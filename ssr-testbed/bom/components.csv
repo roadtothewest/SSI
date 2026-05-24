@@ -1,0 +1,18 @@
+Category,Item,Qty,Part Number,Supplier,Price USD,Notes
+MCU Board,STM32 NUCLEO-H723ZG,1,NUCLEO-H723ZG,Mouser/Digikey,~25,Cortex-M7 550 MHz, SPI, I2S, USB-HS
+Accelerometer,IIS3DWB breakout,1,IIS3DWB,Mouser/Digikey,~15,LGA-14L, SPI, ODR 26.7 kHz
+Microphone,INMP441 breakout,1,INMP441,AliExpress/Amazon,~2,MEMS digital I2S output
+LDO,TPS7A4700 module,1,TPS7A4700EVM,Mouser/Digikey,~6,Ultra-low noise 3.3V
+Capacitor,Ceramic 100nF 0402,5,GRM155R71H104KE14D,Mouser,~0.1 each,Decoupling para flex PCB
+Capacitor,Tantalum 4.7µF 1206,1,——,——,~0.3,Para NR/SS pin del TPS7A
+Connector,JST SH 1.0mm 4-pin,2,BM04B-SRSS-TB,Digikey,~0.5 each,Para cable sensor
+Connector,JST SH crimp housing 4-pin,2,——,Digikey,~0.2 each
+Cable,JST SH pre-crimped 15cm,2,——,Digikey,~1 each
+Cable,Dupont M-F 20cm,20,——,AliExpress,~2 pack
+Cable,Dupont M-M 20cm,10,——,AliExpress,~1 pack
+Adapter,USB-C to USB-A cable,1,——,local,~3,Para NUCLEO a PC
+Power,Powerbank 5V 2A,1,——,local,~10,Pruebas portátiles
+Tape,3M 1526L medical tape,1 roll,3M 1526L,3M/Amazon,~15,Hipoalergénico 0.18mm
+Tape,3M Micropore 1530,1 roll,3M 1530,Farmacia,~3,Refuerzo perimetral
+Protoboard,400-point breadboard,1,——,local,~3,Prototipado
+Logic Analyzer,Saleae clone 8ch 24MHz,1,——,AliExpress,~10,Depuración SPI/I2S

@@ -1,0 +1,62 @@
+```mermaid
+block-beta
+  columns 8
+
+  block:flex:1
+    columns 1
+    FPC("Flex PCB<br/>IIS3DWB")
+    SKIN("Piel laringe")
+  end
+
+  space:1
+
+  block:mcu:3
+    columns 3
+    block:mcu_in:1
+      columns 1
+      SPI_RX("SPI DMA<br/>26.7 kHz<br/>306 kB/s")
+    end
+    block:mcu_core:1
+      columns 1
+      M55("Cortex-M55<br/>Helium (MVE)<br/>CWT/DWT")
+      NPU("Neural-Art<br/>Accelerator<br/>1 TOPS")
+    end
+    block:mcu_out:1
+      columns 1
+      I2S_TX("I2S DMA<br/>22.05 kHz<br/>síntesis")
+    end
+  end
+
+  space:1
+
+  block:audio:1
+    columns 1
+    AMP("MAX98357<br/>Clase D")
+    SPK("Parlante<br/>30mm 4Ω 2W")
+  end
+
+  space:1
+
+  block:pwr:1
+    columns 1
+    BAT("Li-Po 3.7V<br/>500mAh")
+    LDO("TPS7A4700")
+    CHG("TP4056<br/>USB-C")
+  end
+
+  FPC --> SPI_RX
+  SPI_RX --> M55
+  M55 --> NPU
+  NPU --> M55
+  M55 --> I2S_TX
+  I2S_TX --> AMP
+  AMP --> SPK
+
+  BAT --> LDO
+  CHG --> BAT
+  LDO --> mcu
+
+  style FPC fill:#ffe0cc,stroke:#ff8c42
+  style mcu fill:#dae8fc,stroke:#6c8ebf
+  style audio fill:#d5e8d4,stroke:#82b366
+  style pwr fill:#f9e5d9,stroke:#d4735c

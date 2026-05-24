@@ -1,0 +1,29 @@
+```mermaid
+flowchart LR
+  subgraph FW["Plataforma Desarrollo (STM32H723ZG)"]
+    direction TB
+    SPIDMA["SPI DMA Ping-Pong<br/>IIS3DWB @ 26.7 kHz"] --> CALLBACK["Half/Full Transfer<br/>Callback"]
+    I2SDMA["I2S DMA Circular<br/>INMP441 @ 16 kHz"] --> CALLBACK
+    CALLBACK --> FRAME["Frame Builder<br/>{sync, type, ts, len, data}"]
+    TIM2["TIM2 @ 1 MHz<br/>Base de tiempo"] --> CALLBACK
+    FRAME --> USB["USB CDC TX<br/>Bulk EP<br/>512 bytes"]
+  end
+
+  subgraph PC["PC — Dataset Generation"]
+    direction TB
+    PARSER["parser.go<br/>0xAA55 sync detect"] --> RING["ring.go<br/>Buffer 10s"]
+    RING --> WRITER["writer.go<br/>.ssr file"]
+    RING --> DISPLAY["stats.go<br/>FPS, drops"]
+    WRITER --> EXPORT["export.py<br/>CWT Morlet<br/>Mel-spectrogram"]
+    EXPORT --> NPZ[".npz for Colab"]
+  end
+
+  subgraph ML["Entrenamiento + Producto Final"]
+    direction TB
+    COL["Colab TPU<br/>Variante ReLU<br/>sin atención"] --> QUANT["Cuantización int8"]
+    QUANT --> DEPLOY["Deploy a STM32N6"]
+    DEPLOY --> INFER["Inferencia embebida<br/>M55 + NPU + parlante"]
+  end
+
+  FW --> |"USB CDC stream"| PC
+  NPZ --> COL
