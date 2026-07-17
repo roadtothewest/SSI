@@ -44,28 +44,37 @@ ssr-testbed/
 
 ## Estado del Proyecto
 
-| Componente | Estado |
-|---|---|
-| Hardware — Plataforma Desarrollo | Planificado |
-| Flex PCB sensor | Diseño |
-| Firmware STM32 (CMSISv2) | Pendiente |
-| ssr-ingest (Go) | Pendiente |
-| export.py (CWT) | Pendiente |
-| Dataset v0.1 | Pendiente |
-| Modelo (variante ReLU) | Investigación |
-| Producto final STM32N6 | Planificado (post-Muestra) |
+| Componente                               | Estado                    |
+|------------------------------------------|---------------------------|
+| Plataforma de Desarrollo (cotización)    | En curso                  |
+| Flex PCB sensor                          | Diseño (en validación)    |
+| Firmware STM32 (CMSISv2)                 | En desarrollo             |
+| ssr-ingest (Go)                          | En desarrollo             |
+| export.py (CWT)                          | En desarrollo             |
+| Corpus de entrenamiento                  | En desarrollo (foco actual)|
+| Algoritmo Mel (MCU y PC)                 | En desarrollo (foco actual)|
+| Modelo (variante ReLU)                   | Investigación             |
+| Producto final STM32N6                   | Planificado (post-Muestra) |
 
 ## Roadmap
 
-| Mes | Hito |
-|---|---|
-| Mayo 2026 | Compra de componentes, montaje protoboard |
-| Junio 2026 | Firmware CMSISv2 funcional (SPI DMA, I2S DMA, USB CDC streaming) |
-| Julio 2026 | Dataset v0.1 capturado, export.py validado |
-| Agosto 2026 | Modelo entrenado en Colab |
-| Septiembre 2026 | Diseño PCB producto final, inscripción Muestra TECH |
-| **15 Oct 2026** | **Muestra TECH — presentación** |
-| Post-evento | Producto final STM32N6 — fabricación y validación |
+El objetivo principal es tener la inferencia embebida en N6 (Accel. -> CWT -> DL -> Mel -> Parlante) para el 15 de octubre, fecha de la Muestra TECH 2026. El plan se divide en sprints semanales, con un enfoque inicial intensivo en el desarrollo de software.
+
+| Sprint       | Fecha (aprox.)         | Hitos Clave                                                                                                                                                                                                                                                                |
+|--------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Sprint 1** | 17 Jul - 24 Jul 2026   | **Software (100%):** Definición detallada de la arquitectura de tensores para MCU (C/C++) y PC (Python/Golang). Prototipo inicial de CWT en Python/Golang. Inicio de la generación de corpus de entrenamiento (primeras muestras).                                              |
+| **Sprint 2** | 25 Jul - 01 Ago 2026   | **Software (100%):** Implementación de CWT en STM32 (C/C++). Verificación de equivalencia entre CWT en PC y MCU. Refinamiento del proceso de generación de corpus.                                                                                                                |
+| **Sprint 3** | 02 Ago - 08 Ago 2026   | **Software (100%):** Implementación del algoritmo de Mel en Python/Golang (audio a mel y mel a audio). Pruebas de reproducibilidad: mel-spectrogram a audio. Continuación intensiva de la generación de corpus (foco en riqueza contextual).                                |
+| **Sprint 4** | 09 Ago - 15 Ago 2026   | **Software (100%):** Implementación del algoritmo de Mel en STM32 (C/C++) (audio a mel y mel a audio). Verificación de equivalencia y reproducibilidad en MCU y PC. Dataset inicial "limpio" y etiquetado para entrenamiento.                                               |
+| **Sprint 5** | 16 Ago - 22 Ago 2026   | **Integración:** Primeras pruebas de streaming de datos desde MCU a PC con CWT y Mel en tiempo real. Inicio del entrenamiento del modelo de inferencia (Deep Learning) con el dataset inicial en PC.                                                                           |
+| **Sprint 6** | 23 Ago - 29 Ago 2026   | **Modelo y Hardware:** Primeras iteraciones de entrenamiento del modelo. Revisión de diseño final de Flex PCB sensor. Inicio de cotización y/o fabricación de componentes críticos de hardware.                                                                                 |
+| **Sprint 7** | 30 Ago - 05 Sep 2026   | **Optimización y Modelo:** Optimización del modelo de inferencia para despliegue en NPU de STM32N6 (si aplica). Pruebas de rendimiento del pipeline completo (Accel -> CWT -> Mel) en MCU.                                                                                   |
+| **Sprint 8** | 06 Sep - 12 Sep 2026   | **Despliegue Preliminar:** Primer prototipo de inferencia embebida en STM32N6 (sin síntesis a parlante aún). Ajustes y correcciones del modelo y el firmware para mejorar la inferencia.                                                                                     |
+| **Sprint 9** | 13 Sep - 19 Sep 2026   | **Integración Final (Audio):** Implementación de la etapa de síntesis (Mel a Audio) en STM32N6 y conexión con el parlante. Pruebas de integración completa del pipeline (Accel -> CWT -> DL -> Mel -> Parlante).                                                              |
+| **Sprint 10**| 20 Sep - 26 Sep 2026   | **Afinación y Pruebas:** Afinación fina del sistema completo. Pruebas exhaustivas de funcionalidad, latencia y calidad de la voz reconstruida. Inicio de la preparación de la presentación para la Muestra TECH.                                                              |   
+| **Sprint 11**| 27 Sep - 03 Oct 2026   | **Pulido y Presentación:** Pulido de la interfaz y experiencia de usuario. Preparación final de la demostración para la Muestra TECH. Documentación y materiales de presentación.                                                                                           |
+| **Sprint 12**| 04 Oct - 10 Oct 2026   | **Ensayos Generales:** Ensayos generales de la demostración para la Muestra TECH. Revisión final de todos los componentes y funcionalidades. Resolución de últimos bugs.                                                                                                      |
+| **Muestra TECH** | **15 Oct 2026**    | **Presentación del prototipo funcional de SSI.**                                                                                                                                                                                                                           |
 
 ## Muestra TECH 2026
 
