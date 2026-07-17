@@ -53,7 +53,7 @@ ssr-testbed/
 | export.py (CWT)                          | En desarrollo             |
 | Corpus de entrenamiento                  | En desarrollo (foco actual)|
 | Algoritmo Mel (MCU y PC)                 | En desarrollo (foco actual)|
-| Modelo (variante ReLU)                   | Investigación             |
+| Modelo                                   | Investigación              |
 | Producto final STM32N6                   | Planificado (post-Muestra) |
 
 ## Roadmap
