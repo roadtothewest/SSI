@@ -6,18 +6,18 @@ x,1,Regulador LDO 3.0V,SMD SOT-23-5,DESCARTADO para IIS3DWB - reutilizable como 
 x,2,Capacitor 1uF,SMD 0402 - Ceramico X7R o X5R,DESCARTADO para IIS3DWB - reutilizable como filtro IN/OUT del LDO del AFE sEMG,1200(50u),https://es.aliexpress.com/item/1005007464553853.html?spm=a2g0o.productlist.main.1.4e4cOkUROkURN4&algo_pvid=cce41636-509f-41d9-84f9-7103ea7ba348&algo_exp_id=cce41636-509f-41d9-84f9-7103ea7ba348-0&pdp_ext_f=%7B%22order%22%3A%227351%22%2C%22eval%22%3A%221%22%2C%22fromPage%22%3A%22search%22%7D&pdp_npi=6%40dis%21CLP%212484%212389%21%21%2117.58%2116.91%21%402103292b17855366044042109e0e02%2112000040865339122%21sea%21CL%210%21ABX%211%210%21n_tag%3A-29910%3Bd%3A3823f35d%3Bm03_new_user%3A-29895%3BpisId%3A5000000210893047&curPageLogUid=jGMwvwQPEZJ2&utparam-url=scene%3Asearch%7Cquery_from%3A%7Cx_object_id%3A1005007464553853%7C_p_origin_prod%3A
 ,1,PCB Flexible,Custom,DESCARTADO - montaje de acelerometro submentoniano (ya no aplica),,
 ,1,Conector FPC/FFC,SMD Pitch 0.5mm,DESCARTADO - iba con la flex PCB del acelerometro,,
-x,1,Modulo Microfono INMP441,Breakout Circular,Modulo I2S pre-ensamblado - VALIDADO (digital I2S; ver docs/refactor-emg-software.md para tests y comparativas),1000,https://es.aliexpress.com/item/1005012377065358.html?spm=a2g0o.cart.0.0.5e4338daH3Sby7&mp=1&pdp_npi=6%40dis%21CLP%21CLP+999%21CLP+999%21%21CLP+999%21%21%21%4021030dcd17854395497454190e2276%2112000058239138521%21ct%21CL%21-1%21%211%210%21&gatewayAdapt=glo2esp
+,1,Modulo Microfono INMP441,Breakout Circular,NO COMPRADO - candidato recomendado (digital I2S) - pendiente de confirmar escuchando las muestras de audio real del video comparativo antes de comprar (ver docs/refactor-emg-software.md),1000,https://es.aliexpress.com/item/1005012377065358.html?spm=a2g0o.cart.0.0.5e4338daH3Sby7&mp=1&pdp_npi=6%40dis%21CLP%21CLP+999%21CLP+999%21%21CLP+999%21%21%21%4021030dcd17854395497454190e2276%2112000058239138521%21ct%21CL%21-1%21%211%210%21&gatewayAdapt=glo2esp
 ,1,Cable flex o Dupont,Pines estandar,Para rutear el modulo INMP441 a la STM32,,
 ,,,,,,
-,,AFE sEMG (3 canales + RLD) - COTIZADO sep. 2026 - tope USD 60 (ver docs/afe-emg/AFE_EMG_Diseno.md #1 y docs/refactor-emg-software.md #7.3; descartado 4x BioAmp EXG Pill por costo ~USD 138),,,,
-,3,AD8226ARMZ,MSOP-8,Amplificador de instrumentacion por canal (submentoniano/platisma/labio) - preferir sobre INA333 por riesgo de falsificacion en AliExpress (ver nota AFE_EMG_Diseno.md #4); validar ganancia en banco al recibir,11000-19000 (estimado),https://es.aliexpress.com/w/wholesale-AD8226ARMZ.html
-,4,TL074H / MCP6004 (cuadruple),SOIC-14 / TSSOP-14,Op-amps cuadruples: 1 por canal para filtros pasa-altos 20Hz + pasa-bajos 500Hz + gain; el 4to chip aporta el op-amp del integrador RLD (sobran 3 op-amps de ese chip),4000-8000 (estimado),
-,,Resistencias y capacitores de precision,0.1% para RG e integrador RLD,Definir valores tras simulacion de ganancia (ver seccion 3.3 del doc AFE); incluye red de promediado del RLD,4500-9500 (estimado),
+,,AFE sEMG (4 canales + RLD) - REABIERTO a 4 canales sep. 2026 - tope USD 60 ajustado (ver docs/afe-emg/AFE_EMG_Diseno.md #1 y docs/refactor-emg-software.md #7.3; HackEEG/ADS129x evaluado y descartado por no-disponibilidad - ver docs),,,,
+,4,AD8226ARMZ,MSOP-8,Amplificador de instrumentacion por canal (submentoniano/platisma/labio inferior/laringe) - preferir sobre INA333 por riesgo de falsificacion en AliExpress (ver nota AFE_EMG_Diseno.md #4); validar ganancia en banco al recibir,14500-25500 (estimado),https://es.aliexpress.com/w/wholesale-AD8226ARMZ.html
+,4,TL074H / MCP6004 (cuadruple),SOIC-14 / TSSOP-14,Op-amps cuadruples: 1 por canal para filtros pasa-altos 20Hz + pasa-bajos 500Hz + gain; el integrador RLD sale de un op-amp sobrante de uno de estos 4 chips (no se compra un 5to chip),4000-8000 (estimado),
+,,Resistencias y capacitores de precision,0.1% para RG e integrador RLD,Definir valores tras simulacion de ganancia (ver seccion 3.3 del doc AFE); incluye red de promediado del RLD y RG del canal 4,6500-12000 (estimado),
 ,,Protoboard/perfboard + cables + headers,Ruta B (through-hole - sin PCB fabricado),Sin dependencia de envio de manufactura - ver AFE_EMG_Diseno.md ruta B,4500-9500 (estimado),
-,7,Electrodos Ag/AgCl pregelados,Desechables o reusables,3 sitios bipolares (6) + 1 referencia/RLD,4500-7500 (estimado),
+,9,Electrodos Ag/AgCl - preferir reusables sobre pregelados desechables,Desechables o reusables,4 sitios bipolares (8) + 1 referencia/RLD - reusables bajan este item si el costo total se acerca al tope,5500-9500 (estimado),
 ,1,Gel/prep de piel (Nuprep + alcohol),,Preparacion de contacto para reducir ruido de electrodo,,
 ,,,,,,
 ,,Componentes (acelerometro - costo hundido):,28000,,,
-,,Componentes AFE sEMG (estimado - tope USD 60):,28500-53500 CLP aprox,,,
+,,Componentes AFE sEMG 4 canales (estimado - riesgo de acercarse/pasar tope USD 60):,36000-65000 CLP aprox (~USD 38-68),,,
 ,,PCBs+Conectores,0 (Ruta B: sin PCB fabricado),,,
 ,,Adhesivos,?,,,

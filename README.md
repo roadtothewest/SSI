@@ -1,22 +1,30 @@
 # SSI — Silent Speech Interface
 
 Plataforma modular de captura sincronizada para interfaz de habla silenciosa.
-Adquiere tuplas (voz_mic, sEMG) desde un AFE sEMG diferencial de 3 canales
-(submentoniano, platisma, comisura labial) sobre electrodos faciales +
-micrófono digital INMP441 de referencia, mediante un STM32 y streaming por
-USB-CDC a PC.
+Adquiere tuplas (voz_mic, sEMG) desde un AFE sEMG diferencial de 4 canales
+(submentoniano, platisma, labio inferior, laringe) sobre electrodos faciales +
+micrófono digital de referencia, mediante un STM32 y streaming por USB-CDC a
+PC.
 
-> **Nota de refactorización (sep. 2026):** la versión anterior usaba un
-> acelerómetro de banda acústica (IIS3DWB) sobre flex PCB para captar
+**Mantra del proyecto:** matar dos pájaros de un tiro — (1) demostrar
+causalidad sEMG → fonemas, no solo correlación, y (2) construir la
+plataforma/estación de captura que genera el dataset masivo mínimo para que
+el pipeline de software (CWT → Conv2D → TCN → vocoder) generalice más allá
+de la demo. Detalle completo en `docs/refactor-emg-software.md` §0.
+
+> **Nota de refactorización (sep. 2026, corregida):** la versión anterior usaba
+> un acelerómetro de banda acústica (IIS3DWB) sobre flex PCB para captar
 > vibración laríngea. Esa vía queda **descartada**: medía un efecto del habla
 > (movimiento/vibración), no su causa. La versión actual mide potencial
-> mioeléctrico (sEMG), anterior en el tiempo al sonido, lo que permite además
-> sostener una afirmación de **causalidad** (no solo correlación) en el
-> software. Detalle de la decisión de hardware en
+> mioeléctrico (sEMG) en **4 canales** (no 3 — el canal laríngeo se restauró
+> como canal permanente), anterior en el tiempo al sonido, lo que permite
+> además sostener una afirmación de **causalidad** (no solo correlación) en
+> el software. Detalle de la decisión de hardware en
 > `docs/afe-emg/AFE_EMG_Diseno.md`; detalle del refactor de software en
-> `docs/refactor-emg-software.md`. El micrófono INMP441 se mantiene: ya estaba
-> decidido, comprado y validado como digital I2S (ver el doc de refactor de
-> software para las pruebas que lo respaldan).
+> `docs/refactor-emg-software.md`. El micrófono **INMP441 es un candidato
+> recomendado, todavía NO comprado** — pendiente de que el usuario escuche
+> las muestras de audio de la comparativa citada en el doc de refactor antes
+> de confirmar la compra.
 
 **Producto final:** Dispositivo autónomo 100% embebido (STM32N6 + parlante) que
 reconstruye la voz a partir de activación neuromuscular facial. Sin PC.
@@ -24,7 +32,7 @@ reconstruye la voz a partir de activación neuromuscular facial. Sin PC.
 ## Pipeline de Desarrollo
 
 ```
-AFE sEMG (3ch) ──ADC DMA──┐
+AFE sEMG (4ch) ──ADC DMA──┐
                           ├── STM32 USB CDC ──→ PC (ssr-ingest Go) ──→ .ssr file
 INMP441 ──────I2S DMA────┘                              │
                                                          ↓
@@ -37,7 +45,7 @@ INMP441 ──────I2S DMA────┘                              �
 ## Pipeline del Producto Final
 
 ```
-AFE sEMG (3ch) ──ADC──→ STM32N6 (M55: CWT + NPU: inferencia + M55: síntesis) ──I2S──→ MAX98357 ──→ parlante
+AFE sEMG (4ch) ──ADC──→ STM32N6 (M55: CWT + NPU: inferencia + M55: síntesis) ──I2S──→ MAX98357 ──→ parlante
 ```
 
 ## Estructura del Repositorio
@@ -60,8 +68,8 @@ ssr-testbed/
 | Componente                               | Estado                    |
 |------------------------------------------|---------------------------|
 | Acelerómetro IIS3DWB / flex PCB          | **Descartado** (ver nota de refactorización) |
-| AFE sEMG (3 canales + RLD), diseño       | Cerrado (`docs/afe-emg/AFE_EMG_Diseno.md`); construcción pendiente |
-| Micrófono INMP441                        | Comprado y validado (digital I2S) |
+| AFE sEMG (4 canales + RLD), diseño       | Cerrado (`docs/afe-emg/AFE_EMG_Diseno.md`); construcción pendiente |
+| Micrófono INMP441                        | Candidato recomendado, **no comprado** — pendiente de confirmar (ver `docs/refactor-emg-software.md` §2) |
 | Firmware STM32 (CMSISv2)                 | Por refactorizar: ACC → EMG (ver `docs/refactor-emg-software.md`) |
 | ssr-ingest (Go)                          | Por refactorizar: frame tipo EMG (0x03) |
 | export.py (CWT)                          | Por refactorizar: ventana/hop separados + lag causal |
@@ -78,7 +86,7 @@ El objetivo principal es tener la inferencia embebida en N6 (sEMG -> CWT -> DL -
 CWT, Mel y arquitectura de modelo asumiendo entrada de acelerómetro de 3 ejes.
 Esa base de software (Depthwise Conv2D por canal → TCN causal → proyección a
 tokens de vocoder) es agnóstica al sensor y se reutiliza tal cual, solo
-recibiendo 3 canales sEMG en vez de 3 ejes X/Y/Z. Lo que cambia desde el
+recibiendo 4 canales sEMG en vez de 3 ejes X/Y/Z. Lo que cambia desde el
 Sprint 9 es la fuente de la señal (sEMG en vez de acelerómetro) y se agrega un
 requisito nuevo que no existía en el plan original: el software debe sostener
 **causalidad** (precedencia temporal sEMG → voz), no solo correlación. Detalle
@@ -95,9 +103,9 @@ completo en `docs/refactor-emg-software.md`.
 | **Sprint 7** | 30 Ago - 05 Sep 2026   | **Optimización y Modelo:** Optimización del modelo de inferencia para despliegue en NPU de STM32N6 (si aplica). Pruebas de rendimiento del pipeline completo (Accel -> CWT -> Mel) en MCU.                                                                                   |
 | **Sprint 8** | 06 Sep - 12 Sep 2026   | **Despliegue Preliminar:** Primer prototipo de inferencia embebida en STM32N6 (sin síntesis a parlante aún). Ajustes y correcciones del modelo y el firmware para mejorar la inferencia.                                                                                     |
 | **Sprint 9** | 13 Sep - 19 Sep 2026   | **Pivote a sEMG (software):** Armado y validación de 1 canal completo del AFE sEMG (regla: 1 canal probado antes de replicar). Refactor de firmware (frame EMG 0x03), `ssr-ingest` y `export.py` para reemplazar acelerómetro por sEMG. Separación de ventana/hop de la CWT (bug del plan original, ver doc de refactor). |
-| **Sprint 10**| 20 Sep - 26 Sep 2026   | **3 canales + recaptura de corpus:** Replicar el canal validado a los 3 sitios (submentoniano, platisma, comisura labial). Implementar rutina de piso de ruido y modos de captura por condición (articulación silenciosa, vocal sostenida, control de canal laríngeo). Iniciar recaptura del corpus con sEMG real. |
-| **Sprint 11**| 27 Sep - 03 Oct 2026   | **Causalidad y modelo:** Implementar correlación cruzada con lag (envolvente sEMG vs. envolvente acústica) y, si el tiempo alcanza, Granger/transferencia de entropía. Reentrenar el modelo (misma arquitectura Conv2D→TCN) con el corpus sEMG. HMI: panel en tiempo real + índice de correlación. |
-| **Sprint 12**| 04 Oct - 10 Oct 2026   | **Ensayos Generales:** Ensayos generales de la demostración para la Muestra TECH con el pipeline sEMG completo. Revisión final de todos los componentes y funcionalidades. Resolución de últimos bugs. Preparación de la narrativa de causalidad para el jurado (control del confusor laríngeo, sección 8.3 del doc de refactor). |
+| **Sprint 10**| 20 Sep - 26 Sep 2026   | **4 canales + recaptura de corpus:** Replicar el canal validado a los 4 sitios (submentoniano, platisma, labio inferior, laringe — CH4 dedicado, sin necesidad de reubicar electrodos). Implementar rutina de diagnóstico por canal (desconectado/sin habla/con habla, §3.4) y modos de captura por condición experimental (articulación silenciosa, vocal sostenida). Iniciar recaptura del corpus con sEMG real. |
+| **Sprint 11**| 27 Sep - 03 Oct 2026   | **Causalidad, HMI y round-trip WORLD:** Implementar correlación cruzada con lag (envolvente sEMG vs. envolvente acústica) y, si el tiempo alcanza, Granger/transferencia de entropía. Reentrenar el modelo (misma arquitectura Conv2D→TCN) con el corpus sEMG. Construir el HMI multi-pestaña completo (§8 del doc de refactor: por canal, comparación CWT STM32 vs. Go, causalidad, round-trip WORLD). Extender `ssr-roundtrip` con la ruta WORLD (pyworld) y verificar bi-direccionalidad (§9). |
+| **Sprint 12**| 04 Oct - 10 Oct 2026   | **Ensayos Generales:** Ensayos generales de la demostración para la Muestra TECH con el pipeline sEMG completo. Revisión final de todos los componentes y funcionalidades. Resolución de últimos bugs. Preparación de la narrativa de causalidad para el jurado (confusor del canal laríngeo CH4, sección 3.3 del doc de refactor). |
 | **Muestra TECH** | **15 Oct 2026**    | **Presentación del prototipo funcional de SSI.**                                                                                                                                                                                                                           |
 
 ## Muestra TECH 2026

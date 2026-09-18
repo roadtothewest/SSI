@@ -4,30 +4,52 @@
 **Fecha:** 2026-08-07
 **Estado:** Análisis / especificación de diseño (sin archivos de hardware)
 **Alcance:** Revisión del BioAmp EXG Pill v1.0 como referencia, arquitectura AFE de
-3 canales sEMG con Right Leg Drive (RLD) activo, reemplazando al acelerómetro
+4 canales sEMG con Right Leg Drive (RLD) activo, reemplazando al acelerómetro
 IIS3DWB como fuente del pipeline CWT → Deep Learning → vocoder.
 
 ---
 
 ## 1. Resumen ejecutivo
 
-> **Nota de decisión (sep. 2026):** se evaluó reemplazar este AFE discreto por
-> 4x BioAmp EXG Pill armados + un RLD propio, para acelerar la construcción.
-> Se descartó por presupuesto: 4 Pills cuestan ~USD 138 (2x Explorer Pack) y
-> el tope fijado para todo el AFE es **USD 60**. HackEEG (la otra alternativa
-> "lista") cuesta USD 495–2090 y además está descontinuado. La ruta discreta
-> de 3 canales de este documento es la que entra en presupuesto, y el usuario
-> tiene experiencia real con diseño y validación de circuitos con op-amps —
-> el riesgo de tiempo de armar/depurar analógico, que era el motivo original
-> para preferir un AFE pre-armado, es bajo en este caso. **Esta decisión no
-> se reabre** salvo cambio de presupuesto. Detalle en
+> **Nota de decisión (sep. 2026, actualizada):** se evaluó reemplazar este AFE
+> discreto por 4x BioAmp EXG Pill armados + un RLD propio. Se descartó por
+> presupuesto: 4 Pills cuestan ~USD 138 (2x Explorer Pack) contra un tope de
+> **USD 60** para todo el AFE. La ruta discreta de este documento es la que
+> entra en presupuesto, y el usuario tiene experiencia real con diseño y
+> validación de circuitos con op-amps — el riesgo de tiempo de armar/depurar
+> analógico, que era el motivo original para preferir un AFE pre-armado, es
+> bajo en este caso.
+>
+> **Canales: reabierto a 4 (no 3).** Una revisión posterior restauró el
+> 4º canal (laringe) del diseño original, volviendo a la tabla de la sección
+> 3. El 4º canal agrega ~USD 8–14 al estimado, llevando el total a
+> ~USD 38–68 — con riesgo de rozar o pasar levemente el tope de USD 60 en el
+> peor caso (mitigación: electrodos reusables en vez de pregelados
+> desechables, y reusar un op-amp sobrante de los 4 chips cuádruples ya
+> comprados para el integrador RLD en vez de comprar un 5to chip). Detalle en
 > `docs/refactor-emg-software.md` §7.3.
+>
+> **HackEEG / ADS129x, reevaluado y descartado de nuevo (no por mérito
+> técnico):** el ADS1299 detrás de HackEEG es objetivamente superior a este
+> AFE discreto (RLD real en silicio, ADC delta-sigma de 24 bits, CMRR >110 dB,
+> apilable a 32 canales — ver referencia técnica completa en la sección 5).
+> Se descarta igual porque (1) HackEEG está descontinuado, Crowd Supply lo
+> marca sin stock, no es solo un tema de precio; (2) el ADS1298/1299 pelado
+> viene en TQFP-64, sin breakout comercial armado, exige reflow y layout muy
+> sensible — ya documentado en la sección 4.3 como inviable para un sprint de
+> 30 días; (3) es una parte de nicho de TI con baja disponibilidad en Chile,
+> a diferencia de AD8226/TL074/MCP6004 (propósito general, ya cotizados vía
+> AliExpress). La sección 5 se conserva íntegra como ruta recomendada para
+> una v2 post-Muestra.
+>
+> **Esta decisión (AFE discreto, Ruta B) no se reabre** salvo cambio de
+> presupuesto o de disponibilidad de componentes.
 
 El proyecto SSI evoluciona de capturar **vibraciones laríngeas** (IIS3DWB) a
-capturar **señales mioeléctricas superficiales (sEMG)** de 3 grupos musculares
-(laringe, mentón, comisura labial) para decodificar intención fonética. La señal
-cruda (20–500 Hz) alimentará un pipeline de STFT/CWT → Conv2D → TCN → vocoder
-en el STM32N6.
+capturar **señales mioeléctricas superficiales (sEMG)** de 4 grupos musculares
+(submentoniano, platisma, labio inferior, laringe) para decodificar intención
+fonética. La señal cruda (20–500 Hz) alimentará un pipeline de STFT/CWT →
+Conv2D → TCN → vocoder en el STM32N6.
 
 Este documento:
 
@@ -35,7 +57,7 @@ Este documento:
    su topología real desde el netlist.
 2. Demuestra que su pin **"DRL" es una tierra virtual bufferizada, NO un Right
    Leg Drive activo** — decisión crítica para el escalograma.
-3. Define la arquitectura AFE de 3 canales con **RLD activo verdadero**,
+3. Define la arquitectura AFE de 4 canales con **RLD activo verdadero**,
    alimentación 3.3 V rail-to-rail, referencia a 1.65 V y banda 20–500 Hz.
 
 **Decisión arquitectónica obligatoria:** se implementa RLD activo (cancelación de
@@ -139,7 +161,7 @@ activo de la especificación. Debe diseñarse un RLD verdadero.
 
 | Requisito SSI | BioAmp EXG Pill v1.0 | Brecha |
 |---|---|---|
-| Canales | 1 | Se requieren 3 → 3× pill o placa dedicada |
+| Canales | 1 | Se requieren 4 → 4× pill o placa dedicada |
 | RLD activo | No (solo tierra virtual) | **Crítica — rediseñar** |
 | Banda 20–500 Hz | HPF 3.4 Hz / LPF ~159 Hz default | Recalibrar filtros |
 | Ganancia ~1000× en 1.ª etapa | INA discreta, G=11 (default) → ~1000× (RG=440Ω) | CMRR limitado (~70–90 dB) vs INA dedicada (>100 dB) |
@@ -156,18 +178,18 @@ sEMG de 0.1–5 mV.
 
 ---
 
-## 3. Arquitectura AFE propuesta (3 canales + RLD activo)
+## 3. Arquitectura AFE propuesta (4 canales + RLD activo)
 
 ### 3.1 Decisión de alimentación y referencia
 
 - **Alimentación:** 3.3 V limpia (LDO de bajo ruido, p. ej. TPS7A4700 3.3 V,
   ya presente en el testbed).
 - **Referencia analógica:** tierra virtual bufferizada a **1.65 V** (divisor +
-  OpAmp rail-to-rail) aplicada al pin REF de los 3 INAs.
+  OpAmp rail-to-rail) aplicada al pin REF de los 4 INAs.
 - **Op-amps:** rail-to-rail 3.3 V (TL074H/TL084H, MCP6004, OPA4313, TLV2464).
   El TL074 clásico NO opera correctamente a 3.3 V.
 
-### 3.2 Diagrama de bloques por canal (×3)
+### 3.2 Diagrama de bloques por canal (×4)
 
 ```
 Electrodos IN+/IN- (sitio muscular)
@@ -192,7 +214,7 @@ Electrodos IN+/IN- (sitio muscular)
       ▼
 [LPF 4.º orden 500 Hz]  Sallen-Key anti-aliasing (fs ≥ 1 kHz), fase lineal
       ▼
-ADC STM32N6 (ADC12, 12-bit + sobremuestreo) — 3 canales @ 1–2 kHz
+ADC STM32N6 (ADC12, 12-bit + sobremuestreo) — 4 canales @ 1–2 kHz
 ```
 
 ### 3.3 Presupuesto de ganancia
@@ -215,9 +237,10 @@ escalogramas comparables).
 
 ```
             ┌──────── Vcm promedio (resistencias de promediado 100kΩ)
-            │   │   │
-CH1 IN+ ────┘   │   └──── CH3 IN+     (modo común de las 3 entradas)
-CH2 IN+ ────────┘
+            │   │   │   │
+CH1 IN+ ────┘   │   │   └──── CH4 IN+     (modo común de las 4 entradas)
+CH2 IN+ ────────┘   │
+CH3 IN+ ────────────┘
 
   Vcm ──────► [OpAmp inversor]  ganancia −A (A ≈ 10–20)
                  │  ● realimentación con polo dominante (C ≈ 10–100 pF)
@@ -226,9 +249,9 @@ CH2 IN+ ────────┘
              Electrodo de muñeca (bajo actividad muscular/óseo)
 ```
 
-1. **Sensado de Vcm:** promediado resistivo del modo común de las 3 entradas
-   diferenciales (técnica estándar de dispositivos de 2/3 canales; equivalente
-   al Vcm de un INA de 3 derivaciones).
+1. **Sensado de Vcm:** promediado resistivo del modo común de las 4 entradas
+   diferenciales (técnica estándar de dispositivos multicanal; equivalente
+   al Vcm de un INA de 4 derivaciones).
 2. **Inversión y amplificación:** OpAmp rail-to-rail configura el bucle con
    `Gain = −A·Vcm`. A≈10–20 es suficiente para reducir el ruido de línea en
    ~20–40 dB antes de la primera etapa.
@@ -298,15 +321,15 @@ de un chip falso).
 
 ## 5. Interfaz con el STM32N6 (reemplazo del IIS3DWB)
 
-- **ADC:** ADC12 del STM32N6 (12-bit nativo), 3 canales, muestreo DMA a 1–2 kHz,
+- **ADC:** ADC12 del STM32N6 (12-bit nativo), 4 canales, muestreo DMA a 1–2 kHz,
   base de tiempo TIMER común (mismo diseño que el flujo I2S del mic).
 - **Sobremuestreo:** oversampling + promedio para mejorar la resolución efectiva
   (~14+ bits) si se requiere mayor rango dinámico del escalograma.
-- **Salida de los 3 canales:** centrada en 1.65 V, swing ±1.65 V, impedancia de
+- **Salida de los 4 canales:** centrada en 1.65 V, swing ±1.65 V, impedancia de
   salida baja (buffer) → conexión directa al ADC (sin divisor).
-- **Sincronización:** los 3 canales EMG comparten timestamp con el mic de ground
-  truth (**INMP441**, ya decidido y adquirido — ver `docs/refactor-emg-software.md`)
-  vía TIMER 1 MHz.
+- **Sincronización:** los 4 canales EMG comparten timestamp con el mic de ground
+  truth (**INMP441**, candidato recomendado — pendiente de comprar, ver
+  `docs/refactor-emg-software.md`) vía TIMER 1 MHz.
 
 ### 5.1 Formato de trama propuesto (extensión del .ssr)
 
@@ -316,7 +339,7 @@ Byte 2:    Tipo 0x03 = EMG
 Byte 3:    Flags
 Byte 4-7:  Timestamp µs
 Byte 8-9:  Data Length
-Byte 10+:  N muestras × 3 × int16 (CH1, CH2, CH3)
+Byte 10+:  N muestras × 4 × int16 (CH1, CH2, CH3, CH4)
 ```
 
 Compatible con el formato existente (`docs/architecture.md` del testbed): se
@@ -328,18 +351,18 @@ desarrollo, EMG reemplaza a ACC como fuente del CWT.
 ## 6. Integración con el pipeline de Deep Learning
 
 ```
-AFE EMG (3ch, 20-500Hz, RLD activo) ──ADC DMA──┐
+AFE EMG (4ch, 20-500Hz, RLD activo) ──ADC DMA──┐
                                                ├── STM32N6 (M55) ──► CWT Morlet
-Mic INMP441 (ground truth) ───I2S DMA───────┘        (3 escalogramas apilados)
+Mic INMP441 (ground truth) ───I2S DMA───────┘        (4 escalogramas apilados)
                                                         │
                                                         ▼
-                                Conv2D×3 (paralelo) ──► TCN ──► FC ──► latente
+                                Conv2D×4 (paralelo) ──► TCN ──► FC ──► latente
                                                                        │
                                                                        ▼
                                                               Vocoder → voz
 ```
 
-- Los 3 escalogramas (uno por canal) se concatenan/apilan como entrada 3D de las
+- Los 4 escalogramas (uno por canal) se concatenan/apilan como entrada 4D de las
   Conv2D paralelas, tal como define el documento de especificaciones.
 - El RLD garantiza un bin de 50 Hz limpio → las Conv2D aprenden la firma
   mioeléctrica, no el ruido de red.

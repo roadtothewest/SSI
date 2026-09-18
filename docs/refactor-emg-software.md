@@ -9,7 +9,7 @@ arquitectura de modelo, HMI).
 **Relación con otros documentos:**
 
 - `docs/afe-emg/AFE_EMG_Diseno.md` es la fuente de verdad del **hardware**
-  (AFE de 3 canales sEMG + RLD). Este documento no reabre esas decisiones.
+  (AFE de 4 canales sEMG + RLD). Este documento no reabre esas decisiones.
 - Este documento cubre lo que falta: la **metodología de causalidad** que el
   software debe sostener, el esquema de dataset, y el checklist de refactor
   del código existente.
@@ -19,28 +19,48 @@ arquitectura de modelo, HMI).
 
 ---
 
+## 0. Mantra del proyecto (principio rector)
+
+Todo lo que sigue existe para cumplir **dos objetivos simultáneos, no uno**:
+
+1. **Demostrar causalidad sEMG → fonemas.** No basta con correlación (§3).
+2. **Construir la plataforma/estación de captura** que permita generar el
+   **dataset masivo mínimo** necesario para que el pipeline de software
+   propuesto (CWT → Conv2D → TCN → vocoder) generalice más allá de la demo.
+
+El benchmark completo (sEMG + AFE + mic + STM32 + Raspberry Pi) no es solo un
+experimento de causalidad puntual: es, en sí mismo, el **generador de corpus**
+del proyecto. Un servicio en Go arma el dataset en paralelo a otra rutina que
+renderiza una HMI web en tiempo real. Cualquier decisión de diseño en este
+documento se evalúa contra estos dos objetivos, no contra uno solo.
+
+---
+
 ## 1. Decisiones ya cerradas (no reabrir)
 
 | Decisión | Valor | Fuente |
 |---|---|---|
-| Sensor primario | sEMG diferencial, 3 canales (submentoniano, platisma, comisura labial) + RLD | `AFE_EMG_Diseno.md` |
+| Sensor primario | sEMG diferencial, **4 canales** (submentoniano, platisma, labio inferior, laringe) + RLD | `AFE_EMG_Diseno.md` |
 | Acelerómetro IIS3DWB | Descartado por completo | README, esta sesión |
-| AFE | Construcción propia (discreto), no comprar AFE comercial armado | `AFE_EMG_Diseno.md` §3-4; motivo: costo |
-| Micrófono | **Digital I2S — INMP441**, ya comprado | `bom.csv`; validación en §2 de este doc |
+| AFE | Construcción propia (discreto, 4 canales), no comprar AFE comercial armado; HackEEG/ADS129x evaluados y descartados por no-disponibilidad (no por mérito técnico) | `AFE_EMG_Diseno.md` §1, §3-4; ver también §7.3 de este doc |
+| Micrófono | **Digital I2S — INMP441**, candidato recomendado, **NO comprado aún** | `bom.csv`; investigación previa a la compra en §2 de este doc |
 | Entrada auxiliar analógica de mic vía ADS129x | Descartada, no aplica (no se usa ADS129x) | Indicación explícita del usuario |
-| Arquitectura de modelo (Conv2D paralelo por canal → TCN causal → vocoder WORLD) | Se mantiene sin cambios de topología | `sprints/sprint-1/DL.md`, `clave.md` — el pipeline es agnóstico al tipo de sensor, solo cambia la semántica de los 3 canales de entrada |
+| Arquitectura de modelo (Conv2D paralelo por canal → TCN causal → vocoder WORLD) | Se mantiene sin cambios de topología | `sprints/sprint-1/DL.md`, `clave.md` — el pipeline es agnóstico al tipo de sensor, solo cambia la semántica de los 4 canales de entrada |
 
 ---
 
-## 2. Micrófono digital: validación de la elección
+## 2. Micrófono digital: investigación previa a la compra
 
-El proyecto ya tenía decidido y comprado el INMP441 (breakout I2S, ver
-`bom.csv` y `datasheets/INMP441.PDF`), y ya está cableado en el testbed
-(`ssr-testbed/docs/pinout.md`, I2S3). No hace falta elegir de nuevo; lo que
-pedía el usuario era **confirmar con evidencia externa** que no es un error de
-compra.
+**Corrección importante: el INMP441 todavía NO está comprado.** El proyecto
+tiene el datasheet descargado (`datasheets/INMP441.PDF`) y el testbed ya
+documenta su cableado planeado (`ssr-testbed/docs/pinout.md`, I2S3), pero es
+un candidato, no una compra confirmada. El criterio del usuario es exigente:
+no sirve un audio que no sea **prístino**, porque ese audio es el "ground
+truth" del que se extraen los vectores de apoyo (F0, envolvente espectral,
+aperiodicidad — ver §5 de este doc) para entrenar y para verificar el
+vocoder WORLD. Un mic mediocre contamina esa referencia, no solo la demo.
 
-**Evidencia encontrada:**
+**Evidencia encontrada (calidad de audio real, no solo hoja de datos):**
 
 - El canal técnico *atomic14* hizo una comparación directa grabada en video
   entre INMP441 y SPH0645 (otro MEMS I2S muy usado): el INMP441 gana en ruido,
@@ -48,25 +68,39 @@ compra.
   no estándar que obliga a parchear librerías; el INMP441 no tiene ese
   problema. — [ESP32 Audio Input - INMP441 and SPH0645 MEMS I2S Breakout Boards](https://www.youtube.com/watch?v=3g7l5bm7fZ8)
 - El mismo canal probó el ICS-43434 como sucesor "drop-in" del INMP441, con
-  specs equivalentes o mejores. Si en algún momento el INMP441 comprado da
-  problemas, el ICS-43434 es el reemplazo directo a evaluar — pero no hay
-  motivo para cambiar hoy. — [ICS-43434, a replacement for the old INMP441](https://www.atomic14.com/videos/posts/VVGln_-XEgI)
-- Specs de fábrica: SNR 61 dBA, sensibilidad -26 dBFS, salida I2S de 24 bits,
-  filtro anti-aliasing integrado. Suficiente como referencia de "ground
-  truth" de audio para entrenar el modelo (no es un requisito de grabación
-  profesional).
+  specs equivalentes o mejores, aunque un reporte lo describe como "difícil
+  de conseguir" — otra razón para no complicarse si el INMP441 ya funciona.
+  Si en algún momento el INMP441 elegido da problemas, el ICS-43434 es el
+  reemplazo directo a evaluar. — [ICS-43434, a replacement for the old INMP441](https://www.atomic14.com/videos/posts/VVGln_-XEgI)
+- Prueba de escucha comparativa (no solo specs): en un comparativo con
+  varios módulos MEMS baratos grabando simultáneamente, oyentes calificaron
+  los clips del INMP441 con mejor inteligibilidad que las alternativas —
+  evidencia de que el audio percibido, no solo el número de SNR, favorece al
+  INMP441.
+- Specs de fábrica: SNR 61 dBA, sensibilidad -26 dBFS, respuesta en
+  frecuencia ~60 Hz–15 kHz (cubre sobradamente la banda de voz), salida I2S
+  de 24 bits, filtro anti-aliasing integrado.
+
+**Honestidad sobre "prístino":** el INMP441 es la mejor opción **validada con
+audio real** en su rango de precio, no un micrófono de grado estudio. Para el
+uso que le va a dar el proyecto (ground truth de entrenamiento y verificación
+del vocoder, no masterización) es suficiente según la evidencia encontrada,
+pero la palabra final la tiene el usuario escuchando las muestras del video de
+atomic14 (no solo leyendo esta tabla) antes de confirmar la compra.
 
 **Riesgo real, no de la elección sino del proveedor:** hay reportes dispersos
 en foros (Arduino, ESP32, esphome) de módulos INMP441 baratos con canal
 plano/sin respuesta o con timing incorrecto — típico de control de calidad
 inconsistente en breakouts genéricos de AliExpress, no un defecto del chip
-INMP441 en sí. Mitigación de bajo costo: al recibir el módulo, correr una
-prueba de señal conocida (silbido a frecuencia fija o tono de calibración)
-antes de integrarlo al pipeline de captura, y descartarlo si el nivel no
-responde o el ruido de piso es anormal.
+INMP441 en sí. Mitigación: comprar de un vendedor con buen historial, y al
+recibir el módulo correr una prueba de señal conocida (silbido a frecuencia
+fija o tono de calibración) antes de integrarlo al pipeline de captura,
+descartándolo si el nivel no responde o el ruido de piso es anormal.
 
-**Conclusión: se mantiene el INMP441.** No se evalúan más alternativas salvo
-que la prueba de recepción falle.
+**Conclusión: candidato recomendado, pendiente de compra.** Acción concreta
+antes de ordenar: escuchar las muestras de audio del video de atomic14
+enlazado arriba. Si suena aceptable para el oído del usuario, comprar; si no,
+evaluar ICS-43434 pese a su menor disponibilidad.
 
 ---
 
@@ -94,44 +128,57 @@ causalidad.
    hacia features acústicos, si el tiempo del sprint lo permite (ver
    roadmap — es candidato a recortar antes que el punto 1).
 3. **Visualización en el HMI:** índice de correlación o mapa de calor que
-   reaccione al movimiento muscular en tiempo real, con los 4 streams
-   sincronizados (INMP441 arriba, 3 canales sEMG abajo — ver §7.3 sobre por
-   qué son 3 y no 4 canales sEMG).
+   reaccione al movimiento muscular en tiempo real, con los 5 streams
+   sincronizados (INMP441 arriba, 4 canales sEMG abajo — CH4 es el canal
+   laríngeo dedicado, ver §8 "Especificación de HMI multi-pestaña" para el
+   diseño completo de la interfaz).
 
-### 3.3 Confusor crítico: el canal laríngeo (o el más cercano a la laringe)
+### 3.3 Confusor crítico: el canal laríngeo (CH4)
 
 La vibración de las cuerdas vocales (F0 ≈ 80–250 Hz) cae dentro de la banda
-sEMG (20–500 Hz) y puede acoplarse mecánicamente al electrodo más cercano a la
-laringe. Eso produce correlación altísima con la voz **en la dirección causal
-equivocada** (voz → electrodo, por acople mecánico, no activación
-neuromuscular real). Es la objeción técnica más probable de un jurado
-informado, y hay que tener la respuesta lista con datos, no de palabra.
+sEMG (20–500 Hz) y puede acoplarse mecánicamente al electrodo del canal
+laríngeo (CH4, ver `AFE_EMG_Diseno.md`). Eso produce correlación altísima con
+la voz **en la dirección causal equivocada** (voz → electrodo, por acople
+mecánico, no activación neuromuscular real). Es la objeción técnica más
+probable de un jurado informado, y hay que tener la respuesta lista con
+datos, no de palabra.
 
 Controles obligatorios del protocolo de captura:
 
 | Condición | Resultado esperado si la señal es genuina |
 |---|---|
 | Articulación silenciosa (mover la boca sin fonar) | sEMG presente, audio ausente |
-| Vocal sostenida sin articular | Sin pico espectral en F0 en el canal cercano a la laringe |
+| Vocal sostenida sin articular | Sin pico espectral en F0 en CH4 (laríngeo) |
 | Signo del lag | sEMG adelantado respecto del audio, no al revés |
 
 La articulación silenciosa tiene además valor narrativo para la demo: es la
 condición que se parece al usuario objetivo (paciente laringectomizado).
 
-### 3.4 Protocolo de piso de ruido
+### 3.4 Protocolo de diagnóstico por canal (piso de ruido es una lectura, no el objetivo)
 
-Condiciones a registrar, todas con el mismo montaje de electrodos:
+**Corrección de encuadre:** el objetivo de esta rutina **no es "tratar el
+ruido de 50 Hz"** ni la red eléctrica en general. El objetivo es diagnosticar,
+canal por canal, la diferencia entre tres estados — **EMG desconectado**,
+**señal sin habla** y **señal con habla** — para poder observar directamente
+la "intención fonética" en cada canal cuando se conecte el benchmark completo
+(sEMG + AFE + mic + STM32 + Raspberry Pi). El 50 Hz es una lectura más dentro
+de esta rutina (indica si el RLD funciona en la práctica), no la razón de ser
+del protocolo.
 
-1. AFE apagado.
-2. AFE encendido, sin electrodos o con entrada en corto.
-3. AFE encendido, electrodos puestos, usuario callado.
-4. Las tres condiciones de la tabla 3.3.
+Condiciones a registrar, todas con el mismo montaje de electrodos, **por cada
+uno de los 4 canales por separado** (no agregadas):
 
-Objetivo: diferenciar el stream sEMG con voz del stream en silencio, y
-resolver si el baseline es ruido puro o contiene información útil. La
-magnitud del 50 Hz en la condición 3 es la que confirma si el RLD ya
-implementado (ver `AFE_EMG_Diseno.md` §3.4) está funcionando en la práctica,
-no solo en el papel.
+1. **Desconectado:** AFE apagado, o electrodos no puestos / entrada en corto.
+2. **Sin habla:** AFE encendido, electrodos puestos, usuario callado (línea
+   base real de "sin intención fonética").
+3. **Con habla:** usuario hablando/articulando con normalidad.
+4. Las tres condiciones de control de la tabla 3.3 (articulación silenciosa,
+   vocal sostenida, signo del lag), específicas para CH4.
+
+Esto se visualiza en la HMI como parte de la pestaña "por canal" (§8) —
+gráfico crudo superpuesto o alternable entre las tres condiciones — que es
+la forma concreta de "observar la diferencia" que pidió el usuario, no un
+número aislado de dB a 50 Hz.
 
 **Esto debe ser un comando ejecutable** (script en `pc-tools` o rutina de
 firmware), no un procedimiento manual que se hace una vez y se olvida.
@@ -169,7 +216,7 @@ como el mismo parámetro, hay que separarlos explícitamente.
 - [ ] `Core/Src/iis3dwb.c` y su driver SPI: eliminar o archivar: ya no hay
       acelerómetro que inicializar por SPI.
 - [ ] `Core/Src/frame.c` — `frame_process_acc_half` / `frame_process_acc_full`:
-      reemplazar por `frame_process_emg_*`, leyendo 3 canales desde ADC+DMA
+      reemplazar por `frame_process_emg_*`, leyendo 4 canales desde ADC+DMA
       en vez de 3 ejes desde el buffer SPI del IIS3DWB. Frame type pasa de
       `CDC_TYPE_ACC` a `CDC_TYPE_EMG` (`0x03`).
 - [ ] `Core/Src/main.c:170` (llamador de `frame_process_acc_full`): actualizar
@@ -188,7 +235,7 @@ como el mismo parámetro, hay que separarlos explícitamente.
 **PC — exportación (`ssr-testbed/pc-tools/ssr-export/export.py`)**
 
 - [ ] `extract_acc_channel` → `extract_emg_channel`: mismo patrón de
-      deserialización, pero 3 canales sEMG (int16) en vez de x/y/z, y el
+      deserialización, pero 4 canales sEMG (int16) en vez de x/y/z, y el
       divisor de timestamp debe usar la tasa real del ADC (1–2 kHz), no los
       26.7 kHz del IIS3DWB.
 - [ ] `align_channels`: revisar que siga alineando por timestamp sin asumir
@@ -197,6 +244,14 @@ como el mismo parámetro, hay que separarlos explícitamente.
       — ver §5 de este documento.
 - [ ] Agregar el cálculo de correlación cruzada con lag (§3.2) como parte del
       pipeline de exportación, no como notebook aparte.
+
+**Round-trip de audio (`ssr-testbed/pc-tools/ssr-roundtrip/`)**
+
+- [ ] Extender `roundtrip.py`/`mel_utils.py` con una ruta basada en `pyworld`
+      (dio/harvest → F0, cheaptrick → envolvente, d4c → aperiodicidad,
+      synthesize → resíntesis), en paralelo a la ruta Mel+Griffin-Lim
+      existente — ver §9. Reusar `compute_pesq`/`compute_stoi` para comparar
+      objetivamente ambas rutas.
 
 **Documentación del testbed (`ssr-testbed/docs/`)**
 
@@ -209,16 +264,16 @@ como el mismo parámetro, hay que separarlos explícitamente.
 **Modelo (`sprints/sprint-1/DL.md`, `clave.md`)**
 
 - [ ] No requieren cambio de arquitectura. Sí requieren relabeling: donde dice
-      "eje X/Y/Z del acelerómetro" leer "canal 1/2/3 sEMG (submentoniano/
-      platisma/comisura labial)". El razonamiento de ramas Conv2D paralelas
-      por canal y TCN causal aplica igual.
+      "eje X/Y/Z del acelerómetro" leer "canal 1-4 sEMG (submentoniano/
+      platisma/labio inferior/laringe)". El razonamiento de ramas Conv2D
+      paralelas por canal y TCN causal aplica igual, con una cuarta rama.
 
 **HMI**
 
+- [ ] Implementar la especificación completa de §8 (multi-pestaña): por
+      canal, comparación CWT STM32 vs. Go, causalidad, round-trip WORLD.
 - [ ] Agregar modo de captura por condición experimental (§3.3 y §3.4),
       seleccionable desde la interfaz.
-- [ ] Panel: voz (INMP441) arriba, 3 canales sEMG abajo, en tiempo real, más
-      índice de correlación visual.
 
 ---
 
@@ -231,7 +286,7 @@ sobre **NUCLEO-H723ZG**. `AFE_EMG_Diseno.md` §5 y el README (producto final)
 describen la interfaz ADC sobre **STM32N6**. No se sabe, a partir del
 repositorio, si el testbed migra ahora a una placa N6 (p. ej. STM32N6570-DK)
 o si el H723ZG sigue siendo la plataforma de desarrollo hasta más adelante.
-Esto determina el pinout real del ADC de 3 canales y no debe inventarse.
+Esto determina el pinout real del ADC de 4 canales y no debe inventarse.
 **TODO: decidir y documentar antes de tocar `pinout.md`.**
 
 ### 7.2 Resolución de ADC y ganancia total
@@ -241,26 +296,31 @@ efectivos. Falta verificar en la placa real elegida (según 7.1) si esa
 resolución alcanza para la señal facial débil (decenas–cientos de µV) con la
 ganancia del AFE ya definida (§3.3 del doc de AFE). **TODO: medir, no asumir.**
 
-### 7.3 Mínimo de canales para la demo — **CERRADO**
+### 7.3 Mínimo de canales para la demo — **CERRADO EN 4**
 
-**Decisión (sep. 2026): 3 canales** (submentoniano, platisma, comisura
-labial), no 4. Se evaluó volver a 4 canales (uno dedicado a laringe) usando
-4x BioAmp EXG Pill en vez del AFE discreto, porque con Pills el costo marginal
-de un canal extra es solo otra placa. Esa ruta se descartó por presupuesto:
-4 Pills cuestan ~USD 138 (2x Explorer Pack) contra un tope duro de **USD 60**
-fijado por el usuario para todo el AFE; HackEEG (la otra opción "lista") sale
-USD 495–2090 y además está descontinuado (Crowd Supply lo marca sin stock).
-Con el AFE discreto ya diseñado en `AFE_EMG_Diseno.md`, un 4º canal agrega
-~25% más partes y tiempo de armado/debug — exactamente lo que puede hacer
-pasarse del tope de USD 60. **No se reabre esta pregunta salvo cambio de
-presupuesto.**
+**Decisión final (sep. 2026): 4 canales** (submentoniano, platisma, labio
+inferior, laringe — CH4 dedicado). Esta pregunta se cerró primero en 3 por
+presupuesto, y se **reabrió** a pedido explícito del usuario: el 4º canal
+(laríngeo) vuelve como canal permanente, restaurando la tabla original de 4
+sitios y los 9 electrodos (8 de señal + 1 referencia/RLD).
 
-El canal laríngeo se pierde como *canal permanente*, pero el control del
-confusor de §3.3 no depende de tenerlo simultáneo a los otros 3: en una
-sesión de captura dedicada, se reubica temporalmente el electrodo de uno de
-los 3 canales sobre el sitio laríngeo para correr esa condición de control.
-Es un ajuste de protocolo de captura, no de hardware, y no requiere volver a
-abrir el diseño del AFE.
+**Impacto en presupuesto:** el 4º canal agrega ~USD 8–14 sobre el estimado de
+3 canales (~USD 30–54), llevando el total a **~USD 38–68** contra el tope de
+USD 60 — riesgo real de pasarse levemente en el peor caso. Mitigaciones
+documentadas en `bom.csv`: electrodos reusables en vez de pregelados
+desechables, y usar un op-amp sobrante de los 4 chips cuádruples ya
+comprados para el integrador RLD en vez de un 5to chip dedicado.
+
+**HackEEG / ADS129x evaluados de nuevo y descartados** (no por mérito
+técnico): HackEEG está descontinuado (Crowd Supply sin stock) y el chip
+ADS1298/1299 pelado no tiene breakout comercial armado, viene en TQFP-64
+(reflow, layout sensible) y es una parte de nicho de TI con baja
+disponibilidad en Chile — ver el detalle completo en
+`AFE_EMG_Diseno.md` §1. Queda documentado como ruta recomendada para una v2
+post-Muestra (§5 de ese doc).
+
+**No se vuelve a reabrir esta pregunta** salvo cambio de presupuesto o de
+disponibilidad de componentes.
 
 ### 7.4 Tipo de inferencia del modelo
 
@@ -270,11 +330,70 @@ mejor al corpus recapturado con sEMG. Define el Minimum Viable Dataset.
 
 ---
 
-## 8. Referencias
+## 8. Especificación de HMI multi-pestaña
 
-- `docs/afe-emg/AFE_EMG_Diseno.md` — diseño de hardware del AFE sEMG.
+El cliente web (Go) renderiza el HMI en tiempo real **en paralelo** a la
+rutina que arma el dataset — no son pasos secuenciales, son dos rutinas
+corriendo a la vez sobre el mismo stream de tuplas. La interfaz debe tener
+**varias pestañas**, no una sola pantalla de "índice de correlación":
+
+| Pestaña | Contenido | Para qué sirve |
+|---|---|---|
+| **Por canal** | Gráfico crudo de cada uno de los 4 canales sEMG + INMP441, con selector de condición (desconectado / sin habla / con habla, §3.4) | Ver directamente la "intención fonética": la diferencia visual entre las tres condiciones por canal |
+| **Comparación CWT** | Escalograma calculado en el STM32N6 vs. el mismo cálculo hecho en Go/Raspberry Pi, lado a lado, con métricas de latencia y costo por ventana | Benchmark de procesamiento (ya mencionado en el documento AuraVox original §6.4, aterrizado aquí como requisito de UI concreto) |
+| **Causalidad** | Índice de correlación cruzada con lag y/o mapa de calor (§3.2), reaccionando en tiempo real al movimiento muscular | Demostración en vivo del objetivo 1 del mantra (§0) |
+| **Round-trip WORLD** | Comparación audio original vs. audio resintetizado desde los vectores de apoyo (§9), con métricas PESQ/STOI | Demostración en vivo de la bi-direccionalidad del vocoder |
+
+La pestaña "por canal" es la que responde directamente a la corrección de
+§3.4: no un solo número de ruido de 50 Hz, sino una comparación visual clara
+entre las tres condiciones, por canal, que cualquier persona del jurado pueda
+leer sin explicación técnica adicional.
+
+## 9. Verificación de bi-direccionalidad del vocoder WORLD
+
+Objetivo 2 del mantra (§0) necesita, además del hardware de captura, una
+prueba de que el algoritmo de síntesis es determinista y reversible **antes**
+de involucrar al DNN. Metodología pedida por el usuario:
+
+1. **Análisis:** a partir de audio crudo (grabación real del INMP441),
+   extraer los **vectores de apoyo**: F0, envolvente espectral y
+   aperiodicidad (los tres parámetros del vocoder WORLD). En producción,
+   estos mismos vectores son los que el DNN infiere a partir del sEMG — pero
+   esta prueba no depende del DNN, solo del vocoder.
+2. **Síntesis:** a partir de esos vectores de apoyo, resintetizar el audio
+   original con el sintetizador determinista de WORLD.
+3. **Verificación:** comparar audio original vs. audio resintetizado
+   (round-trip). Si el algoritmo es correcto y determinista, la
+   reconstrucción debe ser fiel independientemente de si los vectores vienen
+   de análisis real (esta prueba) o de inferencia del DNN (producción).
+
+**Ya existe un prototipo de esto en el repo, sin trackear todavía:**
+`ssr-testbed/pc-tools/ssr-roundtrip/` (`roundtrip.py`, `mel_utils.py`,
+`audio_io.py`) hace exactamente este round-trip, con métricas ya
+implementadas (`compute_pesq`, `compute_stoi` en `roundtrip.py`) y un primer
+par de audios de prueba (`dataset/roundtrip/original.wav` /
+`reconstructed.wav`). **Pero usa Mel-spectrogram + Griffin-Lim**
+(`mel_utils.py: audio_to_mel` / `mel_to_audio`), no WORLD — y eso contradice
+la propia recomendación ya hecha en `sprints/sprint-1/clave.md`, que señala a
+WORLD como el algoritmo correcto precisamente por ser bi-direccional y
+determinista, a diferencia de Mel+Griffin-Lim (que introduce artefactos de
+fase y suena "robótico/metálico").
+
+**Tarea concreta (ver checklist §6):** extender `ssr-roundtrip` con una ruta
+WORLD real usando la librería `pyworld` (`dio`/`harvest` → F0, `cheaptrick` →
+envolvente espectral, `d4c` → aperiodicidad, `synthesize` → resíntesis),
+reusando las métricas PESQ/STOI que el script ya calcula para poder comparar
+objetivamente la fidelidad de ambas rutas (Mel actual vs. WORLD nuevo) y
+quedarse con la que mejor puntúe — la expectativa, según `clave.md`, es que
+WORLD gane.
+
+## 10. Referencias
+
+- `docs/afe-emg/AFE_EMG_Diseno.md` — diseño de hardware del AFE sEMG (4 canales).
 - [ESP32 Audio Input - INMP441 and SPH0645 MEMS I2S Breakout Boards (atomic14, YouTube)](https://www.youtube.com/watch?v=3g7l5bm7fZ8)
 - [ICS-43434, a replacement for the old INMP441 (atomic14)](https://www.atomic14.com/videos/posts/VVGln_-XEgI)
-- `bom.csv` — estado de compra de componentes (acelerómetro descartado, INMP441 validado, AFE sEMG cotizado — ver §7.3).
+- `bom.csv` — estado de compra de componentes (acelerómetro descartado; INMP441 candidato, pendiente de compra; AFE sEMG de 4 canales cotizado — ver §7.3).
 - [BioAmp EXG Pill — Crowd Supply](https://www.crowdsupply.com/upside-down-labs/bioamp-exg-pill) — pricing consultado sep. 2026: USD 35–249 según pack, sin RLD onboard.
 - [HackEEG — Crowd Supply](https://www.crowdsupply.com/starcat/hackeeg) — USD 495–2090, descontinuado (sin stock) al consultar sep. 2026.
+- `ssr-testbed/pc-tools/ssr-roundtrip/` — prototipo de round-trip de audio (Mel+Griffin-Lim, pendiente extender a WORLD — ver §9).
+- `sprints/sprint-1/clave.md` — comparación Mel+Griffin-Lim vs. vocoder WORLD, recomienda WORLD.
