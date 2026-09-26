@@ -1,0 +1,1 @@
+https://github.com/STMicroelectronics/stm32ai-modelzoo/tree/main/audio_event_detection/yamnet/ST_pretrainedmodel_public_dataset/fsd50k/yamnet_e256_64x96_tl/without_unknown_class

@@ -1,0 +1,3 @@
+[submodule "BioAmp-EXG-Pill"]
+	path = BioAmp-EXG-Pill
+	url = https://github.com/upsidedownlabs/BioAmp-EXG-Pill

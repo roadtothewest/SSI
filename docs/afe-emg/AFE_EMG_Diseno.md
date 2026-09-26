@@ -207,15 +207,20 @@ Electrodos IN+/IN- (sitio muscular)
       │       │
       │       └────► bias de entrada (retorno CM)
       ▼
-[Post-amplificador 2.ª etapa]  no inversor rail-to-rail
-      │  G2 = 5–10  →  G_total ≈ 500–1000
+[HPF 2.º orden 20 Hz]  Sallen-Key, elimina offset ANTES de la ganancia gruesa
       ▼
-[HPF 2.º orden 20 Hz]  Sallen-Key (Butterworth/Bessel), elimina offset
+[G2]  no inversor rail-to-rail, Rg a VREF  →  G_total ≈ 500
       ▼
-[LPF 4.º orden 500 Hz]  Sallen-Key anti-aliasing (fs ≥ 1 kHz), fase lineal
+[LPF 4.º orden 500 Hz]  2× Sallen-Key (Bessel o Butterworth)
       ▼
-ADC STM32N6 (ADC12, 12-bit + sobremuestreo) — 4 canales @ 1–2 kHz
+[Buffer de salida]  ganancia unitaria (+ RC al pin del ADC)
+      ▼
+ADC STM32 (1 ADC, 4 canales, scan+DMA)
 ```
+
+> **Actualizado 26-sep-2026:** orden y buffer acordados con el usuario. Los valores de
+> protección/RFI de este diagrama y el RLD de §3.4 tienen problemas detectados al
+> preparar el traspaso — ver `CONTEXTO_CLAUDE.md` §5 (hallazgos H1–H4) antes de simular.
 
 ### 3.3 Presupuesto de ganancia
 

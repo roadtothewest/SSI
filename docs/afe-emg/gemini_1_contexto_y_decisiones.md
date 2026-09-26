@@ -22,7 +22,7 @@ Cerrar el esquemático del AFE sEMG (4 canales + RLD): valores de componentes, c
 
 - **SSI (Silent Speech Interface) / AuraVox**, "Estación de Auditoría – Corpus Generator". Autores: Matías Pérez y Vicente Andrade (AuraVox.pdf, sep 2026).
 - **Muestra TECH 2026: 15 de octubre de 2026.** Fecha de esta transcripción: 19 sep 2026 (26 días). Criterios de evaluación [REPO]: Creatividad 40 %, Nivel Técnico 25 %, Presentación 20 %, Impacto Social 15 %.
-- Repo: https://github.com/roadtothewest/SSI (rama `master`). Estos dos `.md` no están commiteados.
+- Repo: https://github.com/roadtothewest/SSI (rama `master`). Ver también `CONTEXTO_CLAUDE.md` (traspaso maestro, 26-sep).
 - Arquitectura [USUARIO]: sEMG → AFE → STM32 (ADC+DMA) + micrófono digital (I2S) → SPI → Raspberry Pi 5. En la Pi, un servicio en Go arma el dataset "en paralelo a otra rutina que renderiza la HMI (en tiempo real)". El spec original usa STM32N6570-DK con RTOS y 3 tasks (A: sEMG, B: micrófono, C: empaquetado y envío SPI) [REPO].
 
 ## 2. Mantra del proyecto (palabras del usuario)
