@@ -1,0 +1,23 @@
+* T2 - Respuesta en frecuencia de un canal (entrada diferencial 1 V AC)
+.include models/opa_behav.lib
+.include afe_channel.lib
+VCC VCC 0 3.3
+XVREF VCC VREF VREFGEN
+* fuente diferencial simetrica sobre VREF (Vcm = 1.65 V)
+Vp EP VREF AC 0.5
+Vn EN VREF AC -0.5
+XCH EP EN VCC VREF ADC RGM INAOUT AFE_CH
+.ac dec 50 0.1 100k
+.meas ac G1k   find mag(V(adc)) at=100
+.meas ac G20   find mag(V(adc)) at=20
+.meas ac G50   find mag(V(adc)) at=50
+.meas ac G500  find mag(V(adc)) at=500
+.meas ac G1000 find mag(V(adc)) at=1000
+.meas ac G2000 find mag(V(adc)) at=2000
+.meas ac G4000 find mag(V(adc)) at=4000
+.meas ac Gmax  max mag(V(adc)) from=1 to=10k
+.meas ac fL when mag(V(adc))=Gmax/sqrt(2) rise=1
+.meas ac fH when mag(V(adc))=Gmax/sqrt(2) fall=last
+.meas ac Gina find mag(V(inaout)) at=100
+.options gmin=100f
+.end

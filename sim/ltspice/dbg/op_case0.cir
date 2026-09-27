@@ -1,0 +1,7 @@
+* diagnostico .op caso 0
+.include ../models/opa_behav.lib
+.param SENSE=-1 RLDON=0 CINT=1n RLIM=390k CGE=20p VSEMG=0 RS=100k CCM=47p CD=100p VMAINS_TRAN=0
+.include ../afe_4ch_top.inc
+.op
+.options gmin=100f
+.end

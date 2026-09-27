@@ -1,0 +1,15 @@
+* slew rate + recorte
+.include ../models/opa_behav.lib
+VCC VCC 0 3.3
+Vi IN 0 PULSE(0.5 2.8 10u 1n 1n 20u 40u)
+X1 IN OUT VCC 0 OUT OPA
+Vi2 IN2 0 PULSE(1.65 3.3 10u 1n 1n 20u 40u)
+X2 IN2 N2 VCC 0 O2 OPA
+R1 N2 0 10k
+R2 O2 N2 10k
+.tran 0 40u 0 10n
+.meas tran t1 when V(out)=1 rise=1
+.meas tran t2 when V(out)=2.5 rise=1
+.meas tran sr param 1.5/(t2-t1)
+.meas tran vmax max V(o2)
+.end

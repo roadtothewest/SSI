@@ -1,0 +1,21 @@
+* OPA = MCP6004 conductual suave (sin switches, converge bien). Datos DS20001733L:
+*  GBW 1 MHz, Aol 112 dB (398k), SR 0.6 V/us, salida a 25 mV de los rieles,
+*  Cin 6 pF, Ib ~ 0. Sin ruido (el ruido lo domina el INA333). Vos por parametro.
+*  Etapa 1: gm con saturacion tanh (fija el slew rate), integrador R1||C1 con
+*  recorte por diodos ideales (evita windup), salida limitada a rieles - 25 mV, Rout 50.
+.subckt OPA INP INN VP VN OUT params: VOS=0
+.param GM=1m IMAX=95.5u R1=398Meg C1=159.2p
+Ccm1 INP VN 6p
+Ccm2 INN VN 6p
+Rid INP INN 10T
+B1 0 N1 I={IMAX}*tanh(({GM}/{IMAX})*(V(INP,INN)+{VOS}))
+R1 N1 0 {R1}
+C1 N1 0 {C1}
+BCP CP 0 V=(V(VP)-V(VN))/2
+BCN CN 0 V=-(V(VP)-V(VN))/2
+DCP N1 CP DCL
+DCN CN N1 DCL
+B2 OI 0 V=limit((V(VP)+V(VN))/2+V(N1), V(VN)+25m, V(VP)-25m)
+RO OI OUT 50
+.model DCL D(Ron=10 Roff=1T Vfwd=0.01)
+.ends OPA

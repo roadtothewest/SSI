@@ -1,0 +1,6 @@
+* OPA = macromodelo Microchip MCP6001/2/4 rev E (converge mal con muchas instancias)
+.include MCP6001.lib
+.subckt OPA INP INN VP VN OUT params: VOS=0
+Vos INP INP2 {VOS}
+X1 INP2 INN VP VN OUT MCP6001
+.ends OPA

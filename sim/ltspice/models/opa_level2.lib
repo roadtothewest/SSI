@@ -1,0 +1,9 @@
+* OPA = MCP6004 conductual (UniversalOpAmp2 nativo de LTspice), datos DS20001733L:
+*  GBW 1 MHz, Aol 112 dB, SR 0.6 V/us, salida a 25 mV de rieles, en 28 nV/rtHz,
+*  in 0.6 fA/rtHz, Cin 6 pF. Vos por parametro (datasheet: +-4.5 mV max).
+.lib UniversalOpAmp2.lib
+.subckt OPA INP INN VP VN OUT params: VOS=0
+X1 INP INN VP VN OUT level2 Avol=398k GBW=1Meg Slew=0.6Meg ilimit=15m rail=25m Vos={VOS} en=28n enk=100 in=0.6f Rin=10T
+Ccm1 INP VN 6p
+Ccm2 INN VN 6p
+.ends OPA

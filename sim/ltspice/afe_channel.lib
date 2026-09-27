@@ -1,0 +1,81 @@
+* AuraVox AFE sEMG - subcircuitos (valores: docs/afe-emg/AFE_valores_ltspice.md)
+* Nombres de componentes siguen la pizarra del 26-sep.
+.include models/INA333.LIB
+* modelo de op-amp: el archivo de prueba incluye models/opa_behav.lib o models/opa_mcp.lib
+.model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n)
+
+* ---------------------------------------------------------------------------
+* Un canal: electrodos (EP, EN) -> ADC
+* RGM = punto medio de RG (sensado de modo comun para el RLD)
+* ---------------------------------------------------------------------------
+.subckt AFE_CH EP EN VCC VREF ADC RGM INAOUT
++ params: Rs=100k Rrfi=1k Ccm=47p Cd=100p RG=5.22k
++ Chp=100n R1hp=56.2k Rahp=113k
++ Rf=240k Rg2=10k Cg=10u
++ Rla=88.7k C11=3.9n C12=3.3n
++ Rlb=54.9k C21=15n C22=2.2n
++ Rbk=100 Cbk=1n
+* Proteccion ESD
+Rsp EP P1 {Rs}
+Rsn EN N1 {Rs}
+Dp1 P1 VCC D1N4148
+Dp2 0 P1 D1N4148
+Dn1 N1 VCC D1N4148
+Dn2 0 N1 D1N4148
+* Filtro RFI
+Rfp P1 P2 {Rrfi}
+Rfn N1 N2 {Rrfi}
+Ccmp P2 0 {Ccm}
+Ccmn N2 0 {Ccm}
+Cdif P2 N2 {Cd}
+* INA333 (IN+ IN- VCC VEE OUT REF RG+ RG-), RG partido en dos
+XINA P2 N2 VCC 0 INAOUT VREF RGP RGN INA333
+RGa RGP RGM {RG/2}
+RGb RGM RGN {RG/2}
+* HPF Sallen-Key 2o orden, ganancia 1 (C, C, R1: nodo->salida, Ra: V+ -> VREF)
+Chp1 INAOUT HA {Chp}
+Chp2 HA HB {Chp}
+R1 HA HPO {R1hp}
+Ra HB VREF {Rahp}
+XHP HB HPO VCC 0 HPO OPA
+* G2 no inversor: G_AC = 1+Rf/Rg, G_DC = 1 (Cg retorna a VREF)
+XG2 HPO G2N VCC 0 G2O OPA
+Rf G2O G2N {Rf}
+Rg G2N GC {Rg2}
+Cg GC VREF {Cg}
+* LPF A Sallen-Key, Q = 0.541
+Rla1 G2O LA {Rla}
+Rla2 LA LB {Rla}
+C11 LA LAO {C11}
+C12 LB 0 {C12}
+XLA LB LAO VCC 0 LAO OPA
+* LPF B Sallen-Key, Q = 1.306
+Rlb1 LAO LC {Rlb}
+Rlb2 LC LD {Rlb}
+C21 LC LBO {C21}
+C22 LD 0 {C22}
+XLB LD LBO VCC 0 LBO OPA
+* Buffer + bucket al ADC
+XBF LBO BUF VCC 0 BUF OPA
+Rbk BUF ADC {Rbk}
+Cbk ADC 0 {Cbk}
+.ends AFE_CH
+
+* ---------------------------------------------------------------------------
+* Electrodo: media celda DC + Re || Ce
+* ---------------------------------------------------------------------------
+.subckt ELECTRODE SKIN LEAD params: Vhc=0 Re=20k Ce=47n
+Vhc SKIN X {Vhc}
+Re X LEAD {Re}
+Ce X LEAD {Ce}
+.ends ELECTRODE
+
+* ---------------------------------------------------------------------------
+* VREF: divisor 2x100k + 10u, seguidor
+* ---------------------------------------------------------------------------
+.subckt VREFGEN VCC VREF
+RA1 VCC VD 100k
+RA2 VD 0 100k
+CA VD 0 10u
+XVR VD VREF VCC 0 VREF OPA
+.ends VREFGEN

@@ -1,0 +1,35 @@
+* T4 - Rechazo de 50 Hz de modo comun: sensado del RLD y RLD on/off (4 canales, a bateria)
+* CASE 0: sin RLD (referencia pasiva a VREF), sin R de sensado
+* CASE 1: RLD, sensado en punto medio de RG (604k x4, Cint 1n)
+* CASE 2: RLD, sensado 100k x8 sobre electrodos (pizarra), Cint 12n (misma R*C que caso 1)
+* CASE 3: igual a 2 pero sin RLD (solo el efecto de carga de los 100k)
+* CASE 4: sin RLD, referencia pasiva a VREF a traves de 390k (misma R de seguridad que el RLD)
+* CGE: 20p = a bateria (flotante), 1 = tierra del circuito unida a tierra de red
+.include models/opa_behav.lib
+.param CASE=1
+.step param CASE list 0 1 2 3 4
+.step param CGE list 20p 1
+.param SENSE={if(CASE==1,0,if(CASE==2|CASE==3,1,-1))}
+.param RLDON={if(CASE==1|CASE==2,1,0)}
+.param CINT={if(SENSE==1,12n,1n)}
+.param RLIM=390k VSEMG=0
+.param RPASV={if(CASE==4,390k,1)}
+.param RS=100k CCM=47p CD=100p
+.include afe_4ch_top.inc
+.param VMAINS_TRAN=0 VMAINS_AC=311 VDIFF_AC=0
+.ac list 50 100
+* salida referida a la entrada (RTI) = |V(adc)|/503.3, con 311 Vpk de red
+.meas ac a1 find mag(V(adc1)) at=50
+.meas ac a2 find mag(V(adc2)) at=50
+.meas ac a3 find mag(V(adc3)) at=50
+.meas ac a4 find mag(V(adc4)) at=50
+.meas ac rti1_uVpk param mag(a1)/503.3*1e6
+.meas ac rti2_uVpk param mag(a2)/503.3*1e6
+.meas ac rti3_uVpk param mag(a3)/503.3*1e6
+.meas ac rti4_uVpk param mag(a4)/503.3*1e6
+.meas ac vcm find mag(V(body)-V(vref)) at=50
+.meas ac vrgm1 find mag(V(rgm1)-V(vref)) at=50
+.save V(adc1) V(adc2) V(adc3) V(adc4) V(body) V(vref) V(rgm1) V(rldo)
+
+.options gmin=100f gminsteps=0 srcsteps=0
+.end

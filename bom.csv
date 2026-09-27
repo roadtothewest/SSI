@@ -10,9 +10,9 @@ x,2,Capacitor 1uF,SMD 0402 - Ceramico X7R o X5R,DESCARTADO para IIS3DWB - reutil
 ,1,Cable flex o Dupont,Pines estandar,Para rutear el modulo INMP441 a la STM32,,
 ,,,,,,
 ,,AFE sEMG (4 canales + RLD) - REABIERTO a 4 canales sep. 2026 - tope USD 60 ajustado (ver docs/afe-emg/AFE_EMG_Diseno.md #1 y docs/refactor-emg-software.md #7.3; HackEEG/ADS129x evaluado y descartado por no-disponibilidad - ver docs),,,,
-,4,AD8226ARMZ,MSOP-8,Amplificador de instrumentacion por canal (submentoniano/platisma/labio inferior/laringe) - preferir sobre INA333 por riesgo de falsificacion en AliExpress (ver nota AFE_EMG_Diseno.md #4); validar ganancia en banco al recibir,14500-25500 (estimado),https://es.aliexpress.com/w/wholesale-AD8226ARMZ.html
-,6,OPA4313 o MCP6004 (cuadruple),SOIC-14 / TSSOP-14,22 op-amps: 5 por canal (HPF + G2 + LPF x2 + buffer) x4 + RLD + seguidor VREF - ver CONTEXTO_CLAUDE.md,4000-8000 (estimado),
-,,Resistencias y capacitores de precision,0.1% para RG e integrador RLD,Definir valores tras simulacion de ganancia (ver seccion 3.3 del doc AFE); incluye red de promediado del RLD y RG del canal 4,6500-12000 (estimado),
+,4,INA333AIDGKR,VSSOP-8 + adaptador MSOP8->DIP8,INA por canal (decision del usuario 26-sep) - G1=20.16 con RG partido 2x2.61k 0.1% (punto medio -> RLD); comprar en distribuidor autorizado y validar ganancia en banco - ver docs/afe-emg/AFE_valores_ltspice.md,cotizar,
+,6,MCP6004-I/P (cuadruple),PDIP-14,22 op-amps: 5 por canal (HPF + G2 + LPF x2 + buffer) x4 + RLD + seguidor VREF (2 libres) - rail-to-rail 1.8-6V 1MHz - ver AFE_valores_ltspice.md #1.2,cotizar,
+,,Resistencias 1% y capacitores C0G/film,Lista completa en AFE_valores_ltspice.md #4,~74 R + ~60 C; HPF 100nF en film; RG 0.1%; simulado en sim/ltspice,6500-12000 (estimado),
 ,,Protoboard/perfboard + cables + headers,Ruta B (through-hole - sin PCB fabricado),Sin dependencia de envio de manufactura - ver AFE_EMG_Diseno.md ruta B,4500-9500 (estimado),
 ,9,Electrodos Ag/AgCl - preferir reusables sobre pregelados desechables,Desechables o reusables,4 sitios bipolares (8) + 1 referencia/RLD - reusables bajan este item si el costo total se acerca al tope,5500-9500 (estimado),
 ,1,Gel/prep de piel (Nuprep + alcohol),,Preparacion de contacto para reducir ruido de electrodo,,

@@ -1,0 +1,15 @@
+* seguidor conductual + inversor G=-10
+.include ../models/opa_behav.lib
+VCC VCC 0 3.3
+Vi IN 0 1.65 AC 1
+X1 IN OUT VCC 0 OUT OPA
+X2 VR INV VCC 0 O2 OPA
+VR VR 0 1.65
+R1 IN2 INV 1k
+R2 INV O2 10k
+Vi2 IN2 0 1.65 AC 1
+.ac dec 20 1 10meg
+.meas ac g1 find mag(V(out)) at=100
+.meas ac g2 find mag(V(o2)) at=100
+.meas ac fu when mag(V(out))=0.7071 fall=1
+.end

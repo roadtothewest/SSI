@@ -1,0 +1,9 @@
+* MCP6001 seguidor
+.include ../models/MCP6001.lib
+VCC VCC 0 3.3
+Vi IN 0 1.65 AC 1
+X1 IN OUT VCC 0 OUT MCP6001
+.op
+.ac dec 10 1 10meg
+.meas ac g find mag(V(out)) at=100
+.end
