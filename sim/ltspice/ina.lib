@@ -1,0 +1,6 @@
+* Selector del modelo de INA333 para las pruebas AC y transitorios cortos.
+* Dejar UNA linea activa:
+.include models/INA333.LIB
+*.include models/ina_behav.lib
+* Las transitorias largas (T6, T7) incluyen models/ina_behav.lib directamente:
+* el macromodelo TI fuerza pasos de ~50 ns y 1 s de simulacion con 4 canales toma horas.

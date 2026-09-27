@@ -1,12 +1,11 @@
-* OPA = MCP6004 conductual suave (sin switches, converge bien). Datos DS20001733L:
-*  GBW 1 MHz, Aol 112 dB (398k), SR 0.6 V/us, salida a 25 mV de los rieles,
-*  Cin 6 pF, Ib ~ 0. Sin ruido (el ruido lo domina el INA333). Vos por parametro.
+* Celda de op-amp conductual SUAVE (sin conmutadores; converge rapido en transitorio).
 *  Etapa 1: gm con saturacion tanh (fija el slew rate), integrador R1||C1 con
-*  recorte por diodos ideales (evita windup), salida limitada a rieles - 25 mV, Rout 50.
-.subckt OPA INP INN VP VN OUT params: VOS=0
-.param GM=1m IMAX=95.5u R1=398Meg C1=159.2p
-Ccm1 INP VN 6p
-Ccm2 INN VN 6p
+*  recorte por diodos ideales (evita windup), salida limitada a rieles - VRAIL, Rout 50.
+*  Aol = GM*R1 ; GBW = GM/(2*pi*C1) ; SR = IMAX/C1
+.subckt OPAX INP INN VP VN OUT params: GBW=1Meg AOL=398k SR=0.6Meg VRAIL=25m VOS=0 CIN=6p
+.param GM=1m R1={AOL/GM} C1={GM/(2*pi*GBW)} IMAX={SR*C1}
+Ccm1 INP VN {CIN}
+Ccm2 INN VN {CIN}
 Rid INP INN 10T
 B1 0 N1 I={IMAX}*tanh(({GM}/{IMAX})*(V(INP,INN)+{VOS}))
 R1 N1 0 {R1}
@@ -15,7 +14,14 @@ BCP CP 0 V=(V(VP)-V(VN))/2
 BCN CN 0 V=-(V(VP)-V(VN))/2
 DCP N1 CP DCL
 DCN CN N1 DCL
-B2 OI 0 V=limit((V(VP)+V(VN))/2+V(N1), V(VN)+25m, V(VP)-25m)
+B2 OI 0 V=limit((V(VP)+V(VN))/2+V(N1), V(VN)+{VRAIL}, V(VP)-{VRAIL})
 RO OI OUT 50
 .model DCL D(Ron=10 Roff=1T Vfwd=0.01)
+.ends OPAX
+
+* OPA = MCP6004 (DS20001733L): GBW 1 MHz, Aol 112 dB, SR 0.6 V/us, salida a 25 mV
+*  de los rieles, Cin 6 pF. Vos por parametro (datasheet: +-4.5 mV max).
+*  Validado en dbg/opa.cir (GBW 1.00 MHz) y dbg/sr.cir (SR 0.600 V/us).
+.subckt OPA INP INN VP VN OUT params: VOS=0
+X1 INP INN VP VN OUT OPAX GBW=1Meg AOL=398k SR=0.6Meg VRAIL=25m VOS={VOS} CIN=6p
 .ends OPA

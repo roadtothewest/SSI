@@ -286,34 +286,12 @@ Decisiones que cierra la simulación: G1 (20/10) · Rs (100k/330k) · sensado de
 
 ---
 
-## 7. Resultados LTspice (26–27 sep, `sim/ltspice/`)
+## 7. Resultados LTspice
 
-Modelos: INA333 = macromodelo TI (SBOM382, Final 1.3). Op-amp = MCP6004 **conductual** (`models/opa_behav.lib`: GBW 1 MHz, Aol 112 dB, SR 0,6 V/µs, salida a 25 mV de rieles; validado en `dbg/opa.cir` y `dbg/sr.cir`). El macromodelo de Microchip (`models/opa_mcp.lib`) y el UniversalOpAmp2 (`models/opa_level2.lib`) no convergían con 4 canales. Correr: `wine LTspice.exe -b <archivo>.cir` y leer el `.log`.
+Los resultados completos, con figuras, variantes de diseño, cómo abrir el esquemático y cómo correr las pruebas, están en **`resultados_simulacion.md`**. Resumen (4 canales, 9 electrodos, RLD):
 
-**T2 (`t2_ac.cir`), un canal:** ganancia 54,04 dB (503) · −3 dB en **19,97 Hz** y **501,3 Hz** · −73,8 dB a 4 kHz respecto de la banda · G1 = 20,16. Cumple.
-
-**T4 (`t4_cm.cir`), 4 canales, 50 Hz de red 311 Vpk, desbalance 51k ∥ 47n, RFI propuesta.** Valores referidos a la entrada (RTI):
-
-| Caso | A batería (CGE 20 pF) | Alimentado de red |
-|---|---|---|
-| 0 Ref. pasiva directa a VREF (sin R de seguridad) | 0,37 µVpk | 4,1 µVpk |
-| 4 Ref. pasiva por 390 kΩ (segura) | 7,9 µVpk | 87 µVpk |
-| **1 RLD, sensado en punto medio de RG** | **0,39 µVpk** | **4,3 µVpk** |
-| 2 RLD, sensado 100k × 8 sobre electrodos (pizarra) | 79 µVpk | 870 µVpk |
-| 3 Solo los 100k × 8, sin RLD | 53 µVpk | 582 µVpk |
-
-- Sensar sobre los electrodos es **~200× (46 dB) peor** que el punto medio de RG. H2 queda confirmado.
-- El RLD mejora **~26 dB** frente a una referencia pasiva igual de segura (390 kΩ). Frente a una referencia directa sin resistencia queda igual, pero esa referencia no cumple el límite de corriente.
-
-**T4b (`t4b_rfi.cir`), filtro RFI con RLD en punto medio de RG:**
-
-| RFI | Ganancia 100 Hz | Ganancia 500 Hz | 50 Hz RTI a batería | 50 Hz RTI con red |
-|---|---|---|---|---|
-| Pizarra: 100k, 470p, 4,7n | 51,4 dB (−2,6) | 40,3 dB (**−10,7**) | 2,9 µV | 32 µV |
-| Gemini: 330k, 470p, 4,7n | 46,2 dB (−7,8) | 30,8 dB (**−20,3**) | 2,2 µV | 24 µV |
-| Propuesta: 100k, 47p, 100p | 54,0 dB | 51,0 dB | 0,39 µV | 4,3 µV |
-| Propuesta: 330k, sin Ccm, 47p | 54,0 dB | 51,0 dB | **0,07 µV** | **0,8 µV** |
-
-(Las pérdidas entre paréntesis son respecto de la cadena ideal: 54,0 dB a 100 Hz y 51,0 dB a 500 Hz.) Las dos variantes con 470 pF/4,7 nF se comen la banda. **330k sin Ccm + Cd 47 pF** da el mejor rechazo, 10 µA en falla y +0,8 µVrms de ruido: candidata a quedar como opción final (decisión del usuario).
-
-**Pendiente:** T5, la estabilidad del lazo RLD. `t5_rld.cir` está armado, pero su `.meas` mide |Vcm| absoluto, no la razón con y sin RLD. Hay que exportar con `-ascii` y calcular S(f) = Vcm_RLD/Vcm_sinRLD. También quedan pendientes T3 (offset de electrodo, transitorio), T6–T12 y el Monte Carlo.
+- **T2:** 54,01 dB (×503), −3 dB en 19,9 Hz y 500 Hz, los 4 canales idénticos; diafonía −78 dB.
+- **T4:** sensar el RLD en el punto medio de RG es ~200× (46 dB) mejor que con 100k sobre los electrodos (H2 confirmado). El RLD reduce el 50 Hz 20× (26 dB) frente a una referencia pasiva con la misma R de seguridad.
+- **T4b:** las variantes con 470 pF + 4,7 nF pierden 11–20 dB a 500 Hz. Se recomienda Rs 330k, sin Ccm, Cd 47 pF.
+- **T5/T6:** RLD estable con Cint 1 nF (pico +4,5 dB, MF ≥ 35°); 2,2 nF si se quiere más margen.
+- **T7:** con una senoidal 10× y 100× menor que el ruido, el AFE entrega la señal con la ganancia correcta y sin saturar; la SNR sube 17–19 dB, lo mismo que un filtro ideal con la misma respuesta. El ruido que queda es el artefacto de movimiento de 5–20 Hz que deja pasar el HPF de 2º orden: conviene un HPF digital de 4º orden en la MCU.

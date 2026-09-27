@@ -1,6 +1,6 @@
 * AuraVox AFE sEMG - subcircuitos (valores: docs/afe-emg/AFE_valores_ltspice.md)
 * Nombres de componentes siguen la pizarra del 26-sep.
-.include models/INA333.LIB
+* (modelo de INA: lo incluye cada prueba)
 * modelo de op-amp: el archivo de prueba incluye models/opa_behav.lib o models/opa_mcp.lib
 .model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n)
 

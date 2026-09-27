@@ -1,24 +1,28 @@
-* T4b - Filtro RFI/proteccion: 50 Hz de modo comun vs perdida en banda (CH1, RLD en punto medio de RG)
-* MODE 0: red 311 Vpk (AC), mide 50 Hz en la salida.  MODE 1: 1 V diferencial en CH1, mide ganancia.
+* T4b - Variantes del filtro RFI/proteccion en los 4 canales (RLD en punto medio de RG)
+* MODE 0: red 311 Vpk (AC), sin senal -> 50 Hz residual.  MODE 1: 1 V AC diferencial en los 4 canales -> ganancia.
 * RFI 1: pizarra   Rs 100k, Ccm 470p, Cd 4.7n
 * RFI 2: Gemini    Rs 330k, Ccm 470p, Cd 4.7n
 * RFI 3: propuesta Rs 100k, Ccm 47p,  Cd 100p
 * RFI 4: propuesta Rs 330k, sin Ccm,  Cd 47p
-.include models/opa_behav.lib
+.include opa.lib
+.include ina.lib
 .step param MODE list 0 1
 .step param RFI list 1 2 3 4
 .step param CGE list 20p 1
 .param RS={if(RFI==2|RFI==4,330k,100k)}
 .param CCM={if(RFI<=2,470p,if(RFI==3,47p,1f))}
 .param CD={if(RFI<=2,4.7n,if(RFI==3,100p,47p))}
-.param SENSE=0 RLDON=1 CINT=1n RLIM=390k RPASV=1 VSEMG=0 VMAINS_TRAN=0
-.param VMAINS_AC={if(MODE==0,311,0)} VDIFF_AC={if(MODE==1,1,0)}
+.param SENSE=0 RLDMODE=2 CINT=1n RLIM=390k VMAINS_TRAN=0
+.param VMAINS_AC={if(MODE==0,311,0)} VD={if(MODE==1,1,0)}
+VIN1 S1 BODY AC {VD}
+VIN2 S2 BODY AC {VD}
+VIN3 S3 BODY AC {VD}
+VIN4 S4 BODY AC {VD}
 .include afe_4ch_top.inc
-.ac list 50 100 500
+.ac dec 20 1 20k
 .meas ac rti50_uVpk find mag(V(adc1))/503.3*1e6 at=50
 .meas ac g100 find mag(V(adc1)) at=100
 .meas ac g500 find mag(V(adc1)) at=500
-.meas ac loss500_dB param 20*log10(mag(g500)/mag(g100))
-.save V(adc1)
+.save V(adc1) V(adc2) V(adc3) V(adc4)
 .options gmin=100f
 .end

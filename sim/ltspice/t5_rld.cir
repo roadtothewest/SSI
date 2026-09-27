@@ -1,17 +1,20 @@
-* T5 - Estabilidad del lazo RLD (sensado en punto medio de RG)
-* Mide V(body)-V(vref) con RLD (RLDON=1) contra sin RLD (RLDON=0), barriendo 1 Hz-100 kHz.
-* Referencia sin RLD: pasiva a VREF por 390k. S(f) = Vcm_RLD / Vcm_sinRLD = 1/(1+T). Pico de |S| < 6 dB  =>  margen de fase > ~30 grados.
-.include models/opa_behav.lib
-.param SENSE=0 CGE=20p VSEMG=0 RS=100k CCM=47p CD=100p VMAINS_TRAN=0 VMAINS_AC=311 VDIFF_AC=0 RPASV=390k
-.step param RLDON list 0 1
-.step param CINT list 1n 2.2n 4.7n
+* T5 - RLD con y sin, en frecuencia (banco de 4 canales, red 1 V AC de referencia)
+* RLDMODE 0: referencia pasiva directa | 1: pasiva por 390k | 2: RLD activo
+* La razon S(f) = Vcm(RLD) / Vcm(pasiva por RLIM) = 1/(1+T(f)) la calcula tools/make_figs.py.
+* Pico de |S| > 6 dB indicaria margen de fase < ~30 grados.
+.include opa.lib
+.include ina.lib
+.param SENSE=0 RS=100k CCM=47p CD=100p VMAINS_TRAN=0 VMAINS_AC=311
+.step param RLDMODE list 0 1 2
+.step param CINT list 470p 1n 2.2n 4.7n
 .step param RLIM list 390k 1Meg
+.step param CGE list 20p 1
+VIN1 S1 BODY 0
+VIN2 S2 BODY 0
+VIN3 S3 BODY 0
+VIN4 S4 BODY 0
 .include afe_4ch_top.inc
 .ac dec 20 1 100k
-.meas ac cm50 find mag(V(body)-V(vref)) at=50
-.meas ac cmpk max mag(V(body)-V(vref)) from=1 to=100k
-.meas ac fpk when mag(V(body)-V(vref))=cmpk
-.save V(body) V(vref) V(adc1) V(rldo)
-
+.save V(body) V(vref) V(adc1) V(adc2) V(adc3) V(adc4)
 .options gmin=100f gminsteps=0 srcsteps=0
 .end

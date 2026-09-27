@@ -1,0 +1,54 @@
+* INA333 equivalente para TRANSITORIOS LARGOS.
+* Misma topologia de 3 op-amps, red resistiva (50k/150k con el desajuste de R6),
+* capacidades, corrientes de polarizacion y Vos del macromodelo TI (INA333.LIB,
+* Final 1.3). Solo los 3 amplificadores internos se reemplazan por la celda INAAMP suave,
+* porque el macromodelo TI obliga a pasos de ~50 ns y una transitoria de 1 s con
+* 4 canales toma horas. Ajustado contra el modelo TI en tools/check_ina_behav.py.
+.subckt INA333 IN+ IN- VCC VEE OUT REF RG+ RG-
+.param GBWI=560k GBWO=560k
+C_CMN MID IN- 3P
+C_CMP IN+ MID 3P
+C_DIFF IN- IN+ 3P
+C1 RG- OUT_18 3.5P
+C2 RG+ OUT_11 3.5P
+C3 OUT IN-_19 1P
+EMID MID 0 VALUE={(V(VCC)+V(VEE))/2}
+I_B1 IN- MID 20P
+I_B2 IN+ MID 70P
+I_OS1 RG- MID -70P
+I_OS2 RG+ MID -70P
+I_Q VCC VEE 50U
+R1 RG- OUT_18 50K
+R2 RG+ OUT_11 50K
+R3 OUT_18 IN-_19 150K
+R4 IN-_19 OUT 150K
+R5 OUT_11 IN+_20 150K
+R6 IN+_20 REF 150.0095K
+VOS1 IN+_12 IN- -5.5u
+VOS2 IN+_10 IN+ 4.5u
+XA1 IN+_12 RG- VCC VEE OUT_18 INAAMP GBW={GBWI} AOL=1Meg SR=0.16Meg VRAIL=50m CIN=0.1p
+XA2 IN+_10 RG+ VCC VEE OUT_11 INAAMP GBW={GBWI} AOL=1Meg SR=0.16Meg VRAIL=50m CIN=0.1p
+XA3 IN+_20 IN-_19 VCC VEE OUT INAAMP GBW={GBWO} AOL=1Meg SR=0.16Meg VRAIL=50m CIN=0.1p
+.ends INA333
+
+* Celda interna (copia de OPAX de opa_behav.lib, con otro nombre para poder
+* combinar este archivo con cualquier modelo de op-amp) (sin conmutadores; converge rapido en transitorio).
+*  Etapa 1: gm con saturacion tanh (fija el slew rate), integrador R1||C1 con
+*  recorte por diodos ideales (evita windup), salida limitada a rieles - VRAIL, Rout 50.
+*  Aol = GM*R1 ; GBW = GM/(2*pi*C1) ; SR = IMAX/C1
+.subckt INAAMP INP INN VP VN OUT params: GBW=1Meg AOL=398k SR=0.6Meg VRAIL=25m VOS=0 CIN=6p
+.param GM=1m R1={AOL/GM} C1={GM/(2*pi*GBW)} IMAX={SR*C1}
+Ccm1 INP VN {CIN}
+Ccm2 INN VN {CIN}
+Rid INP INN 10T
+B1 0 N1 I={IMAX}*tanh(({GM}/{IMAX})*(V(INP,INN)+{VOS}))
+R1 N1 0 {R1}
+C1 N1 0 {C1}
+BCP CP 0 V=(V(VP)-V(VN))/2
+BCN CN 0 V=-(V(VP)-V(VN))/2
+DCP N1 CP DCL
+DCN CN N1 DCL
+B2 OI 0 V=limit((V(VP)+V(VN))/2+V(N1), V(VN)+{VRAIL}, V(VP)-{VRAIL})
+RO OI OUT 50
+.model DCL D(Ron=10 Roff=1T Vfwd=0.01)
+.ends INAAMP

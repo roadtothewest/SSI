@@ -1,41 +1,47 @@
-* AuraVox AFE - banco de 4 canales con modelo de cuerpo, red y RLD
-* Parametros esperados (definir con .param/.step en el archivo de prueba):
-*   SENSE  0 = punto medio de RG (propuesta) | 1 = 100k desde cada electrodo (pizarra)
-*   RLDON  1 = RLD activo | 0 = electrodo de referencia pasivo a VREF
-*   CINT   capacitor del integrador RLD
-*   RLIM   resistencia de seguridad del RLD
-*   RPASV  R serie de la referencia pasiva cuando RLDON=0 (1 = directa, 390k = con R de seguridad)
-*   CGE    capacidad tierra-circuito <-> tierra de red (20p bateria, 1 = alimentado de red)
-*   VSEMG  amplitud (pico) del sEMG diferencial (tono de 100 Hz) en CH1 para .tran
-*   VMAINS_AC, VDIFF_AC  amplitudes AC de la red y de la senal diferencial de CH1 para .ac
-*   CCM, CD, RS  filtro RFI / proteccion
+* AuraVox AFE sEMG - banco completo: 4 canales diferenciales, 9 electrodos
+* (4 pares + 1 RLD), 4 salidas ADC1..ADC4, RLD compartido, modelo de cuerpo y red.
+*
+* El archivo de prueba define:
+*   - el estimulo diferencial de cada canal, entre BODY y S1..S4
+*     (p. ej. "VIN1 S1 BODY 0" si el canal no lleva senal);
+*   - los parametros:
+*   RLDMODE 0 = referencia pasiva directa a VREF (1 ohm, sin R de seguridad)
+*           1 = referencia pasiva a VREF por RLIM (misma R de seguridad que el RLD)
+*           2 = RLD activo (integrador)
+*   SENSE   0 = sensado del RLD en el punto medio de RG (propuesta)
+*           1 = 100k desde cada electrodo (pizarra)      -1 = sin R de sensado
+*   CINT    capacitor del integrador RLD
+*   RLIM    resistencia de seguridad entre RLD y su electrodo
+*   CGE     capacidad tierra del circuito <-> tierra de red (20p = a bateria,
+*           1 = circuito unido a tierra, p. ej. USB a un PC enchufado)
+*   VMAINS_TRAN, VMAINS_AC  amplitud de la red de 50 Hz para .tran y para .ac
+*   RS, CCM, CD  proteccion y filtro RFI de entrada
 .include afe_channel.lib
 VCC VCC 0 3.3
 XVREF VCC VREF VREFGEN
 
-* --- Red electrica y cuerpo (valores tipicos, [MEMORIA]) ---
+* --- Red electrica y cuerpo (valores tipicos) ---
 VM MAINS EARTH SINE(0 {VMAINS_TRAN} 50) AC {VMAINS_AC}
 CMB MAINS BODY 3p
 CBE BODY EARTH 200p
 CGE 0 EARTH {CGE}
 RGE 0 EARTH 1G
 
-* --- Electrodos: 20k || 47n por electrodo; desbalance 51k || 47n en EN (estilo IEC 60601-2-27) ---
-* Offsets de media celda distintos por electrodo
-VS1 BODY S1 SINE(0 {VSEMG} 100) AC {VDIFF_AC}
+* --- 8 electrodos de senal: 20k || 47n cada uno; el negativo de cada par lleva
+* un desbalance extra de 51k || 47n (IEC 60601-2-27). Media celda distinta en cada uno.
 XE1P S1 EP1 ELECTRODE Vhc=5m
 XE1N BODY E1x ELECTRODE Vhc=-5m
 RI1 E1x EN1 51k
 CI1 E1x EN1 47n
-XE2P BODY EP2 ELECTRODE Vhc=12m
+XE2P S2 EP2 ELECTRODE Vhc=12m
 XE2N BODY E2x ELECTRODE Vhc=0
 RI2 E2x EN2 51k
 CI2 E2x EN2 47n
-XE3P BODY EP3 ELECTRODE Vhc=-8m
+XE3P S3 EP3 ELECTRODE Vhc=-8m
 XE3N BODY E3x ELECTRODE Vhc=10m
 RI3 E3x EN3 51k
 CI3 E3x EN3 47n
-XE4P BODY EP4 ELECTRODE Vhc=3m
+XE4P S4 EP4 ELECTRODE Vhc=3m
 XE4N BODY E4x ELECTRODE Vhc=-15m
 RI4 E4x EN4 51k
 CI4 E4x EN4 47n
@@ -64,7 +70,7 @@ RSE3P EP3 RLDN {if(SENSE==1,100k,1T)}
 RSE3N EN3 RLDN {if(SENSE==1,100k,1T)}
 RSE4P EP4 RLDN {if(SENSE==1,100k,1T)}
 RSE4N EN4 RLDN {if(SENSE==1,100k,1T)}
-* Salida a electrodo (clavicula) o referencia pasiva
-RLIM RLDO RLDE {if(RLDON,RLIM,1T)}
-RPAS VREF RLDE {if(RLDON,1T,RPASV)}
+* --- 9o electrodo (clavicula): RLD o referencia pasiva ---
+RLIM RLDO RLDE {if(RLDMODE==2,RLIM,1T)}
+RPAS VREF RLDE {if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
 XER BODY RLDE ELECTRODE Vhc=0

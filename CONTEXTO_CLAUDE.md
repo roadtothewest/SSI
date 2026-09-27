@@ -24,10 +24,10 @@ git submodule update --init
 
 - **Proyecto:** SSI / AuraVox — estación de captura sincronizada sEMG + voz y generador de corpus. Muestra TECH 2026: **15 oct 2026** (19 días desde el 26 sep).
 - **Mantra [USUARIO]:** "matar dos pájaros de un tiro": (1) demostrar causalidad sEMG → fonemas; (2) crear la plataforma que genera el dataset masivo mínimo para que el pipeline generalice.
-- **Hardware:** acelerómetro IIS3DWB descartado. AFE sEMG **discreto propio, 4 canales + RLD**, perfboard, tope **USD 60**.
+- **Hardware:** AFE sEMG **discreto propio, 4 canales + RLD**, perfboard, tope **USD 60**. INA333 + 6× MCP6004 (26 sep).
 - **Cadena por canal acordada:** protección → RFI → INA → **HPF → G2** → LPF 4º orden → **buffer** → ADC (1 ADC, 4 canales, scan+DMA).
 - **Micrófono:** INMP441 (I2S) candidato, **no comprado**.
-- **Próximo paso del usuario:** simular el AFE en **PLECS** (plan en §6).
+- **Simulación:** hecha en **LTspice** con los 4 canales, 9 electrodos y RLD (`sim/ltspice/`, resultados en `docs/afe-emg/resultados_simulacion.md`). El plan PLECS de §6 queda como referencia.
 - **Riesgos top:** (a) seguridad con alimentación de red (necesita aislamiento); (b) hallazgos H1–H4 de §5 (RFI+protección y sensado del RLD, tal como están, degradan señal/CMRR); (c) presupuesto (6 chips cuádruples, no 4); (d) LDO comprado es 3,0 V; (e) MCU del testbed sin decidir (NUCLEO-H723ZG vs STM32N6).
 
 ---
@@ -45,7 +45,7 @@ git submodule update --init
 
 ### 2.2 Qué se agregó en este push
 
-- Todo lo que estaba sin trackear: `Accel/`, `Accel_Connections.png`, `BIOAMP*.png`, `datasheets/INMP441.PDF`, `footprints/`, `papers/`, `red_mel.txt`, `respeuesta_iagoogle.md`, `sprints/sprint-1/{DL,clave}.md`, `ssr-testbed/pc-tools/ssr-roundtrip/`.
+- Todo lo que estaba sin trackear: `BIOAMP*.png`, `datasheets/INMP441.PDF`, `papers/`, `red_mel.txt`, `respeuesta_iagoogle.md`, `sprints/sprint-1/{DL,clave}.md`, `ssr-testbed/pc-tools/ssr-roundtrip/`.
 - `BioAmp-EXG-Pill/` como submódulo (162 MB, repo git propio; no se vendorizó).
 - Copiados desde `~/Descargas`: `datasheets/AD8232.PDF` y `docs/AuraVox.pdf` (propuesta original).
 - `.gitignore`: `__pycache__/`, `*.pyc`, `*.lck` (KiCad), `.~lock.*#` (LibreOffice).
@@ -58,25 +58,25 @@ git submodule update --init
 |---|---|---|
 | `README.md` | Descripción, pipeline, estado, roadmap por sprints | Vigente |
 | `CONTEXTO_CLAUDE.md` | Este traspaso | Vigente |
-| `bom.csv` | BOM (acelerómetro como costo hundido, INMP441 candidato, AFE 4 canales) | Vigente, estimado |
+| `bom.csv` | BOM (INMP441 candidato, AFE 4 canales: 4× INA333, 6× MCP6004) | Vigente, estimado |
 | `docs/afe-emg/AFE_EMG_Diseno.md` | Diseño del AFE (análisis netlist del BioAmp §2, arquitectura §3, interfaz §5) | Parcial: ver §5 |
 | `docs/afe-emg/gemini_1_contexto_y_decisiones.md` | Contexto y decisiones (snapshot 19-sep) | Vigente |
 | `docs/afe-emg/gemini_2_diseno_afe.md` | Diseño técnico, debates, errores, 15 puntos abiertos | Vigente; complementa §5–6 |
 | `docs/refactor-emg-software.md` | Mantra, causalidad, HMI multi-pestaña, WORLD, checklist de refactor | Vigente |
 | `docs/AuraVox.pdf` | Propuesta original (2 págs.) | Referencia |
-| `datasheets/` | IIS3DWB (histórico), INMP441, AD8232 | Referencia |
+| `datasheets/` | INMP441, AD8232, INA333, MCP6004 | Referencia |
 | `papers/` | Freeman_RLD.pdf (RLD); `old/` sEMG continuous speech, etc. | Referencia |
 | `BioAmp-EXG-Pill/` | Submódulo upstream (KiCad, docs) | Referencia |
-| `Accel/`, `Accel_Connections.png`, `footprints/` | KiCad/footprint del acelerómetro | **Histórico/descartado** |
 | `BIOAMP.png`, `BIOAMP1.png` | Capturas del BioAmp Pill | Referencia |
-| `sprints/sprint-1/` | Notas de arquitectura DL (Conv2D→TCN→WORLD), NPU STM32N6; `gpt-ups-pelao.md` (batería) | Vigente (reemplazar "ejes X/Y/Z" por "canales sEMG") |
+| `sprints/sprint-1/` | Notas de arquitectura DL (Conv2D→TCN→WORLD), NPU STM32N6; `gpt-ups-pelao.md` (batería) | Vigente (adaptadas a 4 canales sEMG) |
 | `red_mel.txt` | Link al model zoo de ST (yamnet) | Referencia |
 | `respeuesta_iagoogle.md` | Notas de telemetría para dron, **no relacionadas** con SSI | Ajeno |
-| `ssr-testbed/firmware/` | Firmware STM32 (era acelerómetro: `iis3dwb.c`, `frame.c`) | **Por refactorizar** |
-| `ssr-testbed/pc-tools/ssr-ingest` (Go), `ssr-export` (Python CWT), `ssr-inspect`, `ssr-replay` | Herramientas PC | Por refactorizar ACC→EMG |
+| `ssr-testbed/firmware/` | Firmware STM32 (audio I2S + USB-CDC) | **Falta captura EMG** (ADC+DMA, frame 0x03) |
+| `ssr-testbed/pc-tools/ssr-ingest` (Go), `ssr-export` (Python CWT), `ssr-inspect`, `ssr-replay` | Herramientas PC | Leen el frame EMG 0x03; `export.py`: falta ventana/hop + lag |
 | `ssr-testbed/pc-tools/ssr-roundtrip/` | Round-trip de audio Mel+Griffin-Lim con PESQ/STOI | Extender a WORLD (`pyworld`) |
-| `ssr-testbed/docs/{architecture,pinout,pipeline}.md` | Era acelerómetro, NUCLEO-H723ZG | **Desactualizado** (bloqueado por decisión de MCU) |
-| `BASES_MT_2026.pdf`, `resumen.pdf`, `RoadmapSSI.xlsx` | Bases del concurso, resumen, roadmap | Referencia |
+| `ssr-testbed/docs/{architecture,pinout,pipeline}.md` | Testbed sEMG; pines del ADC pendientes | Bloqueado por decisión de MCU |
+| `sim/ltspice/` | Netlists, esquemáticos `.asc` (4 canales), modelos y scripts de la simulación del AFE | Vigente |
+| `BASES_MT_2026.pdf`, `RoadmapSSI.xlsx` | Bases del concurso, roadmap | Referencia |
 
 ---
 
@@ -84,7 +84,7 @@ git submodule update --init
 
 | Tema | Decisión | Estado |
 |---|---|---|
-| Sensor | sEMG diferencial; acelerómetro descartado (medía efecto, no causa) | Cerrado |
+| Sensor | sEMG diferencial | Cerrado |
 | Canales | 4: CH1 submentoniano, CH2 platisma, CH3 labio inferior, CH4 laringe (canal de control del confusor F0) | Cerrado |
 | Electrodos | 9 (8 señal + 1 RLD); ver H2 si se agrega retorno de bias | Cerrado |
 | AFE | Discreto propio, perfboard "Ruta B". BioAmp ×4 (~USD 138), HackEEG (descontinuado), ADS129x pelado (TQFP-64, sin breakout), ADS1292R (1 canal útil) descartados | Cerrado |
@@ -212,9 +212,9 @@ Primer paso en banco después: **1 canal completo validado** antes de replicar l
 
 ## 7. Software y firmware pendiente (resumen de `docs/refactor-emg-software.md`)
 
-- Firmware: reemplazar `iis3dwb.c` y `frame_process_acc_*` (`ssr-testbed/firmware/Core/Src/frame.c`, llamado desde `main.c`) por captura EMG de 4 canales ADC+DMA, frame `0x03` (N × 4 × int16) con timestamp µs; `sync_timer.c` se reutiliza.
-- `ssr-ingest` (Go): agregar frame `0x03`; no caerse ante desconexiones del AFE.
-- `ssr-export` (Python): `extract_acc_channel` → `extract_emg_channel` (4 canales, tasa real del ADC); separar `window_ms` (≥ 50–100 ms) de `hop_ms` (5/10/20 ms); correlación cruzada con lag.
+- Firmware: agregar la captura EMG de 4 canales ADC+DMA, frame `0x03` (N × 4 × int16) con timestamp µs; `sync_timer.c` se reutiliza. Bug previo a corregir: `frame.c` usa `active_buf`, que es `static` en `inmp441.c`, y el driver del micrófono usa los callbacks de TX de I2S en vez de los de RX.
+- `ssr-ingest` (Go): frame `0x03` ya reconocido; no caerse ante desconexiones del AFE. `storage/writer.go` no compila (errores previos: `sha256.Sum256` usado como tipo, `WriteFrame` duplicado).
+- `ssr-export` (Python): ya lee el frame EMG (4 canales, `--fs-emg`, CWT por canal); falta separar `window_ms` (≥ 50–100 ms) de `hop_ms` (5/10/20 ms); correlación cruzada con lag.
 - `ssr-roundtrip`: agregar ruta `pyworld` (dio/harvest, cheaptrick, d4c, synthesize) y comparar con Mel+Griffin-Lim vía PESQ/STOI.
 - HMI multi-pestaña: por canal (desconectado / sin habla / con habla), comparación CWT STM32 vs Go, causalidad, round-trip WORLD.
 - Causalidad: lag sEMG→audio (decenas de ms), controles del confusor laríngeo (articulación silenciosa, vocal sostenida, signo del lag), Granger si alcanza.
@@ -225,7 +225,7 @@ Primer paso en banco después: **1 canal completo validado** antes de replicar l
 
 ## 8. BOM y presupuesto
 
-`bom.csv` (tras este push): acelerómetro como costo hundido (CLP 28.000); INMP441 candidato (CLP ~1.000, no comprado); AFE 4 canales: 4× AD8226ARMZ, **6** cuádruples, pasivas, perfboard, 9 electrodos (reusables preferidos). Estimado CLP 36–65 mil (≈ USD 38–68) **más** 2 cuádruples extra y adaptadores SMD→DIP ⇒ probablemente supera USD 60. Riesgo de falsificación en AliExpress (sobre todo INA333 a precios de centavos): validar ganancia de cada unidad en banco.
+`bom.csv`: INMP441 candidato (CLP ~1.000, no comprado); AFE 4 canales: 4× INA333, **6** MCP6004-I/P, pasivas, perfboard, 9 electrodos (reusables preferidos). Estimado CLP 36–65 mil (≈ USD 38–68) **más** 2 cuádruples extra y adaptadores SMD→DIP ⇒ probablemente supera USD 60. Riesgo de falsificación en AliExpress (sobre todo INA333 a precios de centavos): validar ganancia de cada unidad en banco.
 
 ## 9. Micrófono
 

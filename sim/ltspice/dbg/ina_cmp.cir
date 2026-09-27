@@ -1,0 +1,13 @@
+* Comparacion INA333: modelo TI vs equivalente (G=20). MODE 0 diferencial, MODE 1 modo comun
+.include INAMODEL
+.include ../models/opa_behav.lib
+.step param MODE list 0 1
+VCC VCC 0 3.3
+VR VREF 0 1.65
+Vp P VREF AC {if(MODE==0,0.5,1)}
+Vn N VREF AC {if(MODE==0,-0.5,1)}
+X1 P N VCC 0 OUT VREF RGP RGN INA333
+RG RGP RGN 5.22k
+.ac dec 20 1 1Meg
+.save V(out)
+.end

@@ -1,0 +1,23 @@
+* T6 - RLD con y sin, en el tiempo: red 311 Vpk 50 Hz, 4 canales sin senal, 9 electrodos.
+* RLDMODE 0: referencia pasiva directa (sin R de seguridad) | 1: pasiva por 390k | 2: RLD activo
+* CGE 20p: a bateria | 1: circuito a tierra (USB a PC enchufado)
+.include opa.lib
+* INA333 equivalente (ver models/ina_behav.lib): el macromodelo TI es inviable en transitorios largos
+.include models/ina_behav.lib
+.step param RLDMODE list 0 1 2
+.step param CGE list 20p 1
+.param SENSE=0 CINT=1n RLIM=390k RS=100k CCM=47p CD=100p VMAINS_TRAN=311 VMAINS_AC=0
+VIN1 S1 BODY 0
+VIN2 S2 BODY 0
+VIN3 S3 BODY 0
+VIN4 S4 BODY 0
+.include afe_4ch_top.inc
+.tran 0 0.3 0 100u
+.meas tran pp1 PP V(adc1) FROM 0.2 TO 0.3
+.meas tran pp2 PP V(adc2) FROM 0.2 TO 0.3
+.meas tran pp3 PP V(adc3) FROM 0.2 TO 0.3
+.meas tran pp4 PP V(adc4) FROM 0.2 TO 0.3
+.meas tran vcm_pp PP V(body)-V(vref) FROM 0.2 TO 0.3
+.save V(adc1) V(adc2) V(adc3) V(adc4) V(body) V(vref) V(rldo)
+.options gmin=100f plotwinsize=0 numdgt=15
+.end
