@@ -31,13 +31,13 @@ func main() {
 	}
 
 	totalFrames := 0
-	accFrames := 0
 	audioFrames := 0
+	emgFrames := 0
 	unknownFrames := 0
 	minTs := uint32(0xFFFFFFFF)
 	maxTs := uint32(0)
-	firstAccTs := uint32(0)
 	firstAudioTs := uint32(0)
+	firstEmgTs := uint32(0)
 	pos := 0
 	shown := 0
 
@@ -65,15 +65,15 @@ func main() {
 		}
 
 		switch frameType {
-		case 0x01:
-			accFrames++
-			if firstAccTs == 0 {
-				firstAccTs = ts
-			}
 		case 0x02:
 			audioFrames++
 			if firstAudioTs == 0 {
 				firstAudioTs = ts
+			}
+		case 0x03:
+			emgFrames++
+			if firstEmgTs == 0 {
+				firstEmgTs = ts
 			}
 		default:
 			unknownFrames++
@@ -81,11 +81,11 @@ func main() {
 
 		if *verbose && shown < *first {
 			shown++
-			typeName := "ACC"
+			typeName := fmt.Sprintf("UNK(0x%02X)", frameType)
 			if frameType == 0x02 {
 				typeName = "AUDIO"
-			} else if frameType != 0x01 {
-				typeName = fmt.Sprintf("UNK(0x%02X)", frameType)
+			} else if frameType == 0x03 {
+				typeName = "EMG"
 			}
 			fmt.Printf("#%04d: %s ts=%10d len=%4d flags=0x%02X\n",
 				totalFrames, typeName, ts, dataLen, data[pos+3])
@@ -99,15 +99,15 @@ func main() {
 	fmt.Printf("\n=== File: %s ===\n", *input)
 	fmt.Printf("Total size:   %d bytes\n", len(data))
 	fmt.Printf("Total frames: %d\n", totalFrames)
-	fmt.Printf("  ACC:   %d (%.1f%%)\n", accFrames, float64(accFrames)/float64(totalFrames)*100)
 	fmt.Printf("  AUDIO: %d (%.1f%%)\n", audioFrames, float64(audioFrames)/float64(totalFrames)*100)
+	fmt.Printf("  EMG:   %d (%.1f%%)\n", emgFrames, float64(emgFrames)/float64(totalFrames)*100)
 	fmt.Printf("  UNK:   %d\n", unknownFrames)
 	fmt.Printf("Time range:   %.3f s (ts %d → %d)\n", duration, minTs, maxTs)
-	fmt.Printf("ACC rate:     %.1f fps\n", float64(accFrames)/duration)
 	fmt.Printf("AUDIO rate:   %.1f fps\n", float64(audioFrames)/duration)
+	fmt.Printf("EMG rate:     %.1f fps\n", float64(emgFrames)/duration)
 
-	if firstAccTs != 0 && firstAudioTs != 0 {
-		offset := int32(firstAudioTs) - int32(firstAccTs)
-		fmt.Printf("First frame offset (AUDIO - ACC): %d μs\n", offset)
+	if firstEmgTs != 0 && firstAudioTs != 0 {
+		offset := int32(firstAudioTs) - int32(firstEmgTs)
+		fmt.Printf("First frame offset (AUDIO - EMG): %d μs\n", offset)
 	}
 }

@@ -35,8 +35,6 @@ func main() {
 	info := analyzeFile(data)
 	fmt.Println(info)
 
-	baseDelay := time.Second / time.Duration(*speed * 26700.0 / float64(info.accSamplesPerFrame * 3 * 2))
-
 	for {
 		pos := 0
 		startTime := time.Now()
@@ -69,18 +67,18 @@ func main() {
 				time.Sleep(target.Sub(now))
 			}
 
-			desc := "ACC"
+			desc := fmt.Sprintf("0x%02X", frameType)
 			if frameType == 0x02 {
 				desc = "AUDIO"
+			} else if frameType == 0x03 {
+				desc = "EMG"
 			}
 
 			if *port != "" {
 			}
 
 			pos += frameSize
-			if frameType == 0x01 {
-				fmt.Printf("\rReplaying: ts=%d %s", ts, desc)
-			}
+			fmt.Printf("\rReplaying: ts=%d %s", ts, desc)
 		}
 
 		if !*loop {
@@ -92,10 +90,9 @@ func main() {
 }
 
 type fileInfo struct {
-	frames             int
-	accFrames          int
-	audioFrames        int
-	accSamplesPerFrame int
+	frames      int
+	audioFrames int
+	emgFrames   int
 }
 
 func analyzeFile(data []byte) fileInfo {
@@ -112,11 +109,10 @@ func analyzeFile(data []byte) fileInfo {
 			break
 		}
 		info.frames++
-		if data[pos+2] == 0x01 {
-			info.accFrames++
-			info.accSamplesPerFrame = dataLen / 6
-		} else if data[pos+2] == 0x02 {
+		if data[pos+2] == 0x02 {
 			info.audioFrames++
+		} else if data[pos+2] == 0x03 {
+			info.emgFrames++
 		}
 		pos += frameSize
 	}
@@ -124,6 +120,6 @@ func analyzeFile(data []byte) fileInfo {
 }
 
 func (i fileInfo) String() string {
-	return fmt.Sprintf("Frames: %d (ACC: %d, AUDIO: %d) | ACC samples/frame: %d",
-		i.frames, i.accFrames, i.audioFrames, i.accSamplesPerFrame)
+	return fmt.Sprintf("Frames: %d (AUDIO: %d, EMG: %d)",
+		i.frames, i.audioFrames, i.emgFrames)
 }

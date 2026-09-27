@@ -10,7 +10,6 @@ sobre la NUCLEO-H723ZG.
 ```
 Powerbank 5V ──USB──▶ NUCLEO-H723ZG ──5V pin──▶ TPS7A4700 VIN
                                                      │
-                                                     ├── 3.3V ──▶ IIS3DWB VDD
                                                      ├── 3.3V ──▶ INMP441 VDD
                                                      │
                                                     GND ──▶ AGND común
@@ -19,17 +18,11 @@ Powerbank 5V ──USB──▶ NUCLEO-H723ZG ──5V pin──▶ TPS7A4700 VI
 ⚠️ **Importante:** El TPS7A solo alimenta los sensores. La NUCLEO se
 alimenta por USB directo.
 
-### IIS3DWB (Breakout Board)
+### AFE sEMG (4 canales)
 
-| Breakout Pin | Cable Color  | NUCLEO Pin  |
-|-------------|-------------|-------------|
-| VDD         | Rojo        | TPS7A VOUT (3.3V) |
-| GND         | Negro       | AGND         |
-| CS          | Naranja     | PA4          |
-| SCK         | Amarillo    | PA5          |
-| MOSI        | Verde       | PA7          |
-| MISO        | Azul        | PA6          |
-| INT1        | Violeta     | PC0          |
+Las salidas ADC1..ADC4 del AFE van a 4 entradas analógicas del MCU, con la
+tierra del AFE unida a AGND. Pines pendientes de la decisión de MCU (ver
+docs/refactor-emg-software.md). Esquemático y simulación: sim/ltspice/.
 
 ### INMP441 (Breakout Board)
 
@@ -56,11 +49,7 @@ alimenta por USB directo.
                     ┌──────────────────────┐
                     │     NUCLEO-H723ZG    │
                     │                      │
-                    │ PA4  ◄───────── CS   │
-                    │ PA5  ◄───────── SCK  │
-                    │ PA7  ◄───────── MOSI │
-                    │ PA6  ──────────► MISO│
-                    │ PC0  ◄───────── INT1 │
+                    │ ADCx ◄───────── ADC1..ADC4 (AFE) │
                     │                      │
                     │ PC7  ◄───────── DOUT │
                     │ PA15 ◄───────── WS   │
@@ -76,7 +65,7 @@ alimenta por USB directo.
                     └─────────┬─────────┘
                               │ 3.3V
                     ┌─────────┴─────────┐
-                    │  IIS3DWB  INMP441 │
+                    │      INMP441      │
                     │  VDD      VDD     │
                     │  GND      GND     │
                     └───────────────────┘
@@ -85,6 +74,6 @@ alimenta por USB directo.
 ## Verificación Rápida
 
 1. Medir 3.3V en salida del TPS7A con multímetro
-2. Leer WHO_AM_I del IIS3DWB (registro 0x0F = 0x71) vía SPI
+2. Medir VREF = 1.65 V y las 4 salidas del AFE en reposo (≈ 1.65 V)
 3. Verificar BCK del INMP441 con osciloscopio / analizador lógico
 4. Enviar 0x55 por UART y verificar eco (loopback test)

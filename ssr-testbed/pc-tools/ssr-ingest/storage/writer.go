@@ -61,12 +61,6 @@ func NewWriter(baseDir string) *Writer {
 			SessionID: sessionID,
 			Device:    "NUCLEO-H723ZG",
 			Sensors: map[string]Sensor{
-				"acc": {
-					Model:           "IIS3DWB",
-					OdrHz:           26700,
-					RangeG:          2,
-					SamplesPerFrame: 256,
-				},
 				"audio": {
 					Model:           "INMP441",
 					SampleRateHz:    16000,
@@ -75,7 +69,6 @@ func NewWriter(baseDir string) *Writer {
 				},
 			},
 			TotalFrames: map[string]int{
-				"acc":   0,
 				"audio": 0,
 			},
 		},
@@ -134,12 +127,11 @@ Started: %s
 Duration: %d seconds
 
 Sensors:
-  ACC:  IIS3DWB @ 26700 Hz, ±2g
   AUDIO: INMP441 @ 16000 Hz, 24-bit
 `, w.meta.SessionID, w.started.Format(time.RFC3339), duration)
 
 	os.WriteFile(filepath.Join(w.dir, "info.md"), []byte(info), 0644)
 
-	log.Printf("Session saved: %s (%ds, %d acc + %d audio frames)",
-		w.dir, duration, w.meta.TotalFrames["acc"], w.meta.TotalFrames["audio"])
+	log.Printf("Session saved: %s (%ds, %d audio frames)",
+		w.dir, duration, w.meta.TotalFrames["audio"])
 }

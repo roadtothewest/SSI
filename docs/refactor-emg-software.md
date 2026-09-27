@@ -1,6 +1,6 @@
-# Refactor de software: de acelerómetro a sEMG
+# Refactor de software a sEMG
 
-**Estado:** especificación activa. Reemplaza los supuestos de acelerómetro en
+**Estado:** especificación activa. Define la fuente sEMG de 4 canales en
 todo el árbol de software del proyecto SSI (firmware, `ssr-ingest`, `export.py`,
 arquitectura de modelo, HMI).
 
@@ -41,7 +41,6 @@ documento se evalúa contra estos dos objetivos, no contra uno solo.
 | Decisión | Valor | Fuente |
 |---|---|---|
 | Sensor primario | sEMG diferencial, **4 canales** (submentoniano, platisma, labio inferior, laringe) + RLD | `AFE_EMG_Diseno.md` |
-| Acelerómetro IIS3DWB | Descartado por completo | README, esta sesión |
 | AFE | Construcción propia (discreto, 4 canales), no comprar AFE comercial armado; HackEEG/ADS129x evaluados y descartados por no-disponibilidad (no por mérito técnico) | `AFE_EMG_Diseno.md` §1, §3-4; ver también §7.3 de este doc |
 | Micrófono | **Digital I2S — INMP441**, candidato recomendado, **NO comprado aún** | `bom.csv`; investigación previa a la compra en §2 de este doc |
 | Entrada auxiliar analógica de mic vía ADS129x | Descartada, no aplica (no se usa ADS129x) | Indicación explícita del usuario |
@@ -106,9 +105,8 @@ evaluar ICS-43434 pese a su menor disponibilidad.
 
 ## 3. Metodología de causalidad — esto define el éxito del proyecto
 
-Esta es la sección más importante del refactor. Medir sEMG en vez de vibración
-no vale nada si el software solo reporta una correlación de Pearson: eso ya lo
-podía hacer el acelerómetro. El argumento nuevo del proyecto es que el sEMG es
+Esta es la sección más importante del refactor. Medir sEMG no vale nada si el
+software solo reporta una correlación de Pearson. El argumento nuevo del proyecto es que el sEMG es
 la **causa** (activación neuromuscular), anterior en el tiempo al sonido — y
 esa anterioridad tiene que ser medible.
 
@@ -191,9 +189,8 @@ firmware), no un procedimiento manual que se hace una vez y se olvida.
   el lag medido (o los datos crudos suficientes para recalcularlo). Sin eso,
   el dataset solo sostiene correlación, no causalidad — es el mismo problema
   del punto 3.1 pero a nivel de formato de archivo, no de análisis.
-- El frame EMG (tipo `0x03`, definido en `AFE_EMG_Diseno.md` §5.1) reemplaza
-  al frame ACC (`0x01`) como fuente de la CWT. El frame AUDIO (`0x02`, del
-  INMP441) no cambia.
+- El frame EMG (tipo `0x03`, definido en `AFE_EMG_Diseno.md` §5.1) es la
+  fuente de la CWT. El frame AUDIO (`0x02`, del INMP441) no cambia.
 - El servicio Go (`ssr-ingest`) no debe caerse ante desconexiones del AFE.
 
 ---
@@ -213,33 +210,32 @@ como el mismo parámetro, hay que separarlos explícitamente.
 
 **Firmware (`ssr-testbed/firmware/`)**
 
-- [ ] `Core/Src/iis3dwb.c` y su driver SPI: eliminar o archivar: ya no hay
-      acelerómetro que inicializar por SPI.
-- [ ] `Core/Src/frame.c` — `frame_process_acc_half` / `frame_process_acc_full`:
-      reemplazar por `frame_process_emg_*`, leyendo 4 canales desde ADC+DMA
-      en vez de 3 ejes desde el buffer SPI del IIS3DWB. Frame type pasa de
-      `CDC_TYPE_ACC` a `CDC_TYPE_EMG` (`0x03`).
-- [ ] `Core/Src/main.c:170` (llamador de `frame_process_acc_full`): actualizar
-      la llamada al nuevo handler EMG.
+- [x] Driver del sensor anterior eliminado (`main.c`, `frame.c`, `Makefile`,
+      `usb_cdc.h`), 27-sep.
+- [ ] `Core/Src/frame.c`: agregar `frame_process_emg_*`, leyendo 4 canales
+      desde ADC+DMA, con `CDC_TYPE_EMG` (`0x03`). En `main.c` hay un
+      comentario en el lazo principal donde va la llamada.
+- [ ] Bug previo: `frame.c` usa `active_buf`, que es `static` en
+      `inmp441.c` (no compila); y `inmp441.c` registra los callbacks de TX de
+      I2S (`HAL_I2S_TxHalfCpltCallback`) en vez de los de RX.
 - [ ] `Core/Src/sync_timer.c`: se reutiliza sin cambios (la base de tiempo
       común es agnóstica al sensor).
 
 **PC — ingesta (`ssr-testbed/pc-tools/ssr-ingest/`, Go)**
 
-- [ ] `storage/writer.go` (`NewWriter` y writers de frame): agregar tipo de
-      frame EMG junto a ACC/AUDIO, o reemplazar ACC por EMG si no se necesita
-      retrocompatibilidad con sesiones viejas.
-- [ ] Parser/decodificador de frame: sumar el caso `0x03` del formato de
-      `AFE_EMG_Diseno.md` §5.1.
+- [x] Parser (`parser/frame.go`), `ssr-inspect` y `ssr-replay`: reconocen el
+      frame `0x03` (27-sep).
+- [ ] `storage/writer.go`: agregar el sensor EMG a `metadata.json` y su
+      contador de frames. Además no compila por errores previos
+      (`sha256.Sum256` usado como tipo, `WriteFrame` declarado dos veces).
 
 **PC — exportación (`ssr-testbed/pc-tools/ssr-export/export.py`)**
 
-- [ ] `extract_acc_channel` → `extract_emg_channel`: mismo patrón de
-      deserialización, pero 4 canales sEMG (int16) en vez de x/y/z, y el
-      divisor de timestamp debe usar la tasa real del ADC (1–2 kHz), no los
-      26.7 kHz del IIS3DWB.
-- [ ] `align_channels`: revisar que siga alineando por timestamp sin asumir
-      la ODR del acelerómetro.
+- [x] `extract_emg_channels`: 4 canales int16 intercalados, timestamps con la
+      tasa real del ADC (`--fs-emg`, 2 kHz por defecto); CWT de 20–500 Hz por
+      canal, salida `cwt_mag` (4, escalas, N). Probado con un `.ssr`
+      sintético (27-sep).
+- [x] `align_channels`: alinea EMG y audio por timestamp.
 - [ ] CWT: separar parámetro `window_ms` (≥50–100 ms) de `hop_ms` (5/10/20 ms)
       — ver §5 de este documento.
 - [ ] Agregar el cálculo de correlación cruzada con lag (§3.2) como parte del
@@ -255,18 +251,14 @@ como el mismo parámetro, hay que separarlos explícitamente.
 
 **Documentación del testbed (`ssr-testbed/docs/`)**
 
-- [ ] `architecture.md`, `pinout.md`, `pipeline.md`: describen todavía al
-      IIS3DWB sobre SPI y el NUCLEO-H723ZG. **Bloqueados por una decisión
-      pendiente** — ver TODO 7.1 más abajo — no reescribir el pinout hasta
-      resolverla, para no inventar una asignación de pines que después haya
-      que deshacer.
+- [x] `architecture.md`, `pinout.md`, `pipeline.md` y diagramas describen la
+      fuente sEMG (27-sep). Los pines del ADC siguen **bloqueados por una
+      decisión pendiente** — ver TODO 7.1 más abajo.
 
 **Modelo (`sprints/sprint-1/DL.md`, `clave.md`)**
 
-- [ ] No requieren cambio de arquitectura. Sí requieren relabeling: donde dice
-      "eje X/Y/Z del acelerómetro" leer "canal 1-4 sEMG (submentoniano/
-      platisma/labio inferior/laringe)". El razonamiento de ramas Conv2D
-      paralelas por canal y TCN causal aplica igual, con una cuarta rama.
+- [x] Adaptados a 4 canales sEMG (submentoniano, platisma, labio inferior,
+      laringe): ramas Conv2D paralelas por canal y TCN causal (27-sep).
 
 **HMI**
 
@@ -392,7 +384,7 @@ WORLD gane.
 - `docs/afe-emg/AFE_EMG_Diseno.md` — diseño de hardware del AFE sEMG (4 canales).
 - [ESP32 Audio Input - INMP441 and SPH0645 MEMS I2S Breakout Boards (atomic14, YouTube)](https://www.youtube.com/watch?v=3g7l5bm7fZ8)
 - [ICS-43434, a replacement for the old INMP441 (atomic14)](https://www.atomic14.com/videos/posts/VVGln_-XEgI)
-- `bom.csv` — estado de compra de componentes (acelerómetro descartado; INMP441 candidato, pendiente de compra; AFE sEMG de 4 canales cotizado — ver §7.3).
+- `bom.csv` — estado de compra de componentes (INMP441 candidato, pendiente de compra; AFE sEMG de 4 canales cotizado — ver §7.3).
 - [BioAmp EXG Pill — Crowd Supply](https://www.crowdsupply.com/upside-down-labs/bioamp-exg-pill) — pricing consultado sep. 2026: USD 35–249 según pack, sin RLD onboard.
 - [HackEEG — Crowd Supply](https://www.crowdsupply.com/starcat/hackeeg) — USD 495–2090, descontinuado (sin stock) al consultar sep. 2026.
 - `ssr-testbed/pc-tools/ssr-roundtrip/` — prototipo de round-trip de audio (Mel+Griffin-Lim, pendiente extender a WORLD — ver §9).

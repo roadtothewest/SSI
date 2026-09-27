@@ -2,10 +2,10 @@
 block-beta
   columns 8
 
-  block:flex:1
+  block:afe:1
     columns 1
-    FPC("Flex PCB<br/>IIS3DWB")
-    SKIN("Piel laringe")
+    FPC("AFE sEMG<br/>4 canales + RLD")
+    SKIN("9 electrodos")
   end
 
   space:1
@@ -14,7 +14,7 @@ block-beta
     columns 3
     block:mcu_in:1
       columns 1
-      SPI_RX("SPI DMA<br/>26.7 kHz<br/>306 kB/s")
+      SPI_RX("ADC DMA<br/>4 x 2 kHz<br/>16 kB/s")
     end
     block:mcu_core:1
       columns 1

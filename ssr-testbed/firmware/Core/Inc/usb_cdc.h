@@ -5,8 +5,8 @@
 
 #define CDC_SYNC0                 0xAA
 #define CDC_SYNC1                 0x55
-#define CDC_TYPE_ACC              0x01
 #define CDC_TYPE_AUDIO            0x02
+/* 0x03 = EMG 4 canales (pendiente, ver docs/refactor-emg-software.md) */
 
 typedef __PACKED_STRUCT {
     uint8_t  sync0;
@@ -19,7 +19,6 @@ typedef __PACKED_STRUCT {
 } cdc_frame_t;
 
 #define CDC_HEADER_SIZE           10
-#define CDC_FRAME_ACC_SIZE        (CDC_HEADER_SIZE + ACC_SAMPLES_PER_FRAME * 3 * 2)
 #define CDC_FRAME_AUDIO_SIZE      (CDC_HEADER_SIZE + AUDIO_SAMPLES_PER_FRAME * 4)
 
 bool usb_cdc_init(void);

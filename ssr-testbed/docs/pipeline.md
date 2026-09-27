@@ -4,8 +4,8 @@
 
 ```
 ┌─────────────────┐     ┌──────────────┐     ┌───────────────┐
-│ IIS3DWB (SPI)   │────▶│ STM32 DMA    │────▶│ USB CDC       │
-│ ODR: 26.7 kHz   │     │ Ping-Pong    │     │ Bulk EP       │
+│ AFE sEMG 4ch    │────▶│ ADC + DMA    │────▶│ USB CDC       │
+│ (ADC 2 kHz/ch)  │     │ Ping-Pong    │     │ Bulk EP       │
 └─────────────────┘     └──────────────┘     └───────┬───────┘
                                                       │
 ┌─────────────────┐     ┌──────────────┐              │
@@ -29,8 +29,8 @@ USB CDC stream
 
 ```
 .ssr file
-  → separar canales (ACC + AUDIO)
-    → aplicar CWT a ACC (wavelet Morlet, escalas log)
+  → separar canales (EMG + AUDIO)
+    → aplicar CWT a los 4 canales EMG (wavelet Morlet, escalas log 20-500 Hz)
       → mel-espectrograma a AUDIO
         → alinear temporalmente por timestamps
           → exportar a .npz (diccionario con arrays)
@@ -40,5 +40,5 @@ USB CDC stream
 ## Etapa 4: Entrenamiento (Colab)
 
 ```
-CWT features (ACC) → EfficientFormerV2-s0 (fine-tune) → audio sintetizado
+CWT features (EMG, 4 canales) → Conv2D x4 → TCN → vocoder → audio sintetizado
 ```

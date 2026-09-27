@@ -3,7 +3,6 @@ BUILD_DIR = build
 
 C_SOURCES = \
     Core/Src/main.c \
-    Core/Src/iis3dwb.c \
     Core/Src/inmp441.c \
     Core/Src/usb_cdc.c \
     Core/Src/frame.c \

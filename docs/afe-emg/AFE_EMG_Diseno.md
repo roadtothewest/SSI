@@ -4,8 +4,8 @@
 **Fecha:** 2026-08-07
 **Estado:** Análisis / especificación de diseño (sin archivos de hardware)
 **Alcance:** Revisión del BioAmp EXG Pill v1.0 como referencia, arquitectura AFE de
-4 canales sEMG con Right Leg Drive (RLD) activo, reemplazando al acelerómetro
-IIS3DWB como fuente del pipeline CWT → Deep Learning → vocoder.
+4 canales sEMG con Right Leg Drive (RLD) activo, como fuente del pipeline
+CWT → Deep Learning → vocoder.
 
 ---
 
@@ -45,8 +45,7 @@ IIS3DWB como fuente del pipeline CWT → Deep Learning → vocoder.
 > **Esta decisión (AFE discreto, Ruta B) no se reabre** salvo cambio de
 > presupuesto o de disponibilidad de componentes.
 
-El proyecto SSI evoluciona de capturar **vibraciones laríngeas** (IIS3DWB) a
-capturar **señales mioeléctricas superficiales (sEMG)** de 4 grupos musculares
+El proyecto SSI captura **señales mioeléctricas superficiales (sEMG)** de 4 grupos musculares
 (submentoniano, platisma, labio inferior, laringe) para decodificar intención
 fonética. La señal cruda (20–500 Hz) alimentará un pipeline de STFT/CWT →
 Conv2D → TCN → vocoder en el STM32N6.
@@ -284,7 +283,7 @@ CWT coherente y descarga ciclos de reloj del STM32N6.
 - **Nota sobre EMG:** la potencia dominante del sEMG está en 50–150 Hz; la banda
   completa 20–500 Hz preserva el espectro para el escalograma.
 - **Jitter del ADC:** el muestreo debe ser DMA con base de tiempo común (TIMER),
-  mismo esquema que el testbed actual con IIS3DWB.
+  el mismo esquema que el audio I2S del testbed.
 
 ### 3.6 Presupuesto de ruido y CMRR
 
@@ -324,7 +323,7 @@ de un chip falso).
 
 ---
 
-## 5. Interfaz con el STM32N6 (reemplazo del IIS3DWB)
+## 5. Interfaz con el STM32N6
 
 - **ADC:** ADC12 del STM32N6 (12-bit nativo), 4 canales, muestreo DMA a 1–2 kHz,
   base de tiempo TIMER común (mismo diseño que el flujo I2S del mic).
@@ -348,8 +347,7 @@ Byte 10+:  N muestras × 4 × int16 (CH1, CH2, CH3, CH4)
 ```
 
 Compatible con el formato existente (`docs/architecture.md` del testbed): se
-agrega el frame tipo EMG al lado de ACC (0x01) y AUDIO (0x02). En la etapa de
-desarrollo, EMG reemplaza a ACC como fuente del CWT.
+agrega el frame tipo EMG (0x03) al lado de AUDIO (0x02). EMG es la fuente del CWT.
 
 ---
 
@@ -384,7 +382,7 @@ Mic INMP441 (ground truth) ───I2S DMA───────┘        (4 es
 | 4 | Oscilación del lazo RLD | Polo dominante + resistor serie; validación en prototipo. |
 | 5 | Ruido de contacto (electrodos Ag/AgCl pregeliados) | Preparación de piel (Nuprep + alcohol, ver doc del pill). |
 | 6 | Saturación con contracciones fuertes | Ganancia configurable (G_total 500 default, ajuste a 1000). |
-| 7 | Reemplazo del IIS3DWB en firmware | Nuevo frame 0x03 EMG; migrar export.py CWT al dominio EMG. |
+| 7 | Captura EMG en firmware | Frame 0x03 EMG (ingest y export.py ya lo leen); falta la captura ADC+DMA. |
 
 ---
 

@@ -226,7 +226,7 @@ Referencias sugeridas para "copiar" el RLD: sección "Right Leg Drive" de los da
 
 - 3,3 V limpia (LDO de bajo ruido; el testbed cita un TPS7A4700). El LDO ya comprado es de **3,0 V**, no sirve como riel de 3,3 V (ver documento 1 §7).
 - VREF = 1,65 V: divisor + seguidor rail-to-rail + capacitor de 10 µF, compartida por las 4 INAs y por las etapas de una alimentación. Además es la referencia de retorno de los resistores Rg de los no inversores.
-- Bypass: 100 nF cerámicos pegados a cada pin de alimentación (ya hay 2 de 100 nF y 2 de 1 µF comprados del acelerómetro descartado); el AD8232 recomienda 0,1 µF cerca del pin y 1 µF más lejos [VERIFICADO-DS, p. 20].
+- Bypass: 100 nF cerámicos pegados a cada pin de alimentación (ya hay 2 de 100 nF y 2 de 1 µF en stock); el AD8232 recomienda 0,1 µF cerca del pin y 1 µF más lejos [VERIFICADO-DS, p. 20].
 
 ## 11. Errores y correcciones ocurridos en la conversación (para no repetirlos)
 

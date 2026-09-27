@@ -1,12 +1,10 @@
 #include "main.h"
-#include "iis3dwb.h"
 #include "inmp441.h"
 #include "usb_cdc.h"
 #include "frame.h"
 #include "sync_timer.h"
 
 UART_HandleTypeDef huart3;
-SPI_HandleTypeDef hspi1;
 I2S_HandleTypeDef hi2s3;
 TIM_HandleTypeDef htim2;
 
@@ -21,24 +19,6 @@ static void MX_DEBUG_UART_Init(void)
     huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
     huart3.Init.OverSampling = UART_OVERSAMPLING_16;
     HAL_UART_Init(&huart3);
-}
-
-static void MX_SPI1_Init(void)
-{
-    hspi1.Instance = SPI1;
-    hspi1.Init.Mode = SPI_MODE_MASTER;
-    hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-    hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
-    hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
-    hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
-    hspi1.Init.NSS = SPI_NSS_SOFT;
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
-    hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    hspi1.Init.CRCPolynomial = 7;
-    hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-    HAL_SPI_Init(&hspi1);
 }
 
 static void MX_I2S3_Init(void)
@@ -68,26 +48,9 @@ static void MX_TIM2_Init(void)
 
 static void MX_GPIO_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
-
-    GPIO_InitStruct.Pin = IIS3DWB_CS_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(IIS3DWB_CS_PORT, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(IIS3DWB_CS_PORT, IIS3DWB_CS_PIN, GPIO_PIN_SET);
-
-    GPIO_InitStruct.Pin = IIS3DWB_INT_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-    HAL_GPIO_Init(IIS3DWB_INT_PORT, &GPIO_InitStruct);
-
-    HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
-    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
 static void MX_DMA_Init(void)
@@ -139,7 +102,6 @@ int main(void)
     SystemClock_Config();
     MX_GPIO_Init();
     MX_DMA_Init();
-    MX_SPI1_Init();
     MX_I2S3_Init();
     MX_TIM2_Init();
     MX_DEBUG_UART_Init();
@@ -147,32 +109,21 @@ int main(void)
     sync_timer_init();
     usb_cdc_init();
 
-    if (!iis3dwb_init()) {
-        Error_Handler();
-    }
     if (!inmp441_init()) {
         Error_Handler();
     }
 
     HAL_TIM_Base_Start(&htim2);
 
-    iis3dwb_start_dma();
     inmp441_start_dma();
 
     uint32_t last_print = 0;
-    uint32_t last_acc_frames = 0;
     uint32_t last_audio_frames = 0;
 
     while (1)
     {
-        if (iis3dwb_acc_ready) {
-            iis3dwb_acc_ready = 0;
-            frame_process_acc_half();
-        }
-        if (iis3dwb_acc_ready) {
-            iis3dwb_acc_ready = 0;
-            frame_process_acc_full();
-        }
+        /* Captura EMG de 4 canales (ADC + DMA, frame 0x03): pendiente,
+         * ver docs/refactor-emg-software.md */
         if (inmp441_audio_ready) {
             inmp441_audio_ready = 0;
             frame_process_audio_half();
@@ -185,15 +136,12 @@ int main(void)
         uint32_t now = sync_timer_get_us();
         if (now - last_print > 1000000) {
             last_print = now;
-            uint32_t acc_delta = iis3dwb_frame_count - last_acc_frames;
             uint32_t audio_delta = inmp441_frame_count - last_audio_frames;
-            last_acc_frames = iis3dwb_frame_count;
             last_audio_frames = inmp441_frame_count;
 
             char buf[64];
             int n = snprintf(buf, sizeof(buf),
-                "ACC: %u fps | AUDIO: %u fps\r\n",
-                acc_delta, audio_delta);
+                "AUDIO: %u fps\r\n", audio_delta);
             HAL_UART_Transmit(&huart3, (uint8_t*)buf, n, 100);
         }
     }

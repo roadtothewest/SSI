@@ -15,7 +15,7 @@ Archivo .ssr = Frame[0] + Frame[1] + ... + Frame[N]
 |--------|-------|---------------|---------|--------------------------------------|
 | 0      | 1     | sync0         | uint8   | 0xAA — Sync word byte 1              |
 | 1      | 1     | sync1         | uint8   | 0x55 — Sync word byte 2              |
-| 2      | 1     | frame_type    | uint8   | 0x01=ACC, 0x02=AUDIO                 |
+| 2      | 1     | frame_type    | uint8   | 0x02=AUDIO, 0x03=EMG                 |
 | 3      | 1     | flags         | uint8   | Bit0: half/full, Bit1: overflow flag |
 | 4      | 4     | timestamp     | uint32  | μs desde inicio de captura (little-endian) |
 | 8      | 2     | data_len      | uint16  | Bytes de datos que siguen (little-endian) |
@@ -23,19 +23,21 @@ Archivo .ssr = Frame[0] + Frame[1] + ... + Frame[N]
 
 **Total cabecera: 10 bytes.**
 
-### ACC Frame (type=0x01)
+### EMG Frame (type=0x03)
 
-data contiene muestras de aceleración empaquetadas secuencialmente:
+data contiene muestras del ADC de los 4 canales sEMG, intercaladas por muestra
+(docs/afe-emg/AFE_EMG_Diseno.md §5.1):
 
-| Subcampo | Tipo      | Descripción                          |
-|----------|-----------|--------------------------------------|
-| axis     | int16[3]  | X, Y, Z en little-endian por muestra |
-| ...      | ...       | Repetir data_len/6 veces             |
+| Subcampo | Tipo      | Descripción                              |
+|----------|-----------|------------------------------------------|
+| ch       | int16[4]  | CH1, CH2, CH3, CH4 en little-endian      |
+| ...      | ...       | Repetir data_len/8 veces                 |
 
-Cada muestra = 6 bytes. Para 256 muestras por frame:
-data_len = 1536, data = 1536 bytes, frame total = 1546 bytes.
+Cada muestra = 8 bytes. Para 100 muestras por frame (50 ms a 2 kHz):
+data_len = 800, data = 800 bytes, frame total = 810 bytes.
 
-Factor de escala: int16 → g = valor / 16384 (para rango ±2g)
+Escala: códigos del ADC (sin signo desplazado a int16 centrado en VREF);
+voltaje referido a la entrada = V_ADC / 503 (ganancia nominal del AFE).
 
 ### AUDIO Frame (type=0x02)
 
@@ -54,7 +56,7 @@ Formato PCM 24-bit, signed, little-endian. Escala: ±2^23 = ±1.0
 ## Estructura de Archivo (Resultante)
 
 ```
-[Frame ACC #0] [Frame AUDIO #0] [Frame ACC #1] [Frame AUDIO #1] ...
+[Frame EMG #0] [Frame AUDIO #0] [Frame EMG #1] [Frame AUDIO #1] ...
 ```
 
 La secuencia exacta depende del orden de llegada por USB-CDC (no se
@@ -68,7 +70,7 @@ Una sesión se guarda en:
 dataset/sessions/{YYYY-MM-DD_HHmmss}/
 ├── metadata.json     → {device, sample_rate, odr, range, duration, notes}
 ├── data.ssr          → frames binarios
-├── info.md           → Notas de la sesión (posición sensor, sujeto, etc.)
+├── info.md           → Notas de la sesión (posición de electrodos, sujeto, etc.)
 └── check             → sha256sum del data.ssr
 ```
 
@@ -79,12 +81,12 @@ dataset/sessions/{YYYY-MM-DD_HHmmss}/
   "session_id": "2026-05-24_143022",
   "device": "NUCLEO-H723ZG",
   "sensors": {
-    "acc": { "model": "IIS3DWB", "odr_hz": 26700, "range_g": 2, "samples_per_frame": 256 },
+    "emg": { "model": "AFE sEMG 4ch (INA333 + MCP6004)", "fs_hz": 2000, "channels": 4, "gain": 503, "samples_per_frame": 100 },
     "audio": { "model": "INMP441", "sample_rate_hz": 16000, "bits": 24, "samples_per_frame": 128 }
   },
   "duration_s": 300,
-  "total_frames": { "acc": 31250, "audio": 18750 },
-  "notes": "Sensor sobre laringe, sujeto en reposo, voz en inglés"
+  "total_frames": { "emg": 6000, "audio": 37500 },
+  "notes": "Electrodos submentoniano/platisma/labio inferior/laringe, RLD en clavícula"
 }
 ```
 
@@ -93,4 +95,4 @@ dataset/sessions/{YYYY-MM-DD_HHmmss}/
 - `ssr-ingest` — genera archivos .ssr desde streaming USB-CDC
 - `ssr-inspect` — lee metadatos, imprime frames, valida integridad
 - `ssr-replay` — reproduce archivo .ssr a través del mismo pipe (debug)
-- `export.py` — convierte .ssr → .npz (CWT features + mel-audio)
+- `export.py` — convierte .ssr → .npz (CWT de los 4 canales EMG + mel-audio)

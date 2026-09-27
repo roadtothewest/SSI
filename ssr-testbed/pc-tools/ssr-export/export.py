@@ -2,7 +2,8 @@
 
 """
 ssr-export: Convierte archivos .ssr a .npz para Colab.
-Aplica CWT (Morlet) a aceleración y mel-spectrograma a audio.
+Aplica CWT (Morlet) a los 4 canales sEMG y mel-spectrograma a audio.
+Frame EMG (0x03): N muestras x 4 x int16 (CH1..CH4), ver docs/afe-emg/AFE_EMG_Diseno.md 5.1.
 """
 
 import argparse
@@ -33,8 +34,9 @@ except ImportError:
 HEADER_SIZE = 10
 SYNC0 = 0xAA
 SYNC1 = 0x55
-TYPE_ACC = 0x01
 TYPE_AUDIO = 0x02
+TYPE_EMG = 0x03
+EMG_CHANNELS = 4
 
 
 class SSRFile:
@@ -72,12 +74,12 @@ class SSRFile:
             pos += frame_size
 
     def split_channels(self):
-        acc_frames = [f for f in self.frames if f['type'] == TYPE_ACC]
+        emg_frames = [f for f in self.frames if f['type'] == TYPE_EMG]
         audio_frames = [f for f in self.frames if f['type'] == TYPE_AUDIO]
-        return acc_frames, audio_frames
+        return emg_frames, audio_frames
 
     def summary(self):
-        acc, audio = self.split_channels()
+        emg, audio = self.split_channels()
         if not self.frames:
             return "No frames found"
         ts_min = min(f['timestamp'] for f in self.frames)
@@ -85,35 +87,21 @@ class SSRFile:
         duration = (ts_max - ts_min) / 1e6
         return (
             f"Frames: {len(self.frames)} "
-            f"(ACC={len(acc)}, AUDIO={len(audio)}) | "
+            f"(EMG={len(emg)}, AUDIO={len(audio)}) | "
             f"Duration: {duration:.2f}s"
         )
 
 
-def extract_acc_channel(acc_frames):
-    samples_x, samples_y, samples_z = [], [], []
-    timestamps = []
-
-    for f in acc_frames:
-        data = f['data']
-        ts = f['timestamp']
-        n_samples = f['data_len'] // 6
-
-        for i in range(n_samples):
-            offset = i * 6
-            x = struct.unpack_from('<h', data, offset)[0]
-            y = struct.unpack_from('<h', data, offset+2)[0]
-            z = struct.unpack_from('<h', data, offset+4)[0]
-            samples_x.append(x)
-            samples_y.append(y)
-            samples_z.append(z)
-            timestamps.append(ts + i * (1_000_000 // 26700))
-
+def extract_emg_channels(emg_frames, fs):
+    """Devuelve {'ch': (N, 4) int16, 'timestamps_us': (N,)} desde frames EMG 0x03."""
+    blocks, timestamps = [], []
+    for f in emg_frames:
+        n = f['data_len'] // (2 * EMG_CHANNELS)
+        blocks.append(np.frombuffer(f['data'][:n * 2 * EMG_CHANNELS], dtype='<i2').reshape(n, EMG_CHANNELS))
+        timestamps.append(f['timestamp'] + np.arange(n, dtype=np.uint64) * int(1_000_000 // fs))
     return {
-        'x': np.array(samples_x, dtype=np.int16),
-        'y': np.array(samples_y, dtype=np.int16),
-        'z': np.array(samples_z, dtype=np.int16),
-        'timestamps_us': np.array(timestamps, dtype=np.uint64),
+        'ch': np.concatenate(blocks).astype(np.int16),
+        'timestamps_us': np.concatenate(timestamps).astype(np.uint64),
     }
 
 
@@ -191,31 +179,31 @@ def _mel_filterbank(freqs, n_mels, fs):
     return fbank
 
 
-def align_channels(acc_data, audio_data):
-    acc_ts = acc_data['timestamps_us']
+def align_channels(emg_data, audio_data):
+    emg_ts = emg_data['timestamps_us']
     audio_ts = audio_data['timestamps_us']
 
-    t_start = max(acc_ts[0], audio_ts[0])
-    t_end = min(acc_ts[-1], audio_ts[-1])
+    t_start = max(emg_ts[0], audio_ts[0])
+    t_end = min(emg_ts[-1], audio_ts[-1])
 
     if t_end <= t_start:
         return None, None, 0
 
     duration_s = (t_end - t_start) / 1e6
 
-    acc_mask = (acc_ts >= t_start) & (acc_ts <= t_end)
+    emg_mask = (emg_ts >= t_start) & (emg_ts <= t_end)
     audio_mask = (audio_ts >= t_start) & (audio_ts <= t_end)
 
-    acc_aligned = {
-        k: v[acc_mask] if isinstance(v, np.ndarray) else v
-        for k, v in acc_data.items()
+    emg_aligned = {
+        k: v[emg_mask] if isinstance(v, np.ndarray) else v
+        for k, v in emg_data.items()
     }
     audio_aligned = {
         k: v[audio_mask] if isinstance(v, np.ndarray) else v
         for k, v in audio_data.items()
     }
 
-    return acc_aligned, audio_aligned, duration_s
+    return emg_aligned, audio_aligned, duration_s
 
 
 def main():
@@ -230,6 +218,8 @@ def main():
                         help='Save diagnostic plots')
     parser.add_argument('--n-scales', type=int, default=64,
                         help='Number of CWT scales')
+    parser.add_argument('--fs-emg', type=float, default=2000,
+                        help='Tasa de muestreo del ADC EMG por canal [Hz] (default 2000)')
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -247,81 +237,69 @@ def main():
     ssr = SSRFile(input_path)
     print(f"Loaded: {ssr.path.name} | {ssr.summary()}")
 
-    acc_frames, audio_frames = ssr.split_channels()
-    if not acc_frames:
-        print("No ACC frames found")
+    emg_frames, audio_frames = ssr.split_channels()
+    if not emg_frames:
+        print("No EMG frames found")
         sys.exit(1)
     if not audio_frames:
         print("No AUDIO frames found")
         sys.exit(1)
 
-    print(f"ACC frames: {len(acc_frames)}, AUDIO frames: {len(audio_frames)}")
+    print(f"EMG frames: {len(emg_frames)}, AUDIO frames: {len(audio_frames)}")
 
-    acc_data = extract_acc_channel(acc_frames)
+    fs_emg = args.fs_emg
+    fs_audio = 16000
+    emg_data = extract_emg_channels(emg_frames, fs_emg)
     audio_data = extract_audio_channel(audio_frames)
 
-    print(f"ACC samples: {len(acc_data['x'])}, AUDIO samples: {len(audio_data['samples'])}")
+    print(f"EMG samples: {len(emg_data['ch'])} x {EMG_CHANNELS} ch, AUDIO samples: {len(audio_data['samples'])}")
 
-    acc_aligned, audio_aligned, duration = align_channels(acc_data, audio_data)
-    if acc_aligned is None:
+    emg_aligned, audio_aligned, duration = align_channels(emg_data, audio_data)
+    if emg_aligned is None:
         print("No temporal overlap between channels")
         sys.exit(1)
 
     print(f"Aligned duration: {duration:.2f}s")
-    print(f"Aligned ACC: {len(acc_aligned['x'])} samples")
+    print(f"Aligned EMG: {len(emg_aligned['ch'])} samples")
     print(f"Aligned AUDIO: {len(audio_aligned['samples'])} samples")
 
     export = {}
 
-    export['acc_x'] = np.array(acc_aligned['x'], dtype=np.int16)
-    export['acc_y'] = np.array(acc_aligned['y'], dtype=np.int16)
-    export['acc_z'] = np.array(acc_aligned['z'], dtype=np.int16)
-    export['acc_timestamps_us'] = np.array(acc_aligned['timestamps_us'], dtype=np.uint64)
+    export['emg'] = np.array(emg_aligned['ch'], dtype=np.int16)
+    export['emg_timestamps_us'] = np.array(emg_aligned['timestamps_us'], dtype=np.uint64)
     export['audio'] = np.array(audio_aligned['samples'], dtype=np.int32)
     export['audio_timestamps_us'] = np.array(audio_aligned['timestamps_us'], dtype=np.uint64)
-    export['sample_rate'] = 16000
-    export['acc_odr'] = 26700
-
-    fs_acc = 26700
-    fs_audio = 16000
+    export['sample_rate'] = fs_audio
+    export['emg_fs'] = fs_emg
 
     if args.cwt and HAS_SCIPY:
-        print("Computing CWT (Morlet) on ACC-X...")
-
-        acc_norm = acc_aligned['x'].astype(np.float64)
-        acc_norm -= acc_norm.mean()
-        acc_norm /= acc_norm.std() + 1e-10
-
+        print("Computing CWT (Morlet) on the 4 EMG channels...")
         max_samples = 500000
-        if len(acc_norm) > max_samples:
-            acc_norm = acc_norm[:max_samples]
+        f_max = min(500.0, 0.45 * fs_emg)
+        mags = []
+        for k in range(EMG_CHANNELS):
+            x = emg_aligned['ch'][:max_samples, k].astype(np.float64)
+            x -= x.mean()
+            x /= x.std() + 1e-10
+            cwt_matrix, cwt_freqs = cwt_morlet(x, fs_emg, f_min=20, f_max=f_max, n_scales=args.n_scales)
+            mags.append(np.abs(cwt_matrix).astype(np.float32))
 
-        cwt_matrix, cwt_freqs = cwt_morlet(
-            acc_norm, fs_acc,
-            f_min=50, f_max=3000,
-            n_scales=args.n_scales
-        )
-
-        export['cwt_mag'] = np.abs(cwt_matrix).astype(np.float32)
+        export['cwt_mag'] = np.stack(mags)          # (4, n_scales, N)
         export['cwt_frequencies'] = cwt_freqs.astype(np.float32)
         print(f"CWT shape: {export['cwt_mag'].shape}")
 
         if args.plot and HAS_MPL:
-            plt.figure(figsize=(12, 6))
-            plt.imshow(
-                np.abs(cwt_matrix),
-                aspect='auto',
-                extent=[0, len(acc_norm)/fs_acc, cwt_freqs[0], cwt_freqs[-1]],
-                cmap='viridis'
-            )
-            plt.yscale('log')
-            plt.ylabel('Frequency (Hz)')
-            plt.xlabel('Time (s)')
-            plt.title('CWT of ACC-X (Morlet)')
-            plt.colorbar(label='Magnitude')
+            fig, axes = plt.subplots(EMG_CHANNELS, 1, figsize=(12, 10), sharex=True)
+            for k, ax in enumerate(axes):
+                ax.imshow(mags[k], aspect='auto',
+                          extent=[0, mags[k].shape[1] / fs_emg, cwt_freqs[-1], cwt_freqs[0]], cmap='viridis')
+                ax.set_yscale('log')
+                ax.set_ylabel(f'CH{k + 1} [Hz]')
+            axes[-1].set_xlabel('Time (s)')
+            axes[0].set_title('CWT (Morlet) de los 4 canales sEMG')
             plot_path = input_path.with_suffix('.cwt.png')
-            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-            plt.close()
+            fig.savefig(plot_path, dpi=150, bbox_inches='tight')
+            plt.close(fig)
             print(f"CWT plot saved: {plot_path}")
 
     if args.mel and HAS_SCIPY:

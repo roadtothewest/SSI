@@ -2,17 +2,11 @@
 
 ## Conexiones STM32 (NUCLEO-H723ZG Reference)
 
-### IIS3DWB — SPI1
+### AFE sEMG — ADC (4 canales)
 
-| IIS3DWB Pin | STM32 Pin | Función       | Notas                    |
-|-------------|-----------|---------------|--------------------------|
-| CS          | PA4       | SPI1_NSS      | GPIO output, active low |
-| SCK         | PA5       | SPI1_SCK      | 10 MHz                  |
-| MOSI        | PA7       | SPI1_MOSI     |                         |
-| MISO        | PA6       | SPI1_MISO     |                         |
-| INT1        | PC0       | EXTI0         | Data ready interrupt    |
-| VDD         | 3.3V      | TPS7A output  | LDO limpio              |
-| GND         | GND       | AGND          | Plano separado          |
+Las 4 salidas ADC1..ADC4 del AFE (docs/afe-emg/) van a 4 entradas analógicas
+del ADC con disparo por timer y DMA (2 kHz por canal propuesto). Los pines
+quedan pendientes de la decisión de MCU (ver docs/refactor-emg-software.md).
 
 ### INMP441 — I2S3 (vía SAI1 mapeado a I2S)
 
@@ -30,7 +24,7 @@
 | TPS7A Pin | Conexión          | Notas                      |
 |-----------|-------------------|----------------------------|
 | VIN       | 5V (NUCLEO/VBUS)  | Desde USB o powerbank      |
-| VOUT      | 3.3V sensores     | VDD IIS3DWB + INMP441      |
+| VOUT      | 3.3V sensores     | VDD INMP441                |
 | GND       | AGND              | Plano de tierra analógico  |
 | SHDN      | 5V (pull-up)      | Enable siempre activo      |
 | NR/SS     | 4.7µF → GND       | Noise reduction / soft-start|

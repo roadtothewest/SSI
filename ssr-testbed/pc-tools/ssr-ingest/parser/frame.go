@@ -13,8 +13,8 @@ import (
 const (
 	Sync0      = 0xAA
 	Sync1      = 0x55
-	TypeACC    = 0x01
 	TypeAudio  = 0x02
+	TypeEMG    = 0x03 // EMG 4 canales (pendiente en firmware)
 	HeaderSize = 10
 )
 
@@ -127,10 +127,10 @@ func (p *FrameParser) DropCount() uint64 {
 
 func (h *FrameHeader) TypeName() string {
 	switch h.FrameType {
-	case TypeACC:
-		return "ACC"
 	case TypeAudio:
 		return "AUDIO"
+	case TypeEMG:
+		return "EMG"
 	default:
 		return fmt.Sprintf("UNKNOWN(0x%02X)", h.FrameType)
 	}

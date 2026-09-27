@@ -38,7 +38,7 @@ Metas en el orden que dio el usuario:
 
 | Tema | Decisión | Estado |
 |---|---|---|
-| Sensor | sEMG diferencial. El acelerómetro IIS3DWB **se descartó por completo** (medía un efecto del habla, no su causa). Costo hundido ≈ CLP 28.000. | Cerrado |
+| Sensor | sEMG diferencial. | Cerrado |
 | Canales | **4**: CH1 submentoniano, CH2 platisma, CH3 labio inferior, CH4 laringe. Primero se cerró en 3 por presupuesto; el usuario pidió reabrirlo y quedó en 4. | Cerrado |
 | Electrodos | 9 (8 de señal + 1 electrodo de RLD/referencia). | Cerrado |
 | Ruta de AFE | Discreto propio, "Ruta B" perfboard (sin PCB fabricado, sin espera de manufactura). El usuario tiene "vasta experiencia diseñando y validando circuitos basados en op amps". | Cerrado |

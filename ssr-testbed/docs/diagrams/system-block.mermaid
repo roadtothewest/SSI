@@ -4,19 +4,15 @@ block-beta
 
   block:skin:1
     columns 1
-    block:flex:2
-      columns 1
-      IIS3DWB("IIS3DWB<br/>LGA-14L<br/>2.5×3mm")
-      FPC("Flex PCB<br/>0.1mm polyimide<br/>Adhesivo médico 3M 1526L")
-    end
-    Piel("Piel (laringe)")
+    AFE("AFE sEMG<br/>4 canales + RLD<br/>20-500 Hz")
+    Piel("9 electrodos<br/>(4 pares + RLD)")
   end
 
   space:1
 
   block:stm32:2
     columns 3
-    SPI("SPI1<br/>10 MHz<br/>DMA PP")
+    ADC("ADC 4ch<br/>2 kHz/ch<br/>DMA PP")
     I2S("I2S3<br/>DMA circ")
     TIM("TIM2<br/>sync<br/>1 MHz")
     USB("USB CDC<br/>Bulk EP")
@@ -31,14 +27,13 @@ block-beta
   PC["PC (Linux Mint)<br/>ssr-ingest Go<br/>Dataset capture"]
 
   style skin fill:#f9e5d9,stroke:#d4735c
-  style flex fill:#ffe0cc,stroke:#ff8c42
   style stm32 fill:#dae8fc,stroke:#6c8ebf
   style PC fill:#d5e8d4,stroke:#82b366
 
-  IIS3DWB --> SPI
+  AFE --> ADC
   INMP441 --> I2S
-  TIM --> SPI
+  TIM --> ADC
   TIM --> I2S
-  SPI --> USB
+  ADC --> USB
   I2S --> USB
   USB --> PC

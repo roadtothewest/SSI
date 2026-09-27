@@ -2,7 +2,7 @@
 flowchart LR
   subgraph FW["Plataforma Desarrollo (STM32H723ZG)"]
     direction TB
-    SPIDMA["SPI DMA Ping-Pong<br/>IIS3DWB @ 26.7 kHz"] --> CALLBACK["Half/Full Transfer<br/>Callback"]
+    ADCDMA["ADC DMA Ping-Pong<br/>AFE sEMG 4ch @ 2 kHz"] --> CALLBACK["Half/Full Transfer<br/>Callback"]
     I2SDMA["I2S DMA Circular<br/>INMP441 @ 16 kHz"] --> CALLBACK
     CALLBACK --> FRAME["Frame Builder<br/>{sync, type, ts, len, data}"]
     TIM2["TIM2 @ 1 MHz<br/>Base de tiempo"] --> CALLBACK
