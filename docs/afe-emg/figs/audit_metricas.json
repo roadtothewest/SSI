@@ -1,0 +1,322 @@
+{
+ "rld_robustez": [
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 0.02,
+   "con_RLD_uVpk": 0.0,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 7.88,
+   "con_RLD_uVpk": 0.39,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 12.38,
+   "con_RLD_uVpk": 0.61,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 0.02,
+   "con_RLD_uVpk": 0.0,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 7.94,
+   "con_RLD_uVpk": 0.4,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 12.47,
+   "con_RLD_uVpk": 0.62,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.011
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 0.2,
+   "con_RLD_uVpk": 0.01,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.096
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 70.3,
+   "con_RLD_uVpk": 3.48,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.096
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 110.4,
+   "con_RLD_uVpk": 5.46,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.096
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 0.2,
+   "con_RLD_uVpk": 0.01,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.097
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 70.86,
+   "con_RLD_uVpk": 3.53,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.097
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "bateria",
+   "sin_RLD_uVpk": 111.22,
+   "con_RLD_uVpk": 5.55,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.097
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 0.23,
+   "con_RLD_uVpk": 0.01,
+   "mejora_dB": 25.9,
+   "salida_RLD_Vpk": 0.118
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 86.65,
+   "con_RLD_uVpk": 4.3,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.118
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "20k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 136.05,
+   "con_RLD_uVpk": 6.75,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 0.118
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 0.24,
+   "con_RLD_uVpk": 0.01,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.12
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 87.05,
+   "con_RLD_uVpk": 4.37,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.12
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "200k",
+   "acople_red": "3p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 136.69,
+   "con_RLD_uVpk": 6.86,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 0.12
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 2.42,
+   "con_RLD_uVpk": 0.12,
+   "mejora_dB": 26.2,
+   "salida_RLD_Vpk": 1.183
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 866.16,
+   "con_RLD_uVpk": 42.98,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 1.183
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "20k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 1360.03,
+   "con_RLD_uVpk": 67.51,
+   "mejora_dB": 26.1,
+   "salida_RLD_Vpk": 1.183
+  },
+  {
+   "desbalance": "0",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 2.45,
+   "con_RLD_uVpk": 0.12,
+   "mejora_dB": 26.2,
+   "salida_RLD_Vpk": 1.202
+  },
+  {
+   "desbalance": "51k",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 869.87,
+   "con_RLD_uVpk": 43.67,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 1.202
+  },
+  {
+   "desbalance": "200k",
+   "electrodo_RLD": "200k",
+   "acople_red": "30p",
+   "conexion": "USB a PC",
+   "sin_RLD_uVpk": 1365.79,
+   "con_RLD_uVpk": 68.59,
+   "mejora_dB": 26.0,
+   "salida_RLD_Vpk": 1.202
+  }
+ ],
+ "semg": {
+  "ch1": {
+   "musculo": "submentoniano",
+   "semg_uVrms_rafaga": 50.8,
+   "ruido_entrada_uVrms": 504.9,
+   "snr_entrada_dB": -21.2,
+   "snr_salida_con_RLD_dB": -0.3,
+   "snr_salida_sin_RLD_dB": -4.0,
+   "snr_salida_filtro_digital_dB": 17.5,
+   "corr_envolvente_salida_vs_verdad": 0.98,
+   "corr_envolvente_limpia_vs_verdad": 0.982,
+   "contraste_rafaga_reposo": 2.4,
+   "latencia_ms": 0.6,
+   "fmediana_entrada_Hz": 83.0,
+   "fmediana_salida_Hz": 83.0,
+   "adc_min_V": 1.546,
+   "adc_max_V": 1.759,
+   "ina_min_V": 1.424,
+   "ina_max_V": 1.479
+  },
+  "ch2": {
+   "musculo": "platisma",
+   "semg_uVrms_rafaga": 31.1,
+   "ruido_entrada_uVrms": 731.6,
+   "snr_entrada_dB": -29.7,
+   "snr_salida_con_RLD_dB": -6.1,
+   "snr_salida_sin_RLD_dB": -9.1,
+   "snr_salida_filtro_digital_dB": 7.6,
+   "corr_envolvente_salida_vs_verdad": 0.878,
+   "corr_envolvente_limpia_vs_verdad": 0.988,
+   "contraste_rafaga_reposo": 2.2,
+   "latencia_ms": 0.6,
+   "fmediana_entrada_Hz": 87.9,
+   "fmediana_salida_Hz": 92.8,
+   "adc_min_V": 1.555,
+   "adc_max_V": 1.749,
+   "ina_min_V": 1.386,
+   "ina_max_V": 1.466
+  },
+  "ch3": {
+   "musculo": "labio inferior",
+   "semg_uVrms_rafaga": 40.9,
+   "ruido_entrada_uVrms": 525.1,
+   "snr_entrada_dB": -22.4,
+   "snr_salida_con_RLD_dB": -4.0,
+   "snr_salida_sin_RLD_dB": -6.9,
+   "snr_salida_filtro_digital_dB": 15.7,
+   "corr_envolvente_salida_vs_verdad": 0.984,
+   "corr_envolvente_limpia_vs_verdad": 0.985,
+   "contraste_rafaga_reposo": 2.5,
+   "latencia_ms": 0.6,
+   "fmediana_entrada_Hz": 63.5,
+   "fmediana_salida_Hz": 63.5,
+   "adc_min_V": 1.557,
+   "adc_max_V": 1.765,
+   "ina_min_V": null,
+   "ina_max_V": null
+  },
+  "ch4": {
+   "musculo": "laringe",
+   "semg_uVrms_rafaga": 23.5,
+   "ruido_entrada_uVrms": 517.3,
+   "snr_entrada_dB": -27.0,
+   "snr_salida_con_RLD_dB": -11.5,
+   "snr_salida_sin_RLD_dB": -13.1,
+   "snr_salida_filtro_digital_dB": 9.0,
+   "corr_envolvente_salida_vs_verdad": 0.821,
+   "corr_envolvente_limpia_vs_verdad": 0.981,
+   "contraste_rafaga_reposo": 1.6,
+   "latencia_ms": 0.6,
+   "fmediana_entrada_Hz": 87.9,
+   "fmediana_salida_Hz": 92.8,
+   "adc_min_V": 1.533,
+   "adc_max_V": 1.766,
+   "ina_min_V": null,
+   "ina_max_V": null
+  }
+ }
+}

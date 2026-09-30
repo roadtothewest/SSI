@@ -54,23 +54,29 @@ def compare(ref, sch, what, fixed=('0',)):
     return errs
 
 
-if __name__ == '__main__':
-    subprocess.run(['wine', r'C:\Program Files\ADI\LTspice\LTspice.exe', '-netlist', 'AFE_4CH.asc'],
+STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN')
+
+
+def check(asc):
+    subprocess.run(['wine', r'C:\Program Files\ADI\LTspice\LTspice.exe', '-netlist', asc],
                    cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-    net = open(os.path.join(HERE, 'AFE_4CH.net'), encoding='utf-8', errors='replace').read()
+    net = open(os.path.join(HERE, asc[:-4] + '.net'), encoding='utf-8', errors='replace').read()
+    os.remove(os.path.join(HERE, asc[:-4] + '.net'))
     lib = open(os.path.join(HERE, 'afe_channel.lib'), encoding='latin-1').read()
     errs = compare(elements(block(lib, 'AFE_CH')), elements(block(net, 'CANAL')), 'CANAL',
                    fixed=('0', 'EP', 'EN', 'VCC', 'VREF', 'ADC', 'RGM', 'INAOUT'))
-    # nivel superior: afe_4ch_top.inc (sin R de sensado sobre electrodos) + VREFGEN aplanado + estimulos de t7
     top = open(os.path.join(HERE, 'afe_4ch_top.inc'), encoding='latin-1').read().splitlines()
-    ref = elements(top)
-    ref = {k: v for k, v in ref.items() if not k.startswith('RSE') and k != 'XVREF'}
+    ref = {k: v for k, v in elements(top).items() if not k.startswith('RSE') and k != 'XVREF'}
     for e, nodes in elements(block(lib, 'VREFGEN')).items():
-        ref[e if e != 'XVR' else 'XVR'] = ['VREF_DIV' if n == 'VD' else n for n in nodes]
-    t7 = elements(open(os.path.join(HERE, 't7_func.cir'), encoding='latin-1').read().splitlines())
-    ref.update({k: v for k, v in t7.items() if k[:2] in ('VL', 'VW') or k.startswith('BIN')})
-    sch = {k: v for k, v in elements(net.split('* block symbol definitions')[0].splitlines()).items()}
-    errs += compare(ref, sch, 'AFE_4CH', fixed=('0', 'VCC', 'VREF', 'BODY'))
-    print('\n'.join(errs) if errs else 'OK: conectividad del esquematico = netlists simulados '
-          f'({len(elements(block(net, "CANAL")))} elementos en CANAL, {len(sch)} en AFE_4CH)')
-    sys.exit(1 if errs else 0)
+        ref[e] = ['VREF_DIV' if n == 'VD' else n for n in nodes]
+    sch = {k: v for k, v in elements(net.split('* block symbol definitions')[0].splitlines()).items()
+           if not k.startswith(STIM)}
+    errs += compare(ref, sch, asc, fixed=('0', 'VCC', 'VREF', 'BODY'))
+    print(f'{asc}: ' + ('\n'.join(errs) if errs else 'OK, conectividad = netlists simulados '
+          f'({len(elements(block(net, "CANAL")))} elementos en CANAL, {len(sch)} en el nivel superior)'))
+    return not errs
+
+
+if __name__ == '__main__':
+    ok = [check(a) for a in (sys.argv[1:] or ['AFE_4CH.asc', 'AUDIT_RLD.asc', 'AUDIT_SEMG.asc'])]
+    sys.exit(0 if all(ok) else 1)

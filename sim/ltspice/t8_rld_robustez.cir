@@ -1,0 +1,23 @@
+* T8 - Auditoria del RLD: eficacia a 50 Hz en condiciones adversas (4 canales, INA333 de TI)
+* RLDMODE 1: sin RLD, referencia pasiva por 390k | 2: RLD activo
+* RIMB: desbalance extra del electrodo - (0 / 51k IEC / 200k)
+* RER:  electrodo del RLD (20k gel / 200k piel mal preparada)
+* CMB:  acople red-cuerpo (3p tipico / 30p junto a un cable de red)
+* CGE:  20p a bateria / 1 USB a PC
+.include opa.lib
+.include ina.lib
+.step param RLDMODE list 1 2
+.step param RIMB list 1 51k 200k
+.step param RER list 20k 200k
+.step param CMB list 3p 30p
+.step param CGE list 20p 1
+.param SENSE=0 CINT=1n RLIM=390k RS=100k CCM=47p CD=100p VMAINS_TRAN=0 VMAINS_AC=311
+VIN1 S1 BODY 0
+VIN2 S2 BODY 0
+VIN3 S3 BODY 0
+VIN4 S4 BODY 0
+.include afe_4ch_top.inc
+.ac list 50
+.save V(adc1) V(adc2) V(adc3) V(adc4) V(body) V(vref) V(rldo)
+.options gmin=100f gminsteps=0 srcsteps=0
+.end

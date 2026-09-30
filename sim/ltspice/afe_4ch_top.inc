@@ -16,13 +16,18 @@
 *           1 = circuito unido a tierra, p. ej. USB a un PC enchufado)
 *   VMAINS_TRAN, VMAINS_AC  amplitud de la red de 50 Hz para .tran y para .ac
 *   RS, CCM, CD  proteccion y filtro RFI de entrada
+* Parametros con valor por defecto (se pueden barrer con .step):
+*   CMB   acople red-cuerpo (3p tipico; 30p = cerca de un cable de red)
+*   RIMB  desbalance extra en serie con el electrodo - de cada par (51k = IEC 60601-2-27)
+*   RER   resistencia del electrodo RLD (20k gel; 200k piel poco preparada)
+.param CMB=3p RIMB=51k RER=20k
 .include afe_channel.lib
 VCC VCC 0 3.3
 XVREF VCC VREF VREFGEN
 
 * --- Red electrica y cuerpo (valores tipicos) ---
 VM MAINS EARTH SINE(0 {VMAINS_TRAN} 50) AC {VMAINS_AC}
-CMB MAINS BODY 3p
+CMB MAINS BODY {CMB}
 CBE BODY EARTH 200p
 CGE 0 EARTH {CGE}
 RGE 0 EARTH 1G
@@ -31,19 +36,19 @@ RGE 0 EARTH 1G
 * un desbalance extra de 51k || 47n (IEC 60601-2-27). Media celda distinta en cada uno.
 XE1P S1 EP1 ELECTRODE Vhc=5m
 XE1N BODY E1x ELECTRODE Vhc=-5m
-RI1 E1x EN1 51k
+RI1 E1x EN1 {RIMB}
 CI1 E1x EN1 47n
 XE2P S2 EP2 ELECTRODE Vhc=12m
 XE2N BODY E2x ELECTRODE Vhc=0
-RI2 E2x EN2 51k
+RI2 E2x EN2 {RIMB}
 CI2 E2x EN2 47n
 XE3P S3 EP3 ELECTRODE Vhc=-8m
 XE3N BODY E3x ELECTRODE Vhc=10m
-RI3 E3x EN3 51k
+RI3 E3x EN3 {RIMB}
 CI3 E3x EN3 47n
 XE4P S4 EP4 ELECTRODE Vhc=3m
 XE4N BODY E4x ELECTRODE Vhc=-15m
-RI4 E4x EN4 51k
+RI4 E4x EN4 {RIMB}
 CI4 E4x EN4 47n
 
 * --- 4 canales ---
@@ -73,4 +78,4 @@ RSE4N EN4 RLDN {if(SENSE==1,100k,1T)}
 * --- 9o electrodo (clavicula): RLD o referencia pasiva ---
 RLIM RLDO RLDE {if(RLDMODE==2,RLIM,1T)}
 RPAS VREF RLDE {if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
-XER BODY RLDE ELECTRODE Vhc=0
+XER BODY RLDE ELECTRODE Vhc=0 Re={RER}
