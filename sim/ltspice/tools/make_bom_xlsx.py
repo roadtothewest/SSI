@@ -30,7 +30,7 @@ MODULES = [
         ('Cdif', 'Condensador diferencial', '100p', '100p', 'ceramico C0G/NP0 5 %', 1, 1, 'condensador ceramico 100pF NP0', ''),
     ]),
     ('3 AMPLIFICADOR DE INSTRUMENTACION', 4, [
-        ('XINA', 'INA (POR DEFINIR, ver hoja Requisitos IC)', 'INA333', 'INA333 / AD623 / AD8226 / INA826', 'DIP-8 o modulo con RG accesible', 1, 1, 'INA333 o AD623AN DIP-8', 'G1 = 1 + 100k/RG para INA333/AD623/AD8226/INA826'),
+        ('XINA', 'INA333 (modulo MCU-333)', 'INA333', 'INA333 modulo MCU-333', 'modulo; RG: quitar potenciometro', 1, 1, 'modulo MCU-333 INA333', 'Reemplazar el potenciometro de RG por RGa+RGb y sacar un cable del punto medio al RLD. Respaldo: AD623AN DIP-8 (misma formula de G)'),
         ('RGa, RGb', 'Resistencia de ganancia (partida en dos)', '2.61k', '2.7k', 'pelicula metalica 1 %, parear con multimetro', 2, 4, 'resistencia 2.7k 1%', 'Con 2 x 2.7k: G1 = 19.5 (diseno 20.16). El punto medio va al RLD'),
         ('C desac. INA', 'Desacople del INA', '100n', '100n', 'ceramico X7R', 1, 1, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
@@ -61,7 +61,7 @@ MODULES = [
     ('8 BUFFER + SALIDA AL ADC', 4, [
         ('Rbk', 'Resistencia del bucket', '100', '100', 'pelicula metalica 1 %', 1, 1, 'resistencia 100 ohm 1%', ''),
         ('Cbk', 'Condensador del bucket', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
-        ('ADCk', 'Cable a Arduino A0..A3 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A0 (PA5), CH2-A1 (PA9), CH3-A2 (PA10), CH4-A3 (PA12). Mas 1 cable de GND'),
+        ('ADCk', 'Cable a Arduino A1..A4 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12), CH4-A4 (PF3). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
         ('XBF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
     ('9 VREF 1.65 V (compartido)', 1, [
@@ -77,7 +77,8 @@ MODULES = [
         ('XRLD', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
     ('11 OP-AMPS (paquetes)', 1, [
-        ('XHP..XBF x4, XRLD, XVR', 'Op-amp cuadruple (POR DEFINIR, ver hoja Requisitos IC)', 'MCP6004', 'cuadruple rail-to-rail', 'DIP-14', 6, 1, 'MCP6004 / MCP604 / TLV2374 / OPA4340', '22 secciones = 5 por canal x 4 + RLD + VREF (2 libres). Si es doble: 11 unidades DIP-8'),
+        ('XHP..XBF x4, XRLD, XVR', 'Op-amp cuadruple MCP6004', 'MCP6004', 'MCP6004-I/SL', 'SOIC-14', 6, 4, 'MCP6004-I/SL', '22 secciones = 5 por canal x 4 + RLD + VREF (2 libres). RS Chile vende en paquetes de 10'),
+        ('-', 'Adaptador SOIC-14 a DIP-14', '-', 'SOIC14 a DIP14', 'PCB adaptador', 6, 1, 'adaptador SOIC14 a DIP14', 'Para montar el MCP6004-I/SL en perfboard'),
         ('-', 'Zocalo DIP-14', '-', 'DIP-14', 'zocalo', 6, 1, 'zocalo DIP 14 pines', 'Si los op-amps son dobles: 11 zocalos DIP-8'),
         ('-', 'Desacople de cada op-amp', '100n', '100n', 'ceramico X7R', 6, 2, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
@@ -96,8 +97,8 @@ MODULES = [
     ]),
     ('14 MECANICA E INTERCONEXION', 1, [
         ('-', 'Perfboard', '-', '10 x 15 cm', 'fibra de vidrio', 1, 1, 'placa perforada 10x15', ''),
-        ('-', 'Zocalo DIP-8 (INA)', '-', 'DIP-8', 'zocalo', 4, 1, 'zocalo DIP 8 pines', 'Solo si el INA es DIP-8'),
-        ('-', 'Adaptador SOIC/MSOP-8 a DIP-8', '-', '-', 'PCB adaptador', 4, 1, 'adaptador SOIC8 a DIP8', 'Solo si el INA es SMD'),
+        ('-', 'Zocalo DIP-8 (INA)', '-', 'DIP-8', 'zocalo', 0, 0, 'zocalo DIP 8 pines', 'Solo si usas el respaldo AD623AN DIP-8'),
+        ('-', 'Adaptador SOIC/MSOP-8 a DIP-8', '-', '-', 'PCB adaptador', 0, 0, 'adaptador SOIC8 a DIP8', 'Solo si compras el INA333 suelto (SMD)'),
         ('-', 'Tira de headers macho/hembra', '-', '2.54 mm', '-', 2, 1, 'header 2.54mm 40 pines', ''),
         ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable rigido 24 AWG', ''),
     ]),
@@ -158,6 +159,10 @@ def bom(wb):
             ws.cell(rr, 13, 'HUBOT'); ws.cell(rr, 14, 890)
             ws.cell(rr, 14).comment = None
             ws.cell(rr, 17, 'EJEMPLO de llenado: CLP 890 c/IVA en hubot.cl (30-sep-2026). Tu LDO de 3.0 V no sirve')
+        if ws.cell(rr, 3).value == 'Op-amp cuadruple MCP6004':
+            ws.cell(rr, 13, 'RS Chile'); ws.cell(rr, 14, 809)
+        if ws.cell(rr, 3).value == 'INA333 (modulo MCU-333)':
+            ws.cell(rr, 13, 'MechatronicStore'); ws.cell(rr, 14, 6790)
     ws.cell(last + 2, 14, 'TOTAL').font = Font(name=F, bold=True)
     ws.cell(last + 2, 15, f'=SUM(O5:O{last})').font = Font(name=F, bold=True)
     ws.cell(last + 2, 15).number_format = CLP
@@ -279,9 +284,57 @@ def tiendas(wb):
         ws.column_dimensions[get_column_letter(j)].width = w
 
 
+def _cat(comp, tipo):
+    t = tipo.lower()
+    for k, v in (('pelicula', 'resistencia'), ('poliester/mkt', 'cond. poliester (film)'), ('poliester', 'cond. poliester o C0G'),
+                 ('c0g', 'cond. ceramico C0G'), ('x7r', 'cond. ceramico/electrolitico'), ('ceramico o', 'cond. ceramico/electrolitico'),
+                 ('diodo', 'diodo')):
+        if k in t:
+            return v
+    return comp
+
+
+def compact_rows():
+    """Agrupa por (categoria, valor): [(valor, cantidad total con repuesto, categoria)]."""
+    agg = {}
+    for _, nch, rows in MODULES:
+        for refs, comp, vd, vc, tipo, qch, rep_, buscar, nota in rows:
+            if not qch:
+                continue
+            cat = _cat(comp, tipo)
+            val = vc if vc not in ('-',) else comp
+            agg[(cat, val)] = agg.get((cat, val), 0) + qch * nch + rep_
+    return [(v, q, c) for (c, v), q in agg.items()]
+
+
+def compacta():
+    wb = Workbook(); ws = wb.active; ws.title = 'BoM compacta'
+    ws['A1'] = 'BoM compacta AFE sEMG AuraVox (4 canales, incluye repuesto). Detalle por modulo en BoM_AFE_AuraVox.xlsx'
+    ws['A1'].font = Font(name=F, bold=True, size=12)
+    hdr(ws, 3, ['Valor / parte', 'Cantidad', 'Componente', 'Precio unit. (CLP)', 'Subtotal (CLP)', 'Comprado'])
+    rows = sorted(compact_rows(), key=lambda r: (r[2], r[0]))
+    for i, (v, q, t) in enumerate(rows, 4):
+        for j, x in enumerate((v, q, t), 1):
+            ws.cell(i, j, x).font = Font(name=F)
+        ws.cell(i, 5, f'=IF(D{i}="","",B{i}*D{i})').number_format = CLP
+        for j in (4, 6):
+            ws.cell(i, j).fill = INP; ws.cell(i, j).font = Font(name=F, color='0000FF')
+        ws.cell(i, 4).number_format = CLP
+        for j in range(1, 7):
+            ws.cell(i, j).border = BOX
+    n = 3 + len(rows)
+    ws.cell(n + 1, 4, 'TOTAL').font = Font(name=F, bold=True)
+    ws.cell(n + 1, 5, f'=SUM(E4:E{n})').number_format = CLP
+    for j, w in enumerate([30, 10, 34, 16, 16, 12], 1):
+        ws.column_dimensions[get_column_letter(j)].width = w
+    ws.freeze_panes = 'A4'
+    out = OUT.replace('.xlsx', '_compacta.xlsx'); wb.save(out); print(out)
+
+
 if __name__ == '__main__':
     wb = Workbook()
     last = bom(wb); resumen(wb, last); requisitos(wb); tiendas(wb)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     wb.save(OUT)
     print(OUT)
+    compacta()

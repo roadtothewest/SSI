@@ -4,7 +4,7 @@
   INA333.asy, ELECTRODO.asy  simbolos propios
 La conectividad se verifica con tools/check_asc.py (netlist de LTspice vs afe_channel.lib).
 """
-import os
+import os, sys
 
 HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -128,7 +128,7 @@ def canal():
     # ---- 2 RFI
     s.box(384, -336, 800, 512, '2  FILTRO RFI', 'Rf 1k, Ccm {CCM}, Cd {CD}')
     for side, y in (('p', P), ('n', N)):
-        s.R(f'Rf{side}', (448, y), (528, y), '1k')
+        s.R(f'Rf{side}', (448, y), (528, y), '{RRFI}')
         s.wire((528, y), (592, y), (656, y), (720, y), (944, y))
     s.C('Ccmp', (592, P), (592, 64), '{CCM}'); s.gnd((592, 64))
     s.wire((656, P), (656, 160)); s.C('Cdif', (656, 160), (656, 224), '{CD}'); s.wire((656, 224), (656, N))
@@ -136,19 +136,19 @@ def canal():
     # ---- 3 INA333
     s.box(800, -336, 1296, 512, '3  INA333, G1 = 20.16', 'G1 = 1+100k/RG, RG = 2 x 2.61k\npunto medio RGM -> RLD')
     s.symbol('INA333', 'XINA', (1040, 192), 'R0', 'INA333')
-    s.wire((944, 96), (880, 96)); s.R('RGa', (880, 96), (880, 176), '2.61k')
-    s.wire((880, 176), (880, 192), (880, 208)); s.R('RGb', (880, 208), (880, 288), '2.61k'); s.wire((880, 288), (944, 288))
+    s.wire((944, 96), (880, 96)); s.R('RGa', (880, 96), (880, 176), '{RGH}')
+    s.wire((880, 176), (880, 192), (880, 208)); s.R('RGb', (880, 208), (880, 288), '{RGH}'); s.wire((880, 288), (944, 288))
     s.label((880, 192), 'RGM', dx=-48, iopin='Out')
     s.label((1040, -48), 'VCC', dy=-16); s.gnd((1040, 432)); s.label((1104, 432), 'VREF', dy=16)
-    s.wire((1200, 192), (1264, 192), (1312, 192)); s.flag((1264, 192), 'INAOUT', 'Out')
+    s.wire((1200, 192), (1264, 192), (1312, 192)); s.flag((1264, 192), 'INAOUT')
     # ---- 4 HPF
     s.box(1296, -336, 1952, 512, '4  HPF 20 Hz  (Sallen-Key 2o orden)', 'ganancia 1, Q 0.707')
-    s.C('Chp1', (1312, 192), (1376, 192), '100n')
+    s.C('Chp1', (1312, 192), (1376, 192), '{CHP}')
     s.wire((1376, 192), (1440, 192), (1536, 192))
-    s.R('R1', (1440, 192), (1440, 112), '56.2k')
-    s.C('Chp2', (1536, 192), (1600, 192), '100n')
+    s.R('R1', (1440, 192), (1440, 112), '{RHP1}')
+    s.C('Chp2', (1536, 192), (1600, 192), '{CHP}')
     s.wire((1600, 192), (1664, 192), (1728, 192))
-    s.R('Ra', (1664, 192), (1664, 272), '113k'); s.label((1664, 272), 'VREF', dy=16)
+    s.R('Ra', (1664, 192), (1664, 272), '{RHP2}'); s.label((1664, 272), 'VREF', dy=16)
     op = s.opamp('XHP', (1728, 192)); s.supplies(op)
     s.wire((1440, 112), (1440, 32), (1824, 32), (1824, op['out'][1]))
     s.wire(op['inn'], (1712, op['inn'][1]), (1712, 32))
@@ -161,10 +161,10 @@ def canal():
     s.box(-96, 688, 576, 1232, '5  G2 = 1 + Rf/Rg = 25', 'Cg: ganancia 1 en DC')
     op = s.opamp('XG2', (256, Y2)); s.supplies(op)
     s.wire(op['inn'], (224, op['inn'][1]), (224, Y2 - 112), (224, Y2 - 176))
-    s.R('Rf', (224, Y2 - 176), (304, Y2 - 176), '240k')
+    s.R('Rf', (224, Y2 - 176), (304, Y2 - 176), '{RF2}')
     s.wire((304, Y2 - 176), (368, Y2 - 176), (368, op['out'][1]))
-    s.R('Rg', (224, Y2 - 112), (144, Y2 - 112), '10k')
-    s.C('Cg', (144, Y2 - 112), (80, Y2 - 112), '10u'); s.label((80, Y2 - 112), 'VREF', dx=-48)
+    s.R('Rg', (224, Y2 - 112), (144, Y2 - 112), '{RG2}')
+    s.C('Cg', (144, Y2 - 112), (80, Y2 - 112), '{CG2}'); s.label((80, Y2 - 112), 'VREF', dx=-48)
     s.wire(op['out'], (368, op['out'][1]), (496, op['out'][1]), (640, op['out'][1])); s.flag((496, op['out'][1]), 'G2O')
     y = op['out'][1]
 
@@ -185,9 +185,9 @@ def canal():
         s.wire(op['out'], (bx + 640, op['out'][1]), (bx + 704, op['out'][1]), (bx + 800, op['out'][1]))
         s.flag((bx + 704, op['out'][1]), vout)
         return op['out'][1]
-    y = lpf(640, y, ('Rla1', 'Rla2', 'C11', 'C12', 'XLA'), ('88.7k', '88.7k', '3.9n', '3.3n'), 'LAO',
+    y = lpf(640, y, ('Rla1', 'Rla2', 'C11', 'C12', 'XLA'), ('{RLA}', '{RLA}', '{C11}', '{C12}'), 'LAO',
             (576, 688, 1408, 1232, '6  LPF A 500 Hz  (Q 0.541)', 'Butterworth 4o orden, seccion 1'))
-    y = lpf(1440, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('54.9k', '54.9k', '15n', '2.2n'), 'LBO',
+    y = lpf(1440, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('{RLB}', '{RLB}', '{C21}', '{C22}'), 'LBO',
             (1408, 688, 2208, 1232, '7  LPF B 500 Hz  (Q 1.306)', 'Butterworth 4o orden, seccion 2'))
     # ---- 8 buffer + bucket
     s.box(2208, 688, 2848, 1232, '8  BUFFER + BUCKET -> ADC', '100 ohm + 1 nF')
@@ -197,10 +197,10 @@ def canal():
     s.wire(op['inn'], (2288, op['inn'][1]), (2288, top), (2400, top), (2400, op['out'][1]))
     s.wire(op['out'], (2400, op['out'][1]), (2464, op['out'][1]))
     b = (2464, op['out'][1])
-    s.R('Rbk', b, (b[0] + 80, b[1]), '100')
+    s.R('Rbk', b, (b[0] + 80, b[1]), '{RBK}')
     e = (b[0] + 80, b[1])
     s.wire(e, (e[0] + 96, e[1]), (e[0] + 224, e[1]))
-    s.C('Cbk', (e[0] + 96, e[1]), (e[0] + 96, e[1] + 64), '1n'); s.gnd((e[0] + 96, e[1] + 64))
+    s.C('Cbk', (e[0] + 96, e[1]), (e[0] + 96, e[1] + 64), '{CBK}'); s.gnd((e[0] + 96, e[1] + 64))
     s.flag((e[0] + 224, e[1]), 'ADC', 'Out')
     s.save('CANAL.asc')
 
@@ -232,9 +232,6 @@ PINATTR SpiceOrder 5
 PIN -64 160 BOTTOM 8
 PINATTR PinName RGM
 PINATTR SpiceOrder 6
-PIN 64 160 BOTTOM 8
-PINATTR PinName INAOUT
-PINATTR SpiceOrder 7
 """
     ina_asy = """Version 4
 SymbolType CELL
@@ -307,112 +304,89 @@ PINATTR SpiceOrder 2
 
 
 # ---------------------------------------------------------------------------
-MODES = {
-    't7': dict(
-        file='AFE_4CH.asc',
-        title='Prueba general: senoidal (73/131/211/307 Hz) 10x menor que el ruido en los 4 canales, RLD activo, USB a PC',
-        directives=""".include opa.lib
-.include models/ina_behav.lib
-.include afe_channel.lib
-.param CASE=1
-.param RATIO={if(CASE==2,100,10)} KN={if(CASE==0,0,1)}
-.param NLF=1m NWH=300u NTOT={sqrt(NLF**2+NWH**2)} AS={NTOT*sqrt(2)/RATIO}
-.param F1=73 F2=131 F3=211 F4=307
-.func stim(f,a,b) {AS*sin(2*pi*f*time)+KN*(NLF*a+NWH*b)}
-.param RLDMODE=2 CINT=1n RLIM=390k RS=100k CCM=47p CD=100p
-.param CMB=3p RIMB=51k RER=20k
-.param CGE=1 VMAINS_TRAN={if(CASE==0,0,311)} VMAINS_AC=0
-.tran 0 0.5 0 50u
-.param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
-.options gmin=100f plotwinsize=0""",
-        notes='Correr (Run) y graficar ADC1..ADC4. 0.5 s tarda ~3 min. CASE=2: senoidal 100x menor; CASE=0: sin ruido.'),
-    'rld': dict(
-        file='AUDIT_RLD.asc',
-        title='Auditoria RLD: red de 311 Vpk por el cuerpo, sin senal, comparacion SIN RLD (paso 1) vs CON RLD (paso 2)',
-        directives=""".include opa.lib
+VALORES = """.param RS=100k RRFI=1k CCM=47p CD=100p RGH=2.7k
+.param CHP=100n RHP1=56k RHP2=110k RF2=240k RG2=10k CG2=10u
+.param RLA=91k C11=3.9n C12=3.3n RLB=56k C21=15n C22=2.2n
+.param RBK=100 CBK=1n RSM=620k CINT=1n RLIM=390k"""
+
+ESTIMULO = """.param KN=1 KSEM=25 NMOV=4.28m NWHT=82.4u
+.param AS1=50u AS2=30u AS3=40u AS4=25u
+.param GE1=120u GE2=300u GE3=50u GE4=250u
+.param CMB=3p RIMB=51k RER=20k CGE=1 VMAINS_TRAN=311 VMAINS_AC=0
+.param GDK={1.8/3.3}"""
+
+SIM = """.include opa.lib
 .include models/ina_behav.lib
 .include afe_channel.lib
 .step param RLDMODE list 1 2
-.param CINT=1n RLIM=390k RS=100k CCM=47p CD=100p
-.param CMB=3p RIMB=51k RER=20k
-.param CGE=1 VMAINS_TRAN=311 VMAINS_AC=0
-.tran 0 0.3 0 50u
-.meas tran adc1_50Hz_Vpp PP V(adc1) FROM 0.2 TO 0.3
-.meas tran adc2_50Hz_Vpp PP V(adc2) FROM 0.2 TO 0.3
-.meas tran cuerpo_cm_Vpp PP V(body)-V(vref) FROM 0.2 TO 0.3
-.meas tran rti1_uVpp param adc1_50Hz_Vpp/503*1e6
 .param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
-.options gmin=100f plotwinsize=0""",
-        notes='Run, luego graficar ADC1..ADC4: el paso 1 (sin RLD, referencia pasiva 390k) muestra 50 Hz; el paso 2 (con RLD) casi nada. Resultados numericos: View > SPICE Error Log.'),
-    'semg': dict(
-        file='AUDIT_SEMG.asc',
-        title='Auditoria sEMG: senal mioelectrica (CH1 submentoniano, CH2 platisma, CH3 labio, CH4 laringe) + ruido mayor (movimiento, ECG, red, blanco)',
-        directives=""".include opa.lib
-.include models/ina_behav.lib
-.include afe_channel.lib
-.param KN=1
-.param RLDMODE=2 CINT=1n RLIM=390k RS=100k CCM=47p CD=100p
-.param CMB=3p RIMB=51k RER=20k
-.param CGE=1 VMAINS_TRAN=311 VMAINS_AC=0
-.tran 0 2 0 50u
-.param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
-.options gmin=100f plotwinsize=0""",
-        notes='Run (~12 min) y comparar V(sg1) (sEMG limpio) con V(adc1) y V(n1)-V(body) (entrada con ruido). KN=0 quita el ruido; RLDMODE=1 quita el RLD.'),
-}
+.tran 0 1.2 0 50u
+.options gmin=100f plotwinsize=0
+.meas tran CM_cuerpo_Vpp PP V(body)-V(vref) FROM 0.3 TO 1.2"""
+for _k in range(1, 5):
+    SIM += f"""
+.meas tran sEMG{_k}_uVrms RMS 1e6*V(semg{_k}) FROM 0.35 TO 0.49
+.meas tran ADC{_k}_rafaga_mVrms RMS 1000*(V(adc{_k})-1.65) FROM 0.35 TO 0.49
+.meas tran ADC{_k}_reposo_mVrms RMS 1000*(V(adc{_k})-1.65) FROM 0.58 TO 0.70
+.meas tran SNR{_k}_salida_dB param 20*log10(ADC{_k}_rafaga_mVrms/ADC{_k}_reposo_mVrms)
+.meas tran PIN{_k}_min_V MIN V(pin{_k}) FROM 0.3 TO 1.2
+.meas tran PIN{_k}_max_V MAX V(pin{_k}) FROM 0.3 TO 1.2"""
+
+DKPIN = {1: 'A1 = PA9 (ADC12_INP10)', 2: 'A2 = PA10 (ADC12_INP11)', 3: 'A3 = PA12 (ADC12_INP13)', 4: 'A4 = PF3 (ADC12_INP16)'}
+MUSC = {1: 'submentoniano', 2: 'platisma', 3: 'labio inferior', 4: 'laringe'}
 
 
-def top(mode='t7'):
-    cfg = MODES[mode]
-    s = Sheet(3600, 2800)
-    s.text((-1280, -1008), 'AuraVox - AFE sEMG: 4 canales diferenciales, 9 electrodos (4 pares + RLD), 4 salidas ADC1..ADC4', 4)
-    s.text((-1280, -928), cfg['title'], 3)
-    s.text((-1280, -864), 'Flujo: ESTIMULO -> ELECTRODOS -> CANAL (x4) -> ADC.  Doble clic en un bloque CANAL (o clic derecho > Open Hierarchy) para ver sus 8 etapas.', 2)
+def top():
+    from make_bom_xlsx import compact_rows
+    s = Sheet(4400, 3800)
+    s.text((-1600, -1072), 'AuraVox - AFE sEMG: 4 entradas diferenciales (9 electrodos) -> 4 salidas al ADC del STM32N6570-DK', 4)
+    s.text((-1600, -992), 'Un Run = 2 pasos: paso 1 SIN RLD (referencia pasiva 390k), paso 2 CON RLD. Resultados: View > SPICE Error Log. Doble clic en un bloque CANAL para ver sus 8 etapas.', 3)
+    s.text((-1600, -928), 'QUE GRAFICAR: V(semg1) (sEMG limpio) | V(n1)-V(body) (entrada con ruido) | V(adc1)..V(adc4) (salidas del AFE) | V(pin1)..V(pin4) (lo que ve el ADC, 0-1.8 V) | V(body)-V(vref) (modo comun)', 2)
     # --- alimentacion y VREF ---
-    s.box(-1280, -800, -224, -256, 'ALIMENTACION 3.3 V Y VREF 1.65 V', 'divisor 2 x 100k + 10u, seguidor MCP6004')
-    s.two('voltage', 'VCC', (-1184, -560), (-1184, -480), '3.3'); s.label((-1184, -560), 'VCC', dy=-16); s.gnd((-1184, -480))
-    s.R('RA1', (-928, -592), (-928, -512), '100k'); s.label((-928, -592), 'VCC', dy=-16)
-    s.wire((-928, -512), (-928, -496), (-928, -480)); s.R('RA2', (-928, -480), (-928, -400), '100k'); s.gnd((-928, -400))
-    s.wire((-928, -496), (-848, -496), (-704, -496)); s.C('CA', (-848, -496), (-848, -432), '10u'); s.gnd((-848, -432))
-    op = s.opamp('XVR', (-704, -496)); s.supplies(op)
+    s.box(-1600, -864, -800, -256, 'ALIMENTACION 3.3 V Y VREF', 'divisor 2 x 100k + 10u, seguidor')
+    s.two('voltage', 'VCC', (-1504, -560), (-1504, -480), '3.3'); s.label((-1504, -560), 'VCC', dy=-16); s.gnd((-1504, -480))
+    s.R('RA1', (-1296, -592), (-1296, -512), '100k'); s.label((-1296, -592), 'VCC', dy=-16)
+    s.wire((-1296, -512), (-1296, -496), (-1296, -480)); s.R('RA2', (-1296, -480), (-1296, -400), '100k'); s.gnd((-1296, -400))
+    s.wire((-1296, -496), (-1216, -496), (-1088, -496)); s.C('CA', (-1216, -496), (-1216, -432), '10u'); s.gnd((-1216, -432))
+    op = s.opamp('XVR', (-1088, -496)); s.supplies(op)
     o = follower_feedback(s, op, -624)
     s.label(o, 'VREF', dx=64)
-    # --- red y cuerpo ---
-    s.box(-160, -800, 1408, -256, 'CUERPO Y RED 50 Hz', 'CMB red-cuerpo, CBE cuerpo-tierra, CGE circuito-tierra (20p bateria, 1 = USB a PC)')
-    s.two('voltage', 'VM', (-64, -560), (-64, -480), 'SINE(0 {VMAINS_TRAN} 50) AC {VMAINS_AC}')
-    s.label((-64, -560), 'MAINS', dy=-16); s.label((-64, -480), 'EARTH', dy=16)
-    s.C('CMB', (416, -576), (416, -512), '{CMB}'); s.label((416, -576), 'MAINS', dy=-16); s.label((416, -512), 'BODY', dy=16)
-    s.C('CBE', (640, -576), (640, -512), '200p'); s.label((640, -576), 'BODY', dy=-16); s.label((640, -512), 'EARTH', dy=16)
-    s.C('CGE', (864, -576), (864, -512), '{CGE}'); s.label((864, -576), 'EARTH', dy=-16); s.gnd((864, -512))
-    s.R('RGE', (1088, -592), (1088, -512), '1G'); s.label((1088, -592), 'EARTH', dy=-16); s.gnd((1088, -512))
-    # --- recuadros de columnas ---
-    s.box(-1280, -192, -224, 2464, 'ESTIMULO POR CANAL', 'diferencial, entre el cuerpo y el electrodo +')
+    # --- generadores comunes ---
+    s.box(-736, -864, 112, -256, 'GENERADORES COMUNES', 'envolvente de habla (rafagas) y ECG')
+    s.two('voltage', 'VENV', (-640, -560), (-640, -480), 'PULSE(0.05 1 0.3 30m 30m 170m 420m)')
+    s.label((-640, -560), 'env', dy=-16); s.gnd((-640, -480))
+    s.symbol('voltage', 'VECG', (-256, -576), 'R0', windows=('0 24 16 Left 2', '3 -400 136 Left 0'), value='PWL REPEAT FOREVER (0 0 0.08 0 0.12 0.12 0.16 0 0.20 -0.12 0.22 1 0.24 -0.25 0.27 0 0.42 0 0.50 0.3 0.58 0 0.833 0) ENDREPEAT')
+    s.label((-256, -560), 'ecg', dy=-16); s.gnd((-256, -480))
+    # --- cuerpo y red ---
+    s.box(176, -864, 1472, -256, 'CUERPO Y RED 50 Hz', 'CMB red-cuerpo, CBE cuerpo-tierra, CGE circuito-tierra (1 = USB a PC, peor caso)')
+    s.two('voltage', 'VM', (272, -560), (272, -480), 'SINE(0 {VMAINS_TRAN} 50) AC {VMAINS_AC}')
+    s.label((272, -560), 'MAINS', dy=-16); s.label((272, -480), 'EARTH', dy=16)
+    s.C('CMB', (704, -576), (704, -512), '{CMB}'); s.label((704, -576), 'MAINS', dy=-16); s.label((704, -512), 'BODY', dy=16)
+    s.C('CBE', (928, -576), (928, -512), '200p'); s.label((928, -576), 'BODY', dy=-16); s.label((928, -512), 'EARTH', dy=16)
+    s.C('CGE', (1120, -576), (1120, -512), '{CGE}'); s.label((1120, -576), 'EARTH', dy=-16); s.gnd((1120, -512))
+    s.R('RGE', (1328, -592), (1328, -512), '1G'); s.label((1328, -592), 'EARTH', dy=-16); s.gnd((1328, -512))
+    # --- columnas ---
+    s.box(-1600, -192, -224, 2464, 'ENTRADA DIFERENCIAL POR CANAL', 'sEMG = ruido blanco filtrado 90 Hz x envolvente; ruido = movimiento + ECG + blanco')
     s.box(-160, -192, 704, 2464, 'ELECTRODOS (8 de senal)', '20k||47n; el - de cada par + 51k||47n')
     s.box(768, -192, 1472, 2464, 'AFE: 4 CANALES', 'bloque CANAL = 8 etapas')
+    s.box(1536, -192, 2400, 2464, 'STM32N6570-DK: ARDUINO A1..A4', 'amplificador de la placa 3.3 V -> 1.8 V + muestreo del ADC')
     hc = {1: ('5m', '-5m'), 2: ('12m', '0'), 3: ('-8m', '10m'), 4: ('3m', '-15m')}
-    musc = {1: 'submentoniano', 2: 'platisma', 3: 'labio inferior', 4: 'laringe'}
     for k in range(1, 5):
         y = 64 + (k - 1) * 608
-        s.text((-1248, y - 64), f'CH{k}  {musc[k]}', 3)
-        xb = -512
-        if mode == 't7':
-            s.two('voltage', f'VL{k}', (-1184, y + 48), (-1184, y + 128), f'PWL file=noise/lf_ch{k}.pwl')
-            s.label((-1184, y + 48), f'nl{k}', dy=-16); s.gnd((-1184, y + 128))
-            s.two('voltage', f'VW{k}', (-1184, y + 288), (-1184, y + 368), f'PWL file=noise/wh_ch{k}.pwl')
-            s.label((-1184, y + 288), f'nw{k}', dy=-16); s.gnd((-1184, y + 368))
-            expr = f'V=stim({{F{k}}},V(nl{k}),V(nw{k}))'
-            s.two('bv', f'BIN{k}', (xb, y + 48), (xb, y + 128), expr)
-        elif mode == 'semg':
-            s.two('voltage', f'VSG{k}', (-1184, y + 48), (-1184, y + 128), f'PWL file=noise/semg_ch{k}.pwl')
-            s.label((-1184, y + 48), f'sg{k}', dy=-16); s.gnd((-1184, y + 128))
-            s.two('voltage', f'VNZ{k}', (-1184, y + 288), (-1184, y + 368), f'PWL file=noise/nz_ch{k}.pwl')
-            s.label((-1184, y + 288), f'nz{k}', dy=-16); s.gnd((-1184, y + 368))
-            s.two('bv', f'BIN{k}', (xb, y + 48), (xb, y + 128), f'V=V(sg{k}) + {{KN}}*V(nz{k})')
-        else:
-            s.two('voltage', f'VIN{k}', (xb, y + 48), (xb, y + 128), '0')
-        s.label((xb, y + 128), 'BODY', dy=16)
-        s.wire((xb, y + 48), (xb, y), (256, y), (256, y + 32))
-        s.flag((xb, y), f'n{k}')
-        # electrodos: + en x=256, - en x=0
+        s.text((-1568, y - 64), f'CH{k}  {MUSC[k]}', 3)
+        # sEMG: blanco -> pasabanda -> x envolvente
+        s.two('bv', f'BW{k}', (-1504, y + 48), (-1504, y + 128), f'V=white(2e4*time+{k}e5)')
+        s.label((-1504, y + 48), f'w{k}', dy=-16); s.gnd((-1504, y + 128))
+        s.symbol('e', f'EF{k}', (-1216, y + 32), 'R0', 'Laplace=(s/(2*pi*63))/((s/(2*pi*90))**2+s/(2*pi*63)+1)')
+        s.label((-1264, y + 64), f'w{k}', dx=-32); s.wire((-1264, y + 112), (-1264, y + 144)); s.flag((-1264, y + 144), '0')
+        s.label((-1216, y + 48), f'f{k}', dy=-16); s.gnd((-1216, y + 128))
+        s.two('bv', f'BSEM{k}', (-1504, y + 288), (-1504, y + 368), f'V={{AS{k}}}*{{KSEM}}*V(f{k})*V(env)')
+        s.label((-1504, y + 288), f'semg{k}', dy=-16); s.gnd((-1504, y + 368))
+        expr = f'V=V(semg{k})+{{KN}}*({{NMOV}}*white(3*time+{k*7}e3)+{{NWHT}}*white(2e4*time+{k*3}e5)+{{GE{k}}}*V(ecg))'
+        s.symbol('bv', f'BIN{k}', (-512, y + 32), 'R0', expr, windows=('0 24 16 Left 2', '3 -40 136 Left 0'))
+        s.label((-512, y + 128), 'BODY', dy=16)
+        s.wire((-512, y + 48), (-512, y), (256, y), (256, y + 32))
+        s.flag((-512, y), f'n{k}')
         s.symbol('ELECTRODO', f'XE{k}P', (256, y + 32), 'R0', 'ELECTRODE', (('SpiceLine', f'Vhc={hc[k][0]}'),))
         s.wire((256, y + 128), (256, y + 192), (576, y + 192), (832, y + 192))
         s.label((0, y + 96), 'BODY', dx=-64)
@@ -422,26 +396,32 @@ def top(mode='t7'):
         s.wire((384, y + 320), (384, y + 416)); s.C(f'CI{k}', (384, y + 416), (448, y + 416), '47n')
         s.wire((448, y + 416), (464, y + 416), (464, y + 320)); s.wire((464, y + 320), (576, y + 320), (832, y + 320))
         s.flag((576, y + 192), f'EP{k}'); s.flag((576, y + 320), f'EN{k}')
-        # bloque CANAL: pines EP(-192,-64) EN(-192,64) VCC(-64,-160) VREF(64,-160) ADC(192,0) RGM(-64,160) INAOUT(64,160)
         cx, cy = 1024, y + 256
         s.symbol('CANAL', f'XCH{k}', (cx, cy), 'R0')
         s.label((cx - 64, cy - 160), 'VCC', dy=-32)
         s.label((cx + 64, cy - 160), 'VREF', dy=-32)
-        s.wire((cx + 192, cy), (cx + 320, cy)); s.flag((cx + 320, cy), f'ADC{k}')
         s.label((cx - 64, cy + 160), f'RGM{k}', dy=32)
-        s.label((cx + 64, cy + 160), f'INA{k}', dy=32)
+        # salida -> STM32N6570-DK
+        s.wire((cx + 192, cy), (cx + 320, cy), (1600, cy), (1648, cy), (1712, cy)); s.flag((cx + 320, cy), f'adc{k}')
+        s.R(f'RDKIN{k}', (1648, cy), (1648, cy + 80), '1Meg'); s.gnd((1648, cy + 80))
+        s.symbol('e', f'EDK{k}', (1760, cy - 32), 'R0', '{GDK}')
+        s.wire((1712, cy + 48), (1712, cy + 80)); s.flag((1712, cy + 80), '0'); s.gnd((1760, cy + 64))
+        s.wire((1760, cy - 16), (1824, cy - 16)); s.R(f'RDK{k}', (1824, cy - 16), (1904, cy - 16), '1k')
+        s.wire((1904, cy - 16), (1968, cy - 16), (2064, cy - 16)); s.C(f'CSH{k}', (1968, cy - 16), (1968, cy + 48), '5p'); s.gnd((1968, cy + 48))
+        s.flag((2064, cy - 16), f'pin{k}')
+        s.text((1568, cy - 128), f'CH{k} -> {DKPIN[k]}', 2)
     # --- RLD ---
-    s.box(1536, -192, 2848, 928, 'RLD (9o electrodo, clavicula)', 'integrador inversor; sensa el punto medio de RG de los 4 canales (604k c/u)')
-    s.text((1568, 48), 'RLDMODE 2 = RLD activo (RLIM 390k) | 1 = sin RLD: ref. pasiva a VREF por 390k (RPAS) | 0 = ref. directa', 2)
-    bx, by = 1696, 400
+    bx0 = 2464
+    s.box(bx0, -192, bx0 + 1312, 928, 'RLD (9o electrodo, clavicula)', 'integrador inversor; sensa el punto medio de RG de los 4 canales')
+    s.text((bx0 + 32, 48), 'RLDMODE 2 = con RLD (RLIM 390k) | 1 = sin RLD: ref. pasiva a VREF por 390k (RPAS)', 2)
+    bx, by = bx0 + 160, 400
     for k in range(1, 5):
         yy = by + (k - 1) * 96
         s.label((bx, yy), f'RGM{k}', dx=-64)
-        s.R(f'RSM{k}', (bx, yy), (bx + 80, yy), '604k')
+        s.R(f'RSM{k}', (bx, yy), (bx + 80, yy), '{RSM}')
         s.wire((bx + 80, yy), (bx + 176, yy))
     s.wire((bx + 176, by), (bx + 176, by + 288))
-    op = s.opamp('XRLD', (bx + 352, by + 176))
-    s.supplies(op)
+    op = s.opamp('XRLD', (bx + 352, by + 176)); s.supplies(op)
     s.wire((bx + 176, by + 144), (bx + 240, by + 144), (bx + 320, by + 144), op['inn'])
     s.label(op['inp'], 'VREF', dx=-64)
     s.wire((bx + 240, by + 144), (bx + 240, by - 48), (bx + 320, by - 48))
@@ -460,14 +440,20 @@ def top(mode='t7'):
     s.symbol('ELECTRODO', 'XER', (bx + 960, e[1] - 192), 'R0', 'ELECTRODE', (('SpiceLine', 'Vhc=0 Re={RER}'),))
     s.label((bx + 960, e[1] - 192), 'BODY', dy=-16)
     s.flag((bx + 480, e[1]), 'RLDO')
-    # --- directivas ---
-    s.box(1536, 992, 2848, 2464, 'SIMULACION', cfg['notes'])
-    s.text((1568, 1184), cfg['directives'], 2, directive=True)
-    s.save(cfg['file'])
+    # --- valores, estimulo, simulacion, BoM ---
+    s.box(bx0, 992, bx0 + 1312, 1504, 'VALORES (editar aqui si cambias un componente)', 'E24; el bloque CANAL los usa en sus 4 copias')
+    s.text((bx0 + 32, 1184), VALORES, 2, directive=True)
+    s.box(bx0, 1568, bx0 + 1312, 3040, 'ESTIMULO Y SIMULACION', 'KN=0 quita el ruido. AS = sEMG (V rms); GE = ECG pico; NMOV/NWHT calibrados a 500/20 uV rms')
+    s.text((bx0 + 32, 1760), ESTIMULO + '\n' + SIM, 2, directive=True)
+    s.box(-1600, 3104, 3776, 3680, 'BoM (4 canales, a comprar; detalle en docs/afe-emg/BoM_AFE_AuraVox.xlsx)', '')
+    rows = compact_rows()
+    cols = [rows[i::4] for i in range(4)]
+    for c, rr in enumerate(cols):
+        s.text((-1568 + c * 1344, 3216), '\n'.join(f'{q:>3} x {v}  {t}' for v, q, t in rr), 2)
+    s.save('AuraVox_AFE.asc')
 
 
 if __name__ == '__main__':
-    symbols(); canal()
-    for m in MODES:
-        top(m)
+    sys.path.insert(0, os.path.dirname(__file__))
+    symbols(); canal(); top()
     print('ok')

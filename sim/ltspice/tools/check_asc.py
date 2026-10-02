@@ -17,7 +17,7 @@ def elements(lines):
         if t[0].startswith('X§') and not name.upper().startswith('X'):
             name = 'X' + name
         k = name[0].upper()
-        n = {'R': 2, 'C': 2, 'D': 2, 'V': 2, 'B': 2}.get(k)
+        n = {'R': 2, 'C': 2, 'D': 2, 'V': 2, 'B': 2, 'E': 4}.get(k)
         if k == 'X':
             # nodos hasta el nombre del subcircuito (primer token con letras que no es nodo conocido)
             toks = [x for x in t[1:] if '=' not in x]
@@ -54,7 +54,8 @@ def compare(ref, sch, what, fixed=('0',)):
     return errs
 
 
-STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN')
+STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN', 'BW', 'EF', 'BSEM', 'VENV', 'VECG', 'EDK', 'RDK', 'CSH')
+PROBE = re.compile(r'^(W|F|SEMG)\d$|^(ENV|ECG|RLDO)$')
 
 
 def check(asc):
@@ -67,16 +68,31 @@ def check(asc):
                    fixed=('0', 'EP', 'EN', 'VCC', 'VREF', 'ADC', 'RGM', 'INAOUT'))
     top = open(os.path.join(HERE, 'afe_4ch_top.inc'), encoding='latin-1').read().splitlines()
     ref = {k: v for k, v in elements(top).items() if not k.startswith('RSE') and k != 'XVREF'}
+    ref.update({k: v[:6] for k, v in ref.items() if k.startswith('XCH')})   # el bloque CANAL ya no expone INAOUT
     for e, nodes in elements(block(lib, 'VREFGEN')).items():
         ref[e] = ['VREF_DIV' if n == 'VD' else n for n in nodes]
     sch = {k: v for k, v in elements(net.split('* block symbol definitions')[0].splitlines()).items()
            if not k.startswith(STIM)}
     errs += compare(ref, sch, asc, fixed=('0', 'VCC', 'VREF', 'BODY'))
+    # sin cables abiertos: ningun NC_ y toda red con >= 2 pines (salvo nodos de generadores leidos por expresion)
+    allel = elements(net.split('* block symbol definitions')[0].splitlines())
+    allel.update({'CANAL:' + k: v for k, v in elements(block(net, 'CANAL')).items()})
+    cnt = {}
+    for e, nodes in allel.items():
+        pre = 'CANAL:' if e.startswith('CANAL:') else ''
+        for n in nodes:
+            cnt[pre + n] = cnt.get(pre + n, 0) + 1
+    ports = {'CANAL:' + p for p in ('EP', 'EN', 'VCC', 'VREF', 'ADC', 'RGM')}
+    for n, c in sorted(cnt.items()):
+        if 'NC_' in n:
+            errs.append(f'{asc}: pin sin conectar ({n})')
+        elif c < 2 and n not in ports and n != '0' and not PROBE.match(n.split(':')[-1]):
+            errs.append(f'{asc}: red {n} con un solo pin')
     print(f'{asc}: ' + ('\n'.join(errs) if errs else 'OK, conectividad = netlists simulados '
           f'({len(elements(block(net, "CANAL")))} elementos en CANAL, {len(sch)} en el nivel superior)'))
     return not errs
 
 
 if __name__ == '__main__':
-    ok = [check(a) for a in (sys.argv[1:] or ['AFE_4CH.asc', 'AUDIT_RLD.asc', 'AUDIT_SEMG.asc'])]
+    ok = [check(a) for a in (sys.argv[1:] or ['AuraVox_AFE.asc'])]
     sys.exit(0 if all(ok) else 1)
