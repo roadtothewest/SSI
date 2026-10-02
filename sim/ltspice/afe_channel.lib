@@ -11,7 +11,7 @@
 .subckt AFE_CH EP EN VCC VREF ADC RGM INAOUT
 + params: Rs=100k Rrfi=1k Ccm=47p Cd=100p RG=5.22k
 + Chp=100n R1hp=56.2k Rahp=113k
-+ Rf=240k Rg2=10k Cg=10u
++ Rf=240k Rg2=4.7k Rg2t=5.3k Cg=10u
 + Rla=88.7k C11=3.9n C12=3.3n
 + Rlb=54.9k C21=15n C22=2.2n
 + Rbk=100 Cbk=1n
@@ -41,7 +41,9 @@ XHP HB HPO VCC 0 HPO OPA
 * G2 no inversor: G_AC = 1+Rf/Rg, G_DC = 1 (Cg retorna a VREF)
 XG2 HPO G2N VCC 0 G2O OPA
 Rf G2O G2N {Rf}
-Rg G2N GC {Rg2}
+* Rg = 4.7k fija + trimmer 25k (RGT): ganancia de G2 ajustable por sitio (5.3k -> G2 = 25)
+Rg G2N GT {Rg2}
+RGT GT GC {Rg2t}
 Cg GC VREF {Cg}
 * LPF A Sallen-Key, Q = 0.541
 Rla1 G2O LA {Rla}

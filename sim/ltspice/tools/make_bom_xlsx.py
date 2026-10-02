@@ -30,7 +30,7 @@ MODULES = [
         ('Cdif', 'Condensador diferencial', '100p', '100p', 'ceramico C0G/NP0 5 %', 1, 1, 'condensador ceramico 100pF NP0', ''),
     ]),
     ('3 AMPLIFICADOR DE INSTRUMENTACION', 4, [
-        ('XINA', 'INA333 (modulo MCU-333)', 'INA333', 'INA333 modulo MCU-333', 'modulo; RG: quitar potenciometro', 1, 1, 'modulo MCU-333 INA333', 'Reemplazar el potenciometro de RG por RGa+RGb y sacar un cable del punto medio al RLD. Respaldo: AD623AN DIP-8 (misma formula de G)'),
+        ('XINA', 'INA333 (modulo MCU-333)', 'INA333', 'INA333 modulo MCU-333', 'modulo; RG: quitar potenciometro', 1, 1, 'modulo MCU-333 INA333', 'Desoldar el trimmer de RG y poner RGa+RGb (2.7k+2.7k) con cable del punto medio al RLD. Alimentar por el pin 3.3V (no VCC) y llevar el pin VREF a tu VREF con buffer. Verificar pines con multimetro. Respaldo: AD623AN DIP-8'),
         ('RGa, RGb', 'Resistencia de ganancia (partida en dos)', '2.61k', '2.7k', 'pelicula metalica 1 %, parear con multimetro', 2, 4, 'resistencia 2.7k 1%', 'Con 2 x 2.7k: G1 = 19.5 (diseno 20.16). El punto medio va al RLD'),
         ('C desac. INA', 'Desacople del INA', '100n', '100n', 'ceramico X7R', 1, 1, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
@@ -42,7 +42,8 @@ MODULES = [
     ]),
     ('5 G2 = 25', 4, [
         ('Rf', 'Resistencia de realimentacion', '240k', '240k', 'pelicula metalica 1 %', 1, 1, 'resistencia 240k 1%', ''),
-        ('Rg', 'Resistencia de ganancia', '10k', '10k', 'pelicula metalica 1 %', 1, 1, 'resistencia 10k 1%', ''),
+        ('Rg', 'Resistencia de ganancia fija', '4.7k', '4.7k', 'pelicula metalica 1 %', 1, 1, 'resistencia 4.7k 1%', ''),
+        ('RGT', 'Trimmer de ganancia por sitio de medicion', '25k', '25k multivuelta', 'trimmer multivuelta (3296)', 1, 1, 'trimmer 25k multivuelta 3296', 'G2 = 1 + 240k/(4.7k + RGT): de ~9 (25k) a ~52 (0). Ganancia total ~180-1000. Para G2 = 25: RGT = 5.3k'),
         ('Cg', 'Condensador de bloqueo DC (G = 1 en DC)', '10u', '10u', 'ceramico X7R o electrolitico 16 V', 1, 1, 'condensador 10uF', ''),
         ('XG2', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),

@@ -158,13 +158,14 @@ def canal():
     Y2 = 1056
     s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (256, Y2))
     # ---- 5 G2
-    s.box(-96, 688, 576, 1232, '5  G2 = 1 + Rf/Rg = 25', 'Cg: ganancia 1 en DC')
+    s.box(-96, 688, 576, 1232, '5  G2 = 1 + Rf/(Rg+RGT)', 'RGT = trimmer 25k: G2 9-52 por sitio (5.3k -> 25); Cg: G=1 en DC')
     op = s.opamp('XG2', (256, Y2)); s.supplies(op)
     s.wire(op['inn'], (224, op['inn'][1]), (224, Y2 - 112), (224, Y2 - 176))
     s.R('Rf', (224, Y2 - 176), (304, Y2 - 176), '{RF2}')
     s.wire((304, Y2 - 176), (368, Y2 - 176), (368, op['out'][1]))
     s.R('Rg', (224, Y2 - 112), (144, Y2 - 112), '{RG2}')
-    s.C('Cg', (144, Y2 - 112), (80, Y2 - 112), '{CG2}'); s.label((80, Y2 - 112), 'VREF', dx=-48)
+    s.R('RGT', (144, Y2 - 112), (64, Y2 - 112), '{RG2T}')
+    s.C('Cg', (64, Y2 - 112), (0, Y2 - 112), '{CG2}'); s.label((0, Y2 - 112), 'VREF', dx=-48)
     s.wire(op['out'], (368, op['out'][1]), (496, op['out'][1]), (640, op['out'][1])); s.flag((496, op['out'][1]), 'G2O')
     y = op['out'][1]
 
@@ -305,7 +306,7 @@ PINATTR SpiceOrder 2
 
 # ---------------------------------------------------------------------------
 VALORES = """.param RS=100k RRFI=1k CCM=47p CD=100p RGH=2.7k
-.param CHP=100n RHP1=56k RHP2=110k RF2=240k RG2=10k CG2=10u
+.param CHP=100n RHP1=56k RHP2=110k RF2=240k RG2=4.7k RG2T=5.3k CG2=10u
 .param RLA=91k C11=3.9n C12=3.3n RLB=56k C21=15n C22=2.2n
 .param RBK=100 CBK=1n RSM=620k CINT=1n RLIM=390k"""
 
