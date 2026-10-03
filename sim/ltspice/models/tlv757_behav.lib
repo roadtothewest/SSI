@@ -1,8 +1,9 @@
-* TLV75733P (TI), LDO 3.3 V 1 A - modelo conductual: salida 3.3 V, dropout ~0.4 V a 1 A
-* (lineal con la corriente), Iq 25 uA, habilitado si EN > 0.9 V. Pines: IN GND EN OUT.
+* TLV75733P (TI), LDO 3.3 V 1 A - modelo conductual estable:
+* salida 3.3 V (o VIN - 0.05 V si la entrada es menor), resistencia de salida 50 mohm
+* (la caida de dropout real es ~0.4 V a 1 A; el AFE consume ~30 mA), Iq 25 uA,
+* habilitado si EN > 0.9 V. Pines: IN GND EN OUT.
 .subckt TLV75733P IN GND EN OUT
 Iq IN GND 25u
-B1 OI GND V=if(V(EN,GND)>0.9, min(3.3, V(IN,GND)-0.4*abs(I(VS))), 0)
-VS OI OUT 0
-RS OUT GND 10Meg
+B1 OI GND V=if(V(EN,GND)>0.9, min(3.3, V(IN,GND)-0.05), 0)
+RO OI OUT 0.05
 .ends TLV75733P
