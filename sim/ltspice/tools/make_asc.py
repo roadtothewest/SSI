@@ -343,7 +343,7 @@ SIM = """.include opa.lib
 .step param RLDMODE list 1 2
 .param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
 .tran 0 1.2 0 50u
-.options gmin=100f plotwinsize=0
+.options gmin=100f plotwinsize=0 gminsteps=0 srcsteps=0
 .meas tran CM_cuerpo_Vpp PP V(body)-V(vref) FROM 0.3 TO 1.2"""
 for _k in range(1, 4):
     SIM += f"""

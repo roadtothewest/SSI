@@ -5,7 +5,7 @@
 cd ~/SSI/sim/ltspice
 wine "C:\Program Files\ADI\LTspice\LTspice.exe" AuraVox_AFE.asc
 ```
-Run (~3 min). El Run hace 2 pasos: **paso 1 sin RLD** (referencia pasiva por 390k) y **paso 2 con RLD**.
+Run (~7 min con el macromodelo oficial del TS922). El Run hace 2 pasos: **paso 1 sin RLD** (referencia pasiva por 390k) y **paso 2 con RLD**.
 - Resultados numéricos: *View > SPICE Error Log* (`CM_cuerpo_Vpp`, `ADCk_rafaga/reposo_mVrms`, `SNRk_salida_dB`, `PINk_min/max_V`, `sEMGk_uVrms`).
 - Para ver las 7 etapas de un canal (ESD → RFI → INA333 ×20 → HPF 20 Hz → LPF MFB ×25 → LPF Sallen-Key → bucket): doble clic en un bloque `CANAL`.
 
@@ -51,4 +51,4 @@ Recuadro **VALORES** de la hoja: un `.param` por componente, que usan las 3 copi
 
 ## Modelos y símbolos
 - Símbolos propios en esta carpeta: `INA333.asy` (módulo MCU-333), `TLV75733P.asy`, `ELECTRODO.asy` y `CANAL.asy`. Los op-amps usan `opamp2` de LTspice con Value `TS922`; los diodos, el `1N4148` de la librería de LTspice.
-- Modelos: el INA333 es de TI (`models/INA333.LIB` en AC; el equivalente `models/ina_behav.lib` en transitorio). El TS922 y el TLV75733P son conductuales (`models/opa_ts922.lib`, `models/tlv757_behav.lib`) con los datos de sus datasheets. Si se descargan los modelos oficiales de ST y TI, se cambia el `.include`.
+- Modelos: el INA333 es de TI (`models/INA333.LIB` en AC; el equivalente `models/ina_behav.lib` en transitorio). El **TS922 usa el macromodelo oficial de ST** (`models/ts92x.lib`, envuelto en `models/opa_ts922.lib`); el conductual anterior quedó en `models/opa_ts922_behav.lib`. El TLV75733P es conductual (`models/tlv757_behav.lib`). Con el modelo de ST, el punto de operación se resuelve por pseudo-transitorio (`.options gminsteps=0 srcsteps=0`).
