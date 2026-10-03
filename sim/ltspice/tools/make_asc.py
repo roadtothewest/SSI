@@ -110,8 +110,8 @@ def follower_feedback(s, pins, top_y, extra_from=None):
 def canal():
     """Un canal, 8 etapas en recuadros numerados, en dos filas, con la senal cableada."""
     s = Sheet(3000, 1300)
-    s.text((-96, -480), 'CANAL sEMG:  EP/EN  ->  1 ESD  ->  2 RFI  ->  3 INA333  ->  4 HPF  ->  5 G2  ->  6 LPF A  ->  7 LPF B  ->  8 buffer  ->  ADC', 3)
-    s.text((-96, -416), 'Ganancia total 503 (54 dB), banda 20-500 Hz. Este bloque se usa 4 veces en AFE_4CH.asc (XCH1..XCH4). Nombres = subcircuito AFE_CH de afe_channel.lib', 2)
+    s.text((-96, -480), 'CANAL sEMG:  EP/EN  ->  1 ESD  ->  2 RFI  ->  3 INA333 x20  ->  4 HPF 20 Hz  ->  5 LPF MFB x25  ->  6 LPF SK  ->  7 bucket  ->  ADC', 3)
+    s.text((-96, -416), 'Ganancia total 503 (54 dB), banda 20-500 Hz. Este bloque se usa 3 veces en AuraVox_AFE.asc (XCH1..XCH3). Nombres = subcircuito AFE_CH de afe_channel.lib', 2)
     s.flag((-352, -224), 'VCC', 'In'); s.flag((-352, -160), 'VREF', 'In')
     s.text((-384, -288), 'Alimentacion', 2)
     P, N = 0, 384                      # lineas + y - de la entrada
@@ -156,20 +156,23 @@ def canal():
     s.flag((1888, op['out'][1]), 'HPO')
     # salto de fila: HPO baja a la fila 2
     Y2 = 1056
-    s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (256, Y2))
-    # ---- 5 G2
-    s.box(-96, 688, 576, 1232, '5  G2 = 1 + Rf/(Rg+RGT)', 'RGT = trimmer 25k: G2 9-52 por sitio (5.3k -> 25); Cg: G=1 en DC')
-    op = s.opamp('XG2', (256, Y2)); s.supplies(op)
-    s.wire(op['inn'], (224, op['inn'][1]), (224, Y2 - 112), (224, Y2 - 176))
-    s.R('Rf', (224, Y2 - 176), (304, Y2 - 176), '{RF2}')
-    s.wire((304, Y2 - 176), (368, Y2 - 176), (368, op['out'][1]))
-    s.R('Rg', (224, Y2 - 112), (144, Y2 - 112), '{RG2}')
-    s.R('RGT', (144, Y2 - 112), (64, Y2 - 112), '{RG2T}')
-    s.C('Cg', (64, Y2 - 112), (0, Y2 - 112), '{CG2}'); s.label((0, Y2 - 112), 'VREF', dx=-48)
-    s.wire(op['out'], (368, op['out'][1]), (496, op['out'][1]), (640, op['out'][1])); s.flag((496, op['out'][1]), 'G2O')
+    s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (128, Y2))
+    # ---- 5 LPF MFB con ganancia
+    s.box(-96, 688, 736, 1232, '5  LPF MFB 500 Hz, ganancia -25 (Q 0.54)', 'Butterworth 4o orden, seccion 1; invierte (no importa)')
+    s.R('Rm1', (128, Y2), (208, Y2), '{RM1}')
+    s.wire((208, Y2), (272, Y2), (352, Y2))
+    s.C('Cm1', (272, Y2), (272, Y2 + 64), '{CM1}'); s.gnd((272, Y2 + 64))
+    s.R('Rm2', (272, Y2), (272, Y2 - 80), '{RM2}'); s.wire((272, Y2 - 80), (272, Y2 - 176), (672, Y2 - 176))
+    s.R('Rm3', (352, Y2), (432, Y2), '{RM3}')
+    s.wire((432, Y2), (496, Y2), (576, Y2))
+    s.C('Cm2', (496, Y2), (496, Y2 - 64), '{CM2}'); s.wire((496, Y2 - 64), (496, Y2 - 112), (672, Y2 - 112))
+    op = s.opamp('XMF', (576, Y2 + 32)); s.supplies(op)
+    s.label(op['inp'], 'VREF', dx=-48)
+    s.wire((672, Y2 - 176), (672, Y2 - 112), (672, op['out'][1]))
+    s.wire(op['out'], (672, op['out'][1]), (736, op['out'][1]), (800, op['out'][1])); s.flag((736, op['out'][1]), 'MFO')
     y = op['out'][1]
 
-    # ---- 6 y 7 LPF Sallen-Key (ganancia 1)
+    # ---- 6 LPF Sallen-Key (ganancia 1)
     def lpf(bx, y0, names, vals, vout, box):
         r1, r2, cfb, cg, x = names
         s.box(*box)
@@ -186,23 +189,14 @@ def canal():
         s.wire(op['out'], (bx + 640, op['out'][1]), (bx + 704, op['out'][1]), (bx + 800, op['out'][1]))
         s.flag((bx + 704, op['out'][1]), vout)
         return op['out'][1]
-    y = lpf(640, y, ('Rla1', 'Rla2', 'C11', 'C12', 'XLA'), ('{RLA}', '{RLA}', '{C11}', '{C12}'), 'LAO',
-            (576, 688, 1408, 1232, '6  LPF A 500 Hz  (Q 0.541)', 'Butterworth 4o orden, seccion 1'))
-    y = lpf(1440, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('{RLB}', '{RLB}', '{C21}', '{C22}'), 'LBO',
-            (1408, 688, 2208, 1232, '7  LPF B 500 Hz  (Q 1.306)', 'Butterworth 4o orden, seccion 2'))
-    # ---- 8 buffer + bucket
-    s.box(2208, 688, 2848, 1232, '8  BUFFER + BUCKET -> ADC', '100 ohm + 1 nF')
-    s.wire((2240, y), (2304, y))
-    op = s.opamp('XBF', (2304, y)); s.supplies(op)
-    top = y - 128
-    s.wire(op['inn'], (2288, op['inn'][1]), (2288, top), (2400, top), (2400, op['out'][1]))
-    s.wire(op['out'], (2400, op['out'][1]), (2464, op['out'][1]))
-    b = (2464, op['out'][1])
-    s.R('Rbk', b, (b[0] + 80, b[1]), '{RBK}')
-    e = (b[0] + 80, b[1])
-    s.wire(e, (e[0] + 96, e[1]), (e[0] + 224, e[1]))
-    s.C('Cbk', (e[0] + 96, e[1]), (e[0] + 96, e[1] + 64), '{CBK}'); s.gnd((e[0] + 96, e[1] + 64))
-    s.flag((e[0] + 224, e[1]), 'ADC', 'Out')
+    y = lpf(800, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('{RLB}', '{RLB}', '{C21}', '{C22}'), 'LBO',
+            (736, 688, 1568, 1232, '6  LPF Sallen-Key 500 Hz (Q 1.31)', 'Butterworth 4o orden, seccion 2'))
+    # ---- 7 bucket
+    s.box(1568, 688, 2112, 1232, '7  BUCKET -> ADC', '100 ohm + 1 nF (sin buffer)')
+    s.R('Rbk', (1600, y), (1680, y), '{RBK}')
+    s.wire((1680, y), (1776, y), (1904, y))
+    s.C('Cbk', (1776, y), (1776, y + 64), '{CBK}'); s.gnd((1776, y + 64))
+    s.flag((1904, y), 'ADC', 'Out')
     s.save('CANAL.asc')
 
 
@@ -306,13 +300,14 @@ PINATTR SpiceOrder 2
 
 # ---------------------------------------------------------------------------
 VALORES = """.param RS=100k RRFI=1k CCM=47p CD=100p RGH=2.7k
-.param CHP=100n RHP1=56k RHP2=110k RF2=240k RG2=4.7k RG2T=5.3k CG2=10u
-.param RLA=91k C11=3.9n C12=3.3n RLB=56k C21=15n C22=2.2n
+.param CHP=100n RHP1=56k RHP2=110k
+.param RM1=3k RM2=75k RM3=20k CM1=68n CM2=1n
+.param RLB=56k C21=15n C22=2.2n
 .param RBK=100 CBK=1n RSM=620k CINT=1n RLIM=390k"""
 
 ESTIMULO = """.param KN=1 KSEM=25 NMOV=4.28m NWHT=82.4u
-.param AS1=50u AS2=30u AS3=40u AS4=25u
-.param GE1=120u GE2=300u GE3=50u GE4=250u
+.param AS1=50u AS2=40u AS3=25u
+.param GE1=120u GE2=50u GE3=250u
 .param CMB=3p RIMB=51k RER=20k CGE=1 VMAINS_TRAN=311 VMAINS_AC=0
 .param GDK={1.8/3.3}"""
 
@@ -324,7 +319,7 @@ SIM = """.include opa.lib
 .tran 0 1.2 0 50u
 .options gmin=100f plotwinsize=0
 .meas tran CM_cuerpo_Vpp PP V(body)-V(vref) FROM 0.3 TO 1.2"""
-for _k in range(1, 5):
+for _k in range(1, 4):
     SIM += f"""
 .meas tran sEMG{_k}_uVrms RMS 1e6*V(semg{_k}) FROM 0.35 TO 0.49
 .meas tran ADC{_k}_rafaga_mVrms RMS 1000*(V(adc{_k})-1.65) FROM 0.35 TO 0.49
@@ -333,16 +328,16 @@ for _k in range(1, 5):
 .meas tran PIN{_k}_min_V MIN V(pin{_k}) FROM 0.3 TO 1.2
 .meas tran PIN{_k}_max_V MAX V(pin{_k}) FROM 0.3 TO 1.2"""
 
-DKPIN = {1: 'A1 = PA9 (ADC12_INP10)', 2: 'A2 = PA10 (ADC12_INP11)', 3: 'A3 = PA12 (ADC12_INP13)', 4: 'A4 = PF3 (ADC12_INP16)'}
-MUSC = {1: 'submentoniano', 2: 'platisma', 3: 'labio inferior', 4: 'laringe'}
+DKPIN = {1: 'A1 = PA9 (ADC12_INP10)', 2: 'A2 = PA10 (ADC12_INP11)', 3: 'A3 = PA12 (ADC12_INP13)'}
+MUSC = {1: 'submentoniano', 2: 'labio inferior', 3: 'laringe'}
 
 
 def top():
     from make_bom_xlsx import compact_rows
     s = Sheet(4400, 3800)
-    s.text((-1600, -1072), 'AuraVox - AFE sEMG: 4 entradas diferenciales (9 electrodos) -> 4 salidas al ADC del STM32N6570-DK', 4)
+    s.text((-1600, -1072), 'AuraVox - AFE sEMG: 3 entradas diferenciales (7 electrodos) -> 3 salidas al ADC del STM32N6570-DK', 4)
     s.text((-1600, -992), 'Un Run = 2 pasos: paso 1 SIN RLD (referencia pasiva 390k), paso 2 CON RLD. Resultados: View > SPICE Error Log. Doble clic en un bloque CANAL para ver sus 8 etapas.', 3)
-    s.text((-1600, -928), 'QUE GRAFICAR: V(semg1) (sEMG limpio) | V(n1)-V(body) (entrada con ruido) | V(adc1)..V(adc4) (salidas del AFE) | V(pin1)..V(pin4) (lo que ve el ADC, 0-1.8 V) | V(body)-V(vref) (modo comun)', 2)
+    s.text((-1600, -928), 'QUE GRAFICAR: V(semg1) (sEMG limpio) | V(n1)-V(body) (entrada con ruido) | V(adc1)..V(adc3) (salidas del AFE) | V(pin1)..V(pin3) (lo que ve el ADC, 0-1.8 V) | V(body)-V(vref) (modo comun)', 2)
     # --- alimentacion y VREF ---
     s.box(-1600, -864, -800, -256, 'ALIMENTACION 3.3 V Y VREF', 'divisor 2 x 100k + 10u, seguidor')
     s.two('voltage', 'VCC', (-1504, -560), (-1504, -480), '3.3'); s.label((-1504, -560), 'VCC', dy=-16); s.gnd((-1504, -480))
@@ -368,11 +363,11 @@ def top():
     s.R('RGE', (1328, -592), (1328, -512), '1G'); s.label((1328, -592), 'EARTH', dy=-16); s.gnd((1328, -512))
     # --- columnas ---
     s.box(-1600, -192, -224, 2464, 'ENTRADA DIFERENCIAL POR CANAL', 'sEMG = ruido blanco filtrado 90 Hz x envolvente; ruido = movimiento + ECG + blanco')
-    s.box(-160, -192, 704, 2464, 'ELECTRODOS (8 de senal)', '20k||47n; el - de cada par + 51k||47n')
-    s.box(768, -192, 1472, 2464, 'AFE: 4 CANALES', 'bloque CANAL = 8 etapas')
-    s.box(1536, -192, 2400, 2464, 'STM32N6570-DK: ARDUINO A1..A4', 'amplificador de la placa 3.3 V -> 1.8 V + muestreo del ADC')
-    hc = {1: ('5m', '-5m'), 2: ('12m', '0'), 3: ('-8m', '10m'), 4: ('3m', '-15m')}
-    for k in range(1, 5):
+    s.box(-160, -192, 704, 2464, 'ELECTRODOS (6 de senal)', '20k||47n; el - de cada par + 51k||47n')
+    s.box(768, -192, 1472, 2464, 'AFE: 3 CANALES', 'bloque CANAL = 7 etapas')
+    s.box(1536, -192, 2400, 2464, 'STM32N6570-DK: ARDUINO A1..A3', 'amplificador de la placa 3.3 V -> 1.8 V + muestreo del ADC')
+    hc = {1: ('5m', '-5m'), 2: ('12m', '0'), 3: ('-8m', '10m')}
+    for k in range(1, 4):
         y = 64 + (k - 1) * 608
         s.text((-1568, y - 64), f'CH{k}  {MUSC[k]}', 3)
         # sEMG: blanco -> pasabanda -> x envolvente
@@ -416,7 +411,7 @@ def top():
     s.box(bx0, -192, bx0 + 1312, 928, 'RLD (9o electrodo, clavicula)', 'integrador inversor; sensa el punto medio de RG de los 4 canales')
     s.text((bx0 + 32, 48), 'RLDMODE 2 = con RLD (RLIM 390k) | 1 = sin RLD: ref. pasiva a VREF por 390k (RPAS)', 2)
     bx, by = bx0 + 160, 400
-    for k in range(1, 5):
+    for k in range(1, 4):
         yy = by + (k - 1) * 96
         s.label((bx, yy), f'RGM{k}', dx=-64)
         s.R(f'RSM{k}', (bx, yy), (bx + 80, yy), '{RSM}')
@@ -442,11 +437,11 @@ def top():
     s.label((bx + 960, e[1] - 192), 'BODY', dy=-16)
     s.flag((bx + 480, e[1]), 'RLDO')
     # --- valores, estimulo, simulacion, BoM ---
-    s.box(bx0, 992, bx0 + 1312, 1504, 'VALORES (editar aqui si cambias un componente)', 'E24; el bloque CANAL los usa en sus 4 copias')
+    s.box(bx0, 992, bx0 + 1312, 1504, 'VALORES (editar aqui si cambias un componente)', 'E24; el bloque CANAL los usa en sus 3 copias')
     s.text((bx0 + 32, 1184), VALORES, 2, directive=True)
     s.box(bx0, 1568, bx0 + 1312, 3040, 'ESTIMULO Y SIMULACION', 'KN=0 quita el ruido. AS = sEMG (V rms); GE = ECG pico; NMOV/NWHT calibrados a 500/20 uV rms')
     s.text((bx0 + 32, 1760), ESTIMULO + '\n' + SIM, 2, directive=True)
-    s.box(-1600, 3104, 3776, 3680, 'BoM (4 canales, a comprar; detalle en docs/afe-emg/BoM_AFE_AuraVox.xlsx)', '')
+    s.box(-1600, 3104, 3776, 3680, 'BoM (3 canales, a comprar; detalle en docs/afe-emg/BoM_AFE_AuraVox.xlsx)', '')
     rows = compact_rows()
     cols = [rows[i::4] for i in range(4)]
     for c, rr in enumerate(cols):

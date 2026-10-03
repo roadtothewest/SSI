@@ -1,0 +1,21 @@
+* OPA = LM324/LM358 (bipolar, NO rail-to-rail) alimentado por un riel propio VOPA (3 pilas AA),
+* independiente del riel VCC de 3.3 V. Modelo conductual con los datos del datasheet TI SLOS066:
+*  GBW 1.2 MHz, SR 0.5 V/us, Aol 100 dB, Ib 45 nA, salida de ~5 mV hasta VOPA-1.5 V,
+*  entrada de 0 a VOPA-1.5 V. El pin VP del simbolo queda sin uso (el op-amp toma VOPA).
+.subckt OPA INP INN VP VN OUT params: VOS=0
+VR VPI VN {VOPA}
+Ib1 INP VN 45n
+Ib2 INN VN 45n
+.param GM=1m R1={1e5/GM} C1={GM/(2*pi*1.2Meg)} IMAX={0.5Meg*C1}
+Rid INP INN 1G
+B1 0 N1 I={IMAX}*tanh(({GM}/{IMAX})*(V(INP,INN)+{VOS}))
+R1 N1 0 {R1}
+C1 N1 0 {C1}
+DCP N1 CP DCL
+DCN CN N1 DCL
+BCP CP 0 V=V(VPI)
+BCN CN 0 V=-V(VPI)
+B2 OI 0 V=limit(V(VN)+1.65+V(N1), V(VN)+5m, V(VPI)-1.5)
+RO OI OUT 50
+.model DCL D(Ron=10 Roff=1T Vfwd=0.01)
+.ends OPA

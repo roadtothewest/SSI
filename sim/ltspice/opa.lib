@@ -1,4 +1,4 @@
-* Selector del modelo de op-amp (MCP6004) para todas las pruebas.
-* Dejar UNA linea activa:
-.include models/opa_behav.lib
+* Selector del modelo de op-amp. Dejar UNA linea activa:
+.include models/opa_ts922.lib
+*.include models/opa_behav.lib
 *.include models/opa_mcp.lib

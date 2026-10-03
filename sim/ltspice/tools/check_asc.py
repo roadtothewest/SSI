@@ -66,7 +66,7 @@ def check(asc):
     lib = open(os.path.join(HERE, 'afe_channel.lib'), encoding='latin-1').read()
     errs = compare(elements(block(lib, 'AFE_CH')), elements(block(net, 'CANAL')), 'CANAL',
                    fixed=('0', 'EP', 'EN', 'VCC', 'VREF', 'ADC', 'RGM', 'INAOUT'))
-    top = open(os.path.join(HERE, 'afe_4ch_top.inc'), encoding='latin-1').read().splitlines()
+    top = open(os.path.join(HERE, 'afe_3ch_top.inc'), encoding='latin-1').read().splitlines()
     ref = {k: v for k, v in elements(top).items() if not k.startswith('RSE') and k != 'XVREF'}
     ref.update({k: v[:6] for k, v in ref.items() if k.startswith('XCH')})   # el bloque CANAL ya no expone INAOUT
     for e, nodes in elements(block(lib, 'VREFGEN')).items():

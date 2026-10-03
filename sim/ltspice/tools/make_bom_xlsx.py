@@ -20,50 +20,44 @@ CLP = '$#,##0;($#,##0);-'
 #   cant_por_canal = None -> fila informativa (seccion de op-amp contada en el modulo OP-AMPS)
 OPS = 'seccion de op-amp'
 MODULES = [
-    ('1 PROTECCION ESD', 4, [
+    ('1 PROTECCION ESD', 3, [
         ('Rsp, Rsn', 'Resistencia serie de entrada', '100k', '100k', 'pelicula metalica 1 % 1/4 W', 2, 2, 'resistencia 100k 1% 1/4W', 'Limita la corriente de falla hacia el paciente y hacia el INA'),
         ('Dp1, Dp2, Dn1, Dn2', 'Diodo de clamp a VCC y GND', '1N4148', '1N4148', 'diodo de senal', 4, 4, '1N4148', '4 por canal x 4 = 16 (+4 repuesto = 20). Protegen el INA de descargas'),
     ]),
-    ('2 FILTRO RFI', 4, [
+    ('2 FILTRO RFI', 3, [
         ('Rfp, Rfn', 'Resistencia del filtro RFI', '1k', '1k', 'pelicula metalica 1 %', 2, 2, 'resistencia 1k 1%', ''),
         ('Ccmp, Ccmn', 'Condensador de modo comun', '47p', '47p', 'ceramico C0G/NP0 5 %', 2, 2, 'condensador ceramico 47pF NP0', 'Si la simulacion final elige 330k sin Ccm, no se usan'),
         ('Cdif', 'Condensador diferencial', '100p', '100p', 'ceramico C0G/NP0 5 %', 1, 1, 'condensador ceramico 100pF NP0', ''),
     ]),
-    ('3 AMPLIFICADOR DE INSTRUMENTACION', 4, [
+    ('3 AMPLIFICADOR DE INSTRUMENTACION', 3, [
         ('XINA', 'INA333 (modulo MCU-333)', 'INA333', 'INA333 modulo MCU-333', 'modulo; RG: quitar potenciometro', 1, 1, 'modulo MCU-333 INA333', 'Desoldar el trimmer de RG y poner RGa+RGb (2.7k+2.7k) con cable del punto medio al RLD. Alimentar por el pin 3.3V (no VCC) y llevar el pin VREF a tu VREF con buffer. Verificar pines con multimetro. Respaldo: AD623AN DIP-8'),
         ('RGa, RGb', 'Resistencia de ganancia (partida en dos)', '2.61k', '2.7k', 'pelicula metalica 1 %, parear con multimetro', 2, 4, 'resistencia 2.7k 1%', 'Con 2 x 2.7k: G1 = 19.5 (diseno 20.16). El punto medio va al RLD'),
         ('C desac. INA', 'Desacople del INA', '100n', '100n', 'ceramico X7R', 1, 1, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
-    ('4 HPF 20 Hz (Sallen-Key)', 4, [
+    ('4 HPF 20 Hz (Sallen-Key)', 3, [
         ('Chp1, Chp2', 'Condensador del HPF', '100n', '100n', 'poliester/MKT (film) 5 %', 2, 2, 'condensador poliester 100nF 5%', 'Film, no ceramico: estabilidad y bajo ruido'),
         ('R1', 'Resistencia de realimentacion', '56.2k', '56k', 'pelicula metalica 1 %', 1, 1, 'resistencia 56k 1%', 'Con 56k/110k: f0 = 20.3 Hz, Q = 0.70'),
         ('Ra', 'Resistencia a VREF', '113k', '110k', 'pelicula metalica 1 %', 1, 1, 'resistencia 110k 1%', ''),
         ('XHP', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
-    ('5 G2 = 25', 4, [
-        ('Rf', 'Resistencia de realimentacion', '240k', '240k', 'pelicula metalica 1 %', 1, 1, 'resistencia 240k 1%', ''),
-        ('Rg', 'Resistencia de ganancia fija', '4.7k', '4.7k', 'pelicula metalica 1 %', 1, 1, 'resistencia 4.7k 1%', ''),
-        ('RGT', 'Trimmer de ganancia por sitio de medicion', '25k', '25k multivuelta', 'trimmer multivuelta (3296)', 1, 1, 'trimmer 25k multivuelta 3296', 'G2 = 1 + 240k/(4.7k + RGT): de ~9 (25k) a ~52 (0). Ganancia total ~180-1000. Para G2 = 25: RGT = 5.3k'),
-        ('Cg', 'Condensador de bloqueo DC (G = 1 en DC)', '10u', '10u', 'ceramico X7R o electrolitico 16 V', 1, 1, 'condensador 10uF', ''),
-        ('XG2', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+    ('5 LPF MFB 500 Hz x25 (Q 0.54)', 3, [
+        ('Rm1', 'Resistencia de entrada (fija la ganancia)', '3k', '3k', 'pelicula metalica 1 %', 1, 1, 'resistencia 3k 1%', 'Ganancia = Rm2/Rm1 = 25. No poner trimmer aqui: cambia el Q del filtro'),
+        ('Rm2', 'Resistencia de realimentacion', '75k', '75k', 'pelicula metalica 1 %', 1, 1, 'resistencia 75k 1%', ''),
+        ('Rm3', 'Resistencia a la entrada inversora', '20k', '20k', 'pelicula metalica 1 %', 1, 1, 'resistencia 20k 1%', ''),
+        ('Cm1', 'Condensador a GND', '68n', '68n', 'poliester 5 %', 1, 1, 'condensador poliester 68nF', ''),
+        ('Cm2', 'Condensador de realimentacion', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
+        ('XMF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
-    ('6 LPF A 500 Hz (Q 0.541)', 4, [
-        ('Rla1, Rla2', 'Resistencia del LPF A', '88.7k', '91k', 'pelicula metalica 1 %', 2, 2, 'resistencia 91k 1%', 'Con 91k: f0 = 487 Hz'),
-        ('C11', 'Condensador de realimentacion', '3.9n', '3.9n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 3.9nF', ''),
-        ('C12', 'Condensador a GND', '3.3n', '3.3n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 3.3nF', ''),
-        ('XLA', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
-    ]),
-    ('7 LPF B 500 Hz (Q 1.306)', 4, [
+    ('6 LPF Sallen-Key 500 Hz (Q 1.31)', 3, [
         ('Rlb1, Rlb2', 'Resistencia del LPF B', '54.9k', '56k', 'pelicula metalica 1 %', 2, 2, 'resistencia 56k 1%', 'Con 56k: f0 = 495 Hz'),
         ('C21', 'Condensador de realimentacion', '15n', '15n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 15nF', ''),
         ('C22', 'Condensador a GND', '2.2n', '2.2n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 2.2nF', ''),
         ('XLB', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
-    ('8 BUFFER + SALIDA AL ADC', 4, [
+    ('7 BUCKET + SALIDA AL ADC', 3, [
         ('Rbk', 'Resistencia del bucket', '100', '100', 'pelicula metalica 1 %', 1, 1, 'resistencia 100 ohm 1%', ''),
         ('Cbk', 'Condensador del bucket', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
-        ('ADCk', 'Cable a Arduino A1..A4 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12), CH4-A4 (PF3). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
-        ('XBF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('ADCk', 'Cable a Arduino A1..A3 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
     ]),
     ('9 VREF 1.65 V (compartido)', 1, [
         ('RA1, RA2', 'Divisor de VREF', '100k', '100k', 'pelicula metalica 1 %', 2, 0, 'resistencia 100k 1%', ''),
@@ -71,16 +65,16 @@ MODULES = [
         ('XVR', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
     ('10 RLD (compartido)', 1, [
-        ('RSM1..RSM4', 'Sensado de modo comun (punto medio de RG)', '604k', '620k', 'pelicula metalica 1 %', 4, 1, 'resistencia 620k 1%', ''),
+        ('RSM1..RSM3', 'Sensado de modo comun (punto medio de RG)', '604k', '620k', 'pelicula metalica 1 %', 3, 1, 'resistencia 620k 1%', ''),
         ('CINT', 'Condensador del integrador', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', 'Si oscila en banco: 2.2n'),
         ('RPAR', 'Resistencia en paralelo al integrador', '10M', '10M', 'pelicula 5 %', 1, 1, 'resistencia 10M', ''),
         ('RLIM', 'Resistencia de seguridad al electrodo RLD', '390k', '390k', 'pelicula metalica 1 %', 1, 1, 'resistencia 390k 1%', 'Limita la corriente al paciente'),
         ('XRLD', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
     ]),
     ('11 OP-AMPS (paquetes)', 1, [
-        ('XHP..XBF x4, XRLD, XVR', 'Op-amp cuadruple MCP6004', 'MCP6004', 'MCP6004-I/SL', 'SOIC-14', 6, 4, 'MCP6004-I/SL', '22 secciones = 5 por canal x 4 + RLD + VREF (2 libres). RS Chile vende en paquetes de 10'),
-        ('-', 'Adaptador SOIC-14 a DIP-14', '-', 'SOIC14 a DIP14', 'PCB adaptador', 6, 1, 'adaptador SOIC14 a DIP14', 'Para montar el MCP6004-I/SL en perfboard'),
-        ('-', 'Zocalo DIP-14', '-', 'DIP-14', 'zocalo', 6, 1, 'zocalo DIP 14 pines', 'Si los op-amps son dobles: 11 zocalos DIP-8'),
+        ('XHP, XMF, XLB x3, XRLD, XVR', 'Op-amp doble TS922 (rail-to-rail, 4 MHz)', 'TS922', 'TS922AIYDT', 'SOIC-8', 6, 0, 'TS922AIYDT', '11 secciones = 3 por canal x 3 + RLD + VREF (1 libre). Solo habia 6 en stock'),
+        ('-', 'Adaptador SOIC-8 a DIP-8', '-', 'SOIC8 a DIP8', 'PCB adaptador', 6, 1, 'adaptador SOIC8 a DIP8', 'Soldar el TS922 al adaptador y probarlo antes de montarlo'),
+        ('-', 'Zocalo DIP-8', '-', 'DIP-8', 'zocalo', 6, 1, 'zocalo DIP 8 pines', ''),
         ('-', 'Desacople de cada op-amp', '100n', '100n', 'ceramico X7R', 6, 2, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
     ('12 ALIMENTACION (a bateria)', 1, [
@@ -92,13 +86,13 @@ MODULES = [
         ('-', 'Interruptor', '-', 'deslizante', '-', 1, 0, 'interruptor deslizante', ''),
     ]),
     ('13 ELECTRODOS Y CABLES', 1, [
-        ('XE1P..XE4N, XER', 'Electrodo Ag/AgCl con broche', '-', '3M Red Dot 2228/2560', 'desechable', 9, 41, 'electrodo ECG 3M 2228', '9 por sesion (8 de senal + 1 RLD); caja de 50'),
-        ('-', 'Cable con broche (snap) para electrodo', '-', 'broche 4 mm', '-', 9, 1, 'cable electrodo broche snap', 'O 3 cables ECG de 3 derivaciones'),
+        ('XE1P..XE3N, XER', 'Electrodo Ag/AgCl con broche', '-', '3M Red Dot 2228/2560', 'desechable', 7, 43, 'electrodo ECG 3M 2228', '7 por sesion (6 de senal + 1 RLD); caja de 50'),
+        ('-', 'Cable con broche (snap) para electrodo', '-', 'broche 4 mm', '-', 7, 1, 'cable electrodo broche snap', 'O 3 cables ECG de 3 derivaciones'),
         ('-', 'Alcohol isopropilico / gel', '-', '-', '-', 1, 0, 'alcohol isopropilico', 'Preparar la piel'),
     ]),
     ('14 MECANICA E INTERCONEXION', 1, [
         ('-', 'Perfboard', '-', '10 x 15 cm', 'fibra de vidrio', 1, 1, 'placa perforada 10x15', ''),
-        ('-', 'Zocalo DIP-8 (INA)', '-', 'DIP-8', 'zocalo', 0, 0, 'zocalo DIP 8 pines', 'Solo si usas el respaldo AD623AN DIP-8'),
+        ('-', 'Zocalo DIP-8 (INA)', '-', 'DIP-8 ', 'zocalo', 0, 0, 'zocalo DIP 8 pines', 'Solo si usas el respaldo AD623AN DIP-8'),
         ('-', 'Adaptador SOIC/MSOP-8 a DIP-8', '-', '-', 'PCB adaptador', 0, 0, 'adaptador SOIC8 a DIP8', 'Solo si compras el INA333 suelto (SMD)'),
         ('-', 'Tira de headers macho/hembra', '-', '2.54 mm', '-', 2, 1, 'header 2.54mm 40 pines', ''),
         ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable rigido 24 AWG', ''),
@@ -120,7 +114,7 @@ def hdr(ws, row, cols):
 
 def bom(wb):
     ws = wb.active; ws.title = 'BoM por modulo'
-    ws['A1'] = 'BoM AFE sEMG AuraVox: 4 canales, 9 electrodos, RLD. Ordenada por modulo, igual que los recuadros del esquematico LTspice (sim/ltspice).'
+    ws['A1'] = 'BoM AFE sEMG AuraVox: 3 canales (submentoniano, labio inferior, laringe), 7 electrodos, RLD. Ordenada por modulo, igual que los recuadros del esquematico LTspice (sim/ltspice).'
     ws['A1'].font = Font(name=F, bold=True, size=12)
     ws['A2'] = 'Celdas amarillas = las llenas tu (tienda, precio, estado). Las cantidades y subtotales se calculan solos.'
     ws['A2'].font = Font(name=F, italic=True, size=9)
@@ -132,7 +126,7 @@ def bom(wb):
         ws.cell(r, 1, name)
         for j in range(1, len(COLS) + 1):
             c = ws.cell(r, j); c.fill = MOD; c.font = Font(name=F, bold=True); c.border = BOX
-        ws.cell(r, 3, 'por canal (x4)' if nch == 4 else 'compartido')
+        ws.cell(r, 3, 'por canal (x3)' if nch == 3 else 'compartido')
         r += 1
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
             vals = [name, refs, comp, vd, vc, tipo]
@@ -310,7 +304,7 @@ def compact_rows():
 
 def compacta():
     wb = Workbook(); ws = wb.active; ws.title = 'BoM compacta'
-    ws['A1'] = 'BoM compacta AFE sEMG AuraVox (4 canales, incluye repuesto). Detalle por modulo en BoM_AFE_AuraVox.xlsx'
+    ws['A1'] = 'BoM compacta AFE sEMG AuraVox (3 canales, incluye repuesto). Detalle por modulo en BoM_AFE_AuraVox.xlsx'
     ws['A1'].font = Font(name=F, bold=True, size=12)
     hdr(ws, 3, ['Valor / parte', 'Cantidad', 'Componente', 'Precio unit. (CLP)', 'Subtotal (CLP)', 'Comprado'])
     rows = sorted(compact_rows(), key=lambda r: (r[2], r[0]))
