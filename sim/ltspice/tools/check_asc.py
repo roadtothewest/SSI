@@ -54,7 +54,7 @@ def compare(ref, sch, what, fixed=('0',)):
     return errs
 
 
-STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN', 'BW', 'EF', 'BSEM', 'VENV', 'VECG', 'EDK', 'RDK', 'CSH')
+STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN', 'BW', 'EF', 'BSEM', 'VENV', 'VECG', 'EDK', 'RDK', 'CSH', 'VUSB', 'XLDO', 'CLDOI', 'CLDOO', 'CBULK')
 PROBE = re.compile(r'^(W|F|SEMG)\d$|^(ENV|ECG|RLDO)$')
 
 
@@ -68,7 +68,8 @@ def check(asc):
                    fixed=('0', 'EP', 'EN', 'VCC', 'VREF', 'ADC', 'RGM', 'INAOUT'))
     top = open(os.path.join(HERE, 'afe_3ch_top.inc'), encoding='latin-1').read().splitlines()
     ref = {k: v for k, v in elements(top).items() if not k.startswith('RSE') and k != 'XVREF'}
-    ref.update({k: v[:6] for k, v in ref.items() if k.startswith('XCH')})   # el bloque CANAL ya no expone INAOUT
+    ref.update({k: v[:6] for k, v in ref.items() if k.startswith('XCH')})
+    ref.pop('VCC', None)   # el esquematico genera 3.3 V con el TLV75733P desde 5 V   # el bloque CANAL ya no expone INAOUT
     for e, nodes in elements(block(lib, 'VREFGEN')).items():
         ref[e] = ['VREF_DIV' if n == 'VD' else n for n in nodes]
     sch = {k: v for k, v in elements(net.split('* block symbol definitions')[0].splitlines()).items()

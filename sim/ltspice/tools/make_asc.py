@@ -66,9 +66,9 @@ class Sheet:
 
     def R(self, n, p1, p2, v): self.two('res', n, p1, p2, v)
     def C(self, n, p1, p2, v): self.two('cap', n, p1, p2, v)
-    def D(self, n, a, k, v='D1N4148'): self.two('diode', n, a, k, v)
+    def D(self, n, a, k, v='1N4148'): self.two('diode', n, a, k, v)
 
-    def opamp(self, name, inp, value='OPA'):
+    def opamp(self, name, inp, value='TS922'):
         """opamp2 (In- arriba, In+ abajo). Devuelve dict de pines."""
         o = (inp[0] + 32, inp[1] - 80)
         self.symbol('OpAmps\\\\opamp2', name, o, 'R0', value)
@@ -294,7 +294,32 @@ PIN 0 96 NONE 0
 PINATTR PinName LEAD
 PINATTR SpiceOrder 2
 """
-    for fn, t in (('CANAL.asy', canal_asy), ('INA333.asy', ina_asy), ('ELECTRODO.asy', elec_asy)):
+    ldo_asy = """Version 4
+SymbolType CELL
+RECTANGLE Normal -64 -48 64 48
+TEXT 0 -24 Center 2 TLV75733P
+TEXT -56 -8 Left 1 IN
+TEXT -56 24 Left 1 EN
+TEXT 56 -8 Right 1 OUT
+TEXT 0 32 Center 1 GND
+WINDOW 0 -64 -64 Left 2
+SYMATTR Prefix X
+SYMATTR Value TLV75733P
+SYMATTR Description LDO 3.3 V 1 A, SOT-23-5 (TI). Modelo conductual: models/tlv757_behav.lib
+PIN -64 -16 NONE 0
+PINATTR PinName IN
+PINATTR SpiceOrder 1
+PIN 0 48 NONE 0
+PINATTR PinName GND
+PINATTR SpiceOrder 2
+PIN -64 16 NONE 0
+PINATTR PinName EN
+PINATTR SpiceOrder 3
+PIN 64 -16 NONE 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 4
+"""
+    for fn, t in (('CANAL.asy', canal_asy), ('INA333.asy', ina_asy), ('ELECTRODO.asy', elec_asy), ('TLV75733P.asy', ldo_asy)):
         open(os.path.join(HERE, fn), 'w', newline='\r\n').write(t)
 
 
@@ -314,6 +339,7 @@ ESTIMULO = """.param KN=1 KSEM=25 NMOV=4.28m NWHT=82.4u
 SIM = """.include opa.lib
 .include models/ina_behav.lib
 .include afe_channel.lib
+.include models/tlv757_behav.lib
 .step param RLDMODE list 1 2
 .param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
 .tran 0 1.2 0 50u
@@ -339,8 +365,16 @@ def top():
     s.text((-1600, -992), 'Un Run = 2 pasos: paso 1 SIN RLD (referencia pasiva 390k), paso 2 CON RLD. Resultados: View > SPICE Error Log. Doble clic en un bloque CANAL para ver sus 8 etapas.', 3)
     s.text((-1600, -928), 'QUE GRAFICAR: V(semg1) (sEMG limpio) | V(n1)-V(body) (entrada con ruido) | V(adc1)..V(adc3) (salidas del AFE) | V(pin1)..V(pin3) (lo que ve el ADC, 0-1.8 V) | V(body)-V(vref) (modo comun)', 2)
     # --- alimentacion y VREF ---
-    s.box(-1600, -864, -800, -256, 'ALIMENTACION 3.3 V Y VREF', 'divisor 2 x 100k + 10u, seguidor')
-    s.two('voltage', 'VCC', (-1504, -560), (-1504, -480), '3.3'); s.label((-1504, -560), 'VCC', dy=-16); s.gnd((-1504, -480))
+    s.box(-2560, -864, -800, -256, 'ALIMENTACION: 5 V USB/powerbank -> TLV75733P -> 3.3 V, Y VREF', '5 V desde el pin +5V del STM32N6570-DK; divisor 2 x 100k + 10u y seguidor TS922')
+    s.two('voltage', 'VUSB', (-2464, -560), (-2464, -480), '5'); s.label((-2464, -560), 'V5', dy=-16); s.gnd((-2464, -480))
+    s.symbol('TLV75733P', 'XLDO', (-2176, -528), 'R0', 'TLV75733P')
+    s.wire((-2240, -544), (-2304, -544), (-2336, -544)); s.flag((-2336, -544), 'V5')
+    s.wire((-2240, -512), (-2272, -512), (-2272, -544))
+    s.C('CLDOI', (-2304, -544), (-2304, -480), '1u'); s.gnd((-2304, -480))
+    s.gnd((-2176, -480))
+    s.wire((-2112, -544), (-2048, -544), (-1968, -544), (-1904, -544)); s.flag((-1904, -544), 'VCC')
+    s.C('CLDOO', (-2048, -544), (-2048, -480), '1u'); s.gnd((-2048, -480))
+    s.C('CBULK', (-1968, -544), (-1968, -480), '10u'); s.gnd((-1968, -480))
     s.R('RA1', (-1296, -592), (-1296, -512), '100k'); s.label((-1296, -592), 'VCC', dy=-16)
     s.wire((-1296, -512), (-1296, -496), (-1296, -480)); s.R('RA2', (-1296, -480), (-1296, -400), '100k'); s.gnd((-1296, -400))
     s.wire((-1296, -496), (-1216, -496), (-1088, -496)); s.C('CA', (-1216, -496), (-1216, -432), '10u'); s.gnd((-1216, -432))

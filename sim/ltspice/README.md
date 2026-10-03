@@ -44,3 +44,11 @@ Recuadro **VALORES** de la hoja: un `.param` por componente, que usan las 3 copi
 - INA: módulo INA333 MCU-333 ×3 (+1), con RG = 2 × 2,7k y el punto medio al RLD.
 - Op-amp: TS922AIYDT ×6 (11 de las 12 secciones: 3 por canal + RLD + VREF), en adaptador SOIC-8 → DIP-8.
 - El LPF es de 4º orden: MFB + Sallen-Key. La ganancia es fija (G1 20 × G2 25 = ~500); el ajuste por sitio se hace en el firmware.
+
+## Alimentación y seguridad
+- El AFE toma 5 V del pin +5V del STM32N6570-DK (Arduino CN8) → TLV75733P → 3,3 V (`VCC`). La GND es común con el DK.
+- Con electrodos puestos, el DK debe ir a **powerbank o a un PC funcionando a batería**. No uses un cargador de pared, porque el paciente queda referido a la red. La simulación ya usa ese peor caso (`CGE=1`).
+
+## Modelos y símbolos
+- Símbolos propios en esta carpeta: `INA333.asy` (módulo MCU-333), `TLV75733P.asy`, `ELECTRODO.asy` y `CANAL.asy`. Los op-amps usan `opamp2` de LTspice con Value `TS922`; los diodos, el `1N4148` de la librería de LTspice.
+- Modelos: el INA333 es de TI (`models/INA333.LIB` en AC; el equivalente `models/ina_behav.lib` en transitorio). El TS922 y el TLV75733P son conductuales (`models/opa_ts922.lib`, `models/tlv757_behav.lib`) con los datos de sus datasheets. Si se descargan los modelos oficiales de ST y TI, se cambia el `.include`.

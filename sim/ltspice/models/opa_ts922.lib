@@ -24,3 +24,8 @@ RO OI OUT 50
 .subckt OPA INP INN VP VN OUT params: VOS=0
 X1 INP INN VP VN OUT OPAX GBW=4Meg AOL=200k SR=1Meg VRAIL=30m VOS={VOS} CIN=3p
 .ends OPA
+
+* Mismo modelo con el nombre comercial (lo usa el esquematico)
+.subckt TS922 INP INN VP VN OUT params: VOS=0
+X1 INP INN VP VN OUT OPAX GBW=4Meg AOL=200k SR=1Meg VRAIL=30m VOS={VOS} CIN=3p
+.ends TS922

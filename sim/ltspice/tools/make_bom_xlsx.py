@@ -38,7 +38,7 @@ MODULES = [
         ('Chp1, Chp2', 'Condensador del HPF', '100n', '100n', 'poliester/MKT (film) 5 %', 2, 2, 'condensador poliester 100nF 5%', 'Film, no ceramico: estabilidad y bajo ruido'),
         ('R1', 'Resistencia de realimentacion', '56.2k', '56k', 'pelicula metalica 1 %', 1, 1, 'resistencia 56k 1%', 'Con 56k/110k: f0 = 20.3 Hz, Q = 0.70'),
         ('Ra', 'Resistencia a VREF', '113k', '110k', 'pelicula metalica 1 %', 1, 1, 'resistencia 110k 1%', ''),
-        ('XHP', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('XHP', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
     ('5 LPF MFB 500 Hz x25 (Q 0.54)', 3, [
         ('Rm1', 'Resistencia de entrada (fija la ganancia)', '3k', '3k', 'pelicula metalica 1 %', 1, 1, 'resistencia 3k 1%', 'Ganancia = Rm2/Rm1 = 25. No poner trimmer aqui: cambia el Q del filtro'),
@@ -46,57 +46,60 @@ MODULES = [
         ('Rm3', 'Resistencia a la entrada inversora', '20k', '20k', 'pelicula metalica 1 %', 1, 1, 'resistencia 20k 1%', ''),
         ('Cm1', 'Condensador a GND', '68n', '68n', 'poliester 5 %', 1, 1, 'condensador poliester 68nF', ''),
         ('Cm2', 'Condensador de realimentacion', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
-        ('XMF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('XMF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
     ('6 LPF Sallen-Key 500 Hz (Q 1.31)', 3, [
         ('Rlb1, Rlb2', 'Resistencia del LPF B', '54.9k', '56k', 'pelicula metalica 1 %', 2, 2, 'resistencia 56k 1%', 'Con 56k: f0 = 495 Hz'),
         ('C21', 'Condensador de realimentacion', '15n', '15n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 15nF', ''),
         ('C22', 'Condensador a GND', '2.2n', '2.2n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 2.2nF', ''),
-        ('XLB', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('XLB', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
     ('7 BUCKET + SALIDA AL ADC', 3, [
         ('Rbk', 'Resistencia del bucket', '100', '100', 'pelicula metalica 1 %', 1, 1, 'resistencia 100 ohm 1%', ''),
         ('Cbk', 'Condensador del bucket', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
         ('ADCk', 'Cable a Arduino A1..A3 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
     ]),
-    ('9 VREF 1.65 V (compartido)', 1, [
+    ('8 VREF 1.65 V (compartido)', 1, [
         ('RA1, RA2', 'Divisor de VREF', '100k', '100k', 'pelicula metalica 1 %', 2, 0, 'resistencia 100k 1%', ''),
         ('CA', 'Condensador del divisor', '10u', '10u', 'ceramico X7R o electrolitico', 1, 0, 'condensador 10uF', ''),
-        ('XVR', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('XVR', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
-    ('10 RLD (compartido)', 1, [
+    ('9 RLD (compartido)', 1, [
         ('RSM1..RSM3', 'Sensado de modo comun (punto medio de RG)', '604k', '620k', 'pelicula metalica 1 %', 3, 1, 'resistencia 620k 1%', ''),
         ('CINT', 'Condensador del integrador', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', 'Si oscila en banco: 2.2n'),
         ('RPAR', 'Resistencia en paralelo al integrador', '10M', '10M', 'pelicula 5 %', 1, 1, 'resistencia 10M', ''),
         ('RLIM', 'Resistencia de seguridad al electrodo RLD', '390k', '390k', 'pelicula metalica 1 %', 1, 1, 'resistencia 390k 1%', 'Limita la corriente al paciente'),
-        ('XRLD', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 11 OP-AMPS'),
+        ('XRLD', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
-    ('11 OP-AMPS (paquetes)', 1, [
-        ('XHP, XMF, XLB x3, XRLD, XVR', 'Op-amp doble TS922 (rail-to-rail, 4 MHz)', 'TS922', 'TS922AIYDT', 'SOIC-8', 6, 0, 'TS922AIYDT', '11 secciones = 3 por canal x 3 + RLD + VREF (1 libre). Solo habia 6 en stock'),
+    ('10 OP-AMPS (paquetes)', 1, [
+        ('XHP, XMF, XLB x3, XRLD, XVR', 'Op-amp doble TS922AIYDT (Global 001-TS922)', 'TS922', 'TS922AIYDT', 'SOIC-8', 6, 0, 'TS922AIYDT', '11 secciones = 3 por canal x 3 + RLD + VREF (1 libre). Solo habia 6 en stock'),
         ('-', 'Adaptador SOIC-8 a DIP-8', '-', 'SOIC8 a DIP8', 'PCB adaptador', 6, 1, 'adaptador SOIC8 a DIP8', 'Soldar el TS922 al adaptador y probarlo antes de montarlo'),
         ('-', 'Zocalo DIP-8', '-', 'DIP-8', 'zocalo', 6, 1, 'zocalo DIP 8 pines', ''),
         ('-', 'Desacople de cada op-amp', '100n', '100n', 'ceramico X7R', 6, 2, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
-    ('12 ALIMENTACION (a bateria)', 1, [
-        ('-', 'Regulador LDO 3.3 V', 'MCP1700-3302E', 'MCP1700-3302E TO-92', 'LDO 250 mA', 1, 1, 'MCP1700 3.3V TO-92', 'Tu LDO de 3.0 V no sirve'),
-        ('-', 'Condensadores del LDO (entrada y salida)', '1u', '1u', 'ceramico X7R', 2, 1, 'condensador ceramico 1uF', 'Ya tienes 2 x 1uF 0402 (SMD): sirven si los sueldas'),
-        ('-', 'Condensador bulk del riel 3.3 V', '10u', '10u', 'ceramico o electrolitico', 1, 1, 'condensador 10uF', ''),
-        ('-', 'Portapilas 3 x AA', '-', '3xAA', '-', 1, 0, 'portapilas 3 AA', '4.5 V nominal; mantiene el AFE aislado de la red'),
-        ('-', 'Pilas AA', '-', 'AA', 'alcalina', 3, 3, 'pila AA', ''),
-        ('-', 'Interruptor', '-', 'deslizante', '-', 1, 0, 'interruptor deslizante', ''),
+    ('11 ALIMENTACION (5 V USB / powerbank -> 3.3 V)', 1, [
+        ('XLDO', 'Regulador LDO 3.3 V TLV75733PDBVR (Global 014-75733)', 'TLV75733P', 'TLV75733PDBVR', 'SOT-23-5', 1, 1, 'TLV75733PDBVR', 'Entrada 5 V desde el pin +5V del STM32N6570-DK (Arduino CN8). EN unido a IN'),
+        ('-', 'Adaptador SOT-23-5 a DIP', '-', 'SOT23 a DIP', 'PCB adaptador', 1, 1, 'adaptador SOT23 a DIP', 'Para montar el TLV75733P en perfboard'),
+        ('CLDOI, CLDOO', 'Condensadores del LDO (entrada y salida)', '1u', '1u', 'ceramico X7R', 2, 1, 'condensador ceramico 1uF', 'Pegados a los pines del LDO'),
+        ('CBULK', 'Condensador bulk del riel 3.3 V', '10u', '10u', 'ceramico o electrolitico', 1, 1, 'condensador 10uF', ''),
+        ('-', 'Cable 5 V y GND desde el DK', '-', 'jumper Dupont', '-', 2, 1, 'cable dupont macho-hembra', 'Usar powerbank o PC a bateria mientras haya electrodos puestos (ver Notas de seguridad)'),
     ]),
-    ('13 ELECTRODOS Y CABLES', 1, [
+    ('12 ELECTRODOS Y CONECTORES (7)', 1, [
         ('XE1P..XE3N, XER', 'Electrodo Ag/AgCl con broche', '-', '3M Red Dot 2228/2560', 'desechable', 7, 43, 'electrodo ECG 3M 2228', '7 por sesion (6 de senal + 1 RLD); caja de 50'),
-        ('-', 'Cable con broche (snap) para electrodo', '-', 'broche 4 mm', '-', 7, 1, 'cable electrodo broche snap', 'O 3 cables ECG de 3 derivaciones'),
+        ('-', 'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado', '-', 'broche 4 mm a pin', '-', 7, 1, 'cable electrodo broche snap', 'Uno por electrodo; trenzar los dos de cada par'),
+        ('-', 'Conector en la placa para los 7 cables', '-', 'header 2.54 mm 1x8 + hembra', '-', 1, 1, 'header 2.54mm 1x8 macho y hembra', 'Orden sugerido: CH1+ CH1- CH2+ CH2- CH3+ CH3- RLD GND(malla). Alternativa: bornera de tornillo 2.54/3.5 mm'),
         ('-', 'Alcohol isopropilico / gel', '-', '-', '-', 1, 0, 'alcohol isopropilico', 'Preparar la piel'),
     ]),
-    ('14 MECANICA E INTERCONEXION', 1, [
+    ('13 MECANICA E INTERCONEXION', 1, [
         ('-', 'Perfboard', '-', '10 x 15 cm', 'fibra de vidrio', 1, 1, 'placa perforada 10x15', ''),
-        ('-', 'Zocalo DIP-8 (INA)', '-', 'DIP-8 ', 'zocalo', 0, 0, 'zocalo DIP 8 pines', 'Solo si usas el respaldo AD623AN DIP-8'),
-        ('-', 'Adaptador SOIC/MSOP-8 a DIP-8', '-', '-', 'PCB adaptador', 0, 0, 'adaptador SOIC8 a DIP8', 'Solo si compras el INA333 suelto (SMD)'),
-        ('-', 'Tira de headers macho/hembra', '-', '2.54 mm', '-', 2, 1, 'header 2.54mm 40 pines', ''),
+                        ('-', 'Tira de headers macho/hembra', '-', '2.54 mm', '-', 2, 1, 'header 2.54mm 40 pines', ''),
         ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable rigido 24 AWG', ''),
     ]),
+    ('14 MICROFONO DE REFERENCIA (I2S)', 1, [
+        ('-', 'Modulo microfono digital INMP441 (I2S)', '-', 'INMP441', 'modulo', 1, 1, 'modulo microfono INMP441', 'A SAI/I2S del STM32N6570-DK (pines por definir en CubeMX). Alternativa sin cableado: microfono MEMS PDM que trae el DK (U13)'),
+        ('-', 'Cables Dupont para el microfono', '-', 'jumper Dupont', '-', 6, 0, 'cable dupont hembra-hembra', 'VDD 3.3V, GND, SCK, WS, SD, L/R (L/R a GND)'),
+    ]),
+
 ]
 
 COLS = ['Modulo', 'Ref. en esquematico', 'Componente', 'Valor de diseno', 'Valor a comprar', 'Tipo / tolerancia',
@@ -116,7 +119,7 @@ def bom(wb):
     ws = wb.active; ws.title = 'BoM por modulo'
     ws['A1'] = 'BoM AFE sEMG AuraVox: 3 canales (submentoniano, labio inferior, laringe), 7 electrodos, RLD. Ordenada por modulo, igual que los recuadros del esquematico LTspice (sim/ltspice).'
     ws['A1'].font = Font(name=F, bold=True, size=12)
-    ws['A2'] = 'Celdas amarillas = las llenas tu (tienda, precio, estado). Las cantidades y subtotales se calculan solos.'
+    ws['A2'] = 'Celdas amarillas = las llenas tu (tienda, precio, estado). SEGURIDAD: con electrodos puestos alimentar el DK con powerbank o PC a bateria, nunca con un cargador de pared.'
     ws['A2'].font = Font(name=F, italic=True, size=9)
     hdr(ws, 4, COLS)
     dv = DataValidation(type='list', formula1='"Pendiente,Comprado,No hay,No aplica"', allow_blank=True)
@@ -150,12 +153,8 @@ def bom(wb):
     last = r - 1
     # fila de ejemplo con precio real (MCP1700 en HUBOT)
     for rr in range(5, last + 1):
-        if ws.cell(rr, 3).value == 'Regulador LDO 3.3 V':
-            ws.cell(rr, 13, 'HUBOT'); ws.cell(rr, 14, 890)
-            ws.cell(rr, 14).comment = None
-            ws.cell(rr, 17, 'EJEMPLO de llenado: CLP 890 c/IVA en hubot.cl (30-sep-2026). Tu LDO de 3.0 V no sirve')
-        if ws.cell(rr, 3).value == 'Op-amp cuadruple MCP6004':
-            ws.cell(rr, 13, 'RS Chile'); ws.cell(rr, 14, 809)
+        if str(ws.cell(rr, 3).value).startswith(('Op-amp doble TS922', 'Regulador LDO 3.3 V TLV')):
+            ws.cell(rr, 13, 'Global Electronica')
         if ws.cell(rr, 3).value == 'INA333 (modulo MCU-333)':
             ws.cell(rr, 13, 'MechatronicStore'); ws.cell(rr, 14, 6790)
     ws.cell(last + 2, 14, 'TOTAL').font = Font(name=F, bold=True)
