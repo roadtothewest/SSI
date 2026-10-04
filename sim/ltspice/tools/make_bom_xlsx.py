@@ -95,7 +95,8 @@ MODULES = [
     ]),
     ('13 MECANICA E INTERCONEXION', 1, [
         ('-', 'Perfboard', '-', '10 x 15 cm', 'fibra de vidrio', 1, 1, 'placa perforada 10x15', ''),
-                        ('-', 'Tira de headers 1x40 2.54 THT (1 macho + 1 hembra)', '-', '2.54 mm', '-', 2, 1, 'tira header macho 1x40 / tira hembra 1x40', 'Macho: salidas A1-A3, GND, 5 V y microfono. Hembra: zocalo de los modulos INA333'),
+                        ('-', 'Tira de header macho 1x40 2.54 THT', '-', 'macho 1x40', '-', 1, 0, 'tira poste recto una fila 40 pines', 'Salidas A1-A3 + GND, 5 V/GND y microfono'),
+        ('-', 'Tira de header hembra 1x40 2.54 THT', '-', 'hembra 1x40', '-', 1, 0, 'tira 40 pines header hembra 2.54', 'Zocalo de los 3 modulos INA333 (se cambian sin desoldar)'),
         ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable UTP Cat6 24 AWG unifilar (por metro)', 'UTP: 8 hilos rigidos por metro. Rigido: no usarlo para los cables de electrodo (se corta al doblarse)'),
     ]),
     ('14 MICROFONO DE REFERENCIA (I2S)', 1, [
@@ -149,18 +150,39 @@ CART = {
     'Conector de la placa para los 7 electrodos': (G, '1105-8X2 hembra doble fila 16 vias 2.54', 2, 150, ''),
     'Cable para puentes': (G, '6UNI UTP Cat6 4 pares 24 AWG unifilar (m)', 3, 300, '3 m'),
     'Modulo microfono digital INMP441 (I2S)': (G, 'INMP441 sensor microfono omnidireccional (pagina 5044)', 1, 7790, ''),
+    'Cm1': (G, '2A104K poliester 100nF 100V + 2A473J poliester 47nF 100V, en paralelo (par)', 4, 130,
+            'No hay 150 nF en Global: 100n + 47n en paralelo = 147 nF (f0 +1 %, Q -1 %). Cantidad en pares; precio del par ($70 + $60)'),
+    'CLDOO cer.': (G, 'CM105 MLCC THD 1uF 50V X7R', 2, 50, ''),
+    'Tira de header macho 1x40 2.54 THT': (G, '1109-40L tira poste recto una fila 40 pines, pin largo', 1, 490, ''),
+    'Tira de header hembra 1x40 2.54 THT': (M, 'Fila de 40 pines header hembra 2.54 (GD2-3)', 1, 490, ''),
 }
 # Por agregar al carrito de Global (encontrados en globalelectronica.cl el 4-oct-2026). Mismo formato que CART.
 ADD = {
-    'Cm1': (G, '2A104K poliester 100nF 100V + 2A473J poliester 47nF 100V, en paralelo (par)', 4, 130,
-            'No hay 150 nF en Global: 100n + 47n en paralelo = 147 nF (f0 +1 %, Q -1 %). Precio = el par ($70 + $60)'),
-    'C21': (G, '2A153J poliester 15nF 100V', 4, 60, ''),
-    'CLDOO cer.': (G, 'CM105 MLCC THD 1uF 50V X7R', 2, 50, ''),
+    'C21': (G, '2A103J poliester 10nF 100V + 2A472K poliester 4.7nF 100V, en paralelo (par)', 4, 110,
+            '15 nF agotado (2A153J en Global; tampoco en MechatronicStore): 10n + 4.7n en paralelo = 14.7 nF (f0 +1 %, Q -1 %). '
+            'Stock al 4-oct: 2A103J 22 u, 2A472K 122 u. Cantidad en pares; precio del par ($50 + $60)'),
+}
+# Lo que falta y no esta en ninguna fila de diseno (insumos de montaje)
+INSUMOS = [
+    (1, 'Estano 0.5-0.8 mm con nucleo de flux', 'soldadura estano 0.8 mm', 'Global (soldadura)', ''),
+    (1, 'Flux (lapiz o pasta)', 'flux', 'Global (flux y mallas)', 'Imprescindible para soldar los TS922 en los S08D8'),
+    (1, 'Malla desoldadora', 'malla desoldadora', 'Global (flux y mallas)', 'Para sacar los trimmers de los modulos INA333'),
+    (1, 'Termorretractil 2-3 mm (surtido)', 'tubo termo retractil', 'Global', 'Uniones bus Dupont - cable de electrodo'),
+]
+DONDE = {
+    'Electrodo Ag/AgCl con broche 4 mm': 'Tiendas de insumos medicos / Mercado Libre',
+    'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado': 'MechatronicStore ("cable de electrodos AD8232") / tiendas medicas',
+    'Alcohol isopropilico / gel': 'Farmacia / ferreteria',
+    'Perfboard': 'Global (tarjetas para prototipos) / MechatronicStore',
+    'Cable a Arduino A1..A3 del STM32N6570-DK': 'MechatronicStore / Global. 1 tira de 40 M-H cubre las 3 filas M-H (14 cables)',
+    'Cable 5 V y GND desde el DK': 'MechatronicStore / Global (misma tira M-H)',
+    'Cables Dupont para el microfono': 'MechatronicStore / Global (misma tira M-H)',
+    'Bus de 8 cables Dupont macho (separado de una tira de 40)': 'MechatronicStore / Global. 1 tira de 40 M-M',
 }
 STATES = '"Pendiente,En carrito,Comprado,No hay,No aplica"'
 # notas generales de la compra (hoja Resumen)
 AVISOS = [
-    'AGREGAR al carrito de Global: 4 x 2A104K (100n poliester) + 4 x 2A473J (47n poliester) para Cm1 (100n + 47n en paralelo = 147 nF); 4 x 2A153J (15n poliester) para C21; 2 x CM105 (1 uF MLCC X7R) para la salida del LDO.',
+    'AGREGAR al carrito de Global: 4 x 2A103J (10n poliester) + 4 x 2A472K (4.7n poliester) para C21 (10n + 4.7n en paralelo = 14.7 nF; el 15 nF esta agotado).',
     'Pendiente (otra tienda): electrodos, cables de electrodo, jumpers Dupont (tira M-H y tira M-M), perfboard, tiras de header 1x40 y alcohol.',
     'Resistencias de carbon 5 % en vez de pelicula metalica 1 %: aceptado para la demo (ganancia por canal +-7 %, se normaliza en firmware). Para produccion: 1 %.',
     'Ajustes opcionales: S08D8 12 -> 7 (ahorro $1.250); 100k 2 W -> 1/4 W si hay stock (ahorro ~$1.700).',
@@ -241,11 +263,40 @@ def bom(wb):
     ws.cell(last + 2, 16, 'TOTAL').font = Font(name=F, bold=True)
     ws.cell(last + 2, 17, f'=SUM(Q5:Q{last})').font = Font(name=F, bold=True)
     ws.cell(last + 2, 17).number_format = CLP
+    falta(ws, last + 4)
     for j, w in enumerate(WID, 1):
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.freeze_panes = 'C5'
     ws.auto_filter.ref = f'A4:S{last}'
     return last
+
+
+def falta_rows():
+    """[(cant, que, buscar como, donde, nota)] de todo lo que no esta en los carritos."""
+    out = []
+    for _, nch, rows in MODULES:
+        for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
+            k = key(refs, comp)
+            if qch is None or k in CART:
+                continue
+            add = ADD.get(k)
+            q = qch * nch + rep
+            que = f'{vc} {comp}' if vc not in ('-',) else comp
+            if add:
+                out.append((q, que, add[1], 'Global (agregar al carrito)', add[4]))
+            else:
+                out.append((q, que, buscar, DONDE.get(comp, ''), nota))
+    return out + [(q, que, b, d, n + ' (insumo, no esta en el esquematico)' if n else 'insumo, no esta en el esquematico')
+                  for q, que, b, d, n in INSUMOS]
+
+
+def falta(ws, r0):
+    ws.cell(r0, 1, 'FALTA COMPRAR (no esta en los carritos del 4-oct-2026)').font = Font(name=F, bold=True, size=12, color='C00000')
+    hdr(ws, r0 + 1, ['Cant.', 'Que', 'Buscar como', 'Donde', 'Notas'])
+    for i, row in enumerate(falta_rows(), r0 + 2):
+        for j, v in enumerate(row, 1):
+            c = ws.cell(i, j, v); c.font = Font(name=F); c.border = BOX
+            c.alignment = Alignment(wrap_text=True, vertical='top')
 
 
 def resumen(wb, last):
@@ -448,7 +499,8 @@ def compacta():
     n = 3 + len(rows)
     ws.cell(n + 1, 6, 'TOTAL').font = Font(name=F, bold=True)
     ws.cell(n + 1, 7, f'=SUM(G4:G{n})').number_format = CLP
-    r = n + 3
+    falta(ws, n + 3)
+    r = n + 6 + len(falta_rows())
     ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
     for a in AVISOS:
         r += 1
