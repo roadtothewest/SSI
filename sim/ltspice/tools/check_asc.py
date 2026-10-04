@@ -6,7 +6,7 @@ HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
 def elements(lines):
-    """name -> lista de nodos (sin valor). Solo R, C, D, V, B, X."""
+    """name -> lista de nodos (sin valor). Solo R, C, L, D, V, B, E, X."""
     out = {}
     for l in lines:
         l = l.split(';')[0].strip()
@@ -17,7 +17,7 @@ def elements(lines):
         if t[0].startswith('X§') and not name.upper().startswith('X'):
             name = 'X' + name
         k = name[0].upper()
-        n = {'R': 2, 'C': 2, 'D': 2, 'V': 2, 'B': 2, 'E': 4}.get(k)
+        n = {'R': 2, 'C': 2, 'L': 2, 'D': 2, 'V': 2, 'B': 2, 'E': 4}.get(k)
         if k == 'X':
             # nodos hasta el nombre del subcircuito (primer token con letras que no es nodo conocido)
             toks = [x for x in t[1:] if '=' not in x]
@@ -54,7 +54,7 @@ def compare(ref, sch, what, fixed=('0',)):
     return errs
 
 
-STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN', 'BW', 'EF', 'BSEM', 'VENV', 'VECG', 'EDK', 'RDK', 'CSH', 'VUSB', 'XLDO', 'CLDOI', 'CLDOO', 'CBULK')
+STIM = ('VL', 'VW', 'VSG', 'VNZ', 'BIN', 'VIN', 'BW', 'LSEM', 'CSEM', 'RSEM', 'BSEM', 'VENV', 'VECG', 'EDK', 'RDK', 'CSH', 'VUSB', 'XLDO', 'CLDOI', 'CLDOO', 'CBULK')
 PROBE = re.compile(r'^(W|F|SEMG)\d$|^(ENV|ECG|RLDO)$')
 
 
@@ -69,6 +69,7 @@ def check(asc):
     top = open(os.path.join(HERE, 'afe_3ch_top.inc'), encoding='latin-1').read().splitlines()
     ref = {k: v for k, v in elements(top).items() if not k.startswith('RSE') and k != 'XVREF'}
     ref.update({k: v[:6] for k, v in ref.items() if k.startswith('XCH')})
+    ref.pop('RPAS', None)   # sin modos: el RLD va siempre al electrodo por RLIM
     ref.pop('VCC', None)   # el esquematico genera 3.3 V con el TLV75733P desde 5 V   # el bloque CANAL ya no expone INAOUT
     for e, nodes in elements(block(lib, 'VREFGEN')).items():
         ref[e] = ['VREF_DIV' if n == 'VD' else n for n in nodes]

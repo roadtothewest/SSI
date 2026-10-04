@@ -9,7 +9,7 @@ import os, sys
 HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # desplazamiento (x) del pin y (y) de cada pin en R0, largo entre pines
-TWO = {'res': (16, 16, 80), 'cap': (16, 0, 64), 'diode': (16, 0, 64),
+TWO = {'res': (16, 16, 80), 'ind': (16, 16, 80), 'cap': (16, 0, 64), 'diode': (16, 0, 64),
        'voltage': (0, 16, 80), 'bv': (0, 16, 80)}
 ROT = {'R0': lambda x, y: (x, y), 'R90': lambda x, y: (-y, x),
        'R180': lambda x, y: (-x, -y), 'R270': lambda x, y: (y, -x)}
@@ -110,7 +110,7 @@ def follower_feedback(s, pins, top_y, extra_from=None):
 def canal():
     """Un canal, 8 etapas en recuadros numerados, en dos filas, con la senal cableada."""
     s = Sheet(3000, 1300)
-    s.text((-96, -480), 'CANAL sEMG:  EP/EN  ->  1 ESD  ->  2 RFI  ->  3 INA333 x20  ->  4 HPF 20 Hz  ->  5 LPF MFB x25  ->  6 LPF SK  ->  7 bucket  ->  ADC', 3)
+    s.text((-96, -480), 'CANAL sEMG:  EP/EN  ->  1 ESD  ->  2 RFI  ->  3 INA333 x20  ->  4 HPF 20 Hz  ->  5 G2 + LPF A (MFB x125)  ->  6 LPF B + buffer (SK x1)  ->  7 RC  ->  ADC', 3)
     s.text((-96, -416), 'Ganancia total 503 (54 dB), banda 20-500 Hz. Este bloque se usa 3 veces en AuraVox_AFE.asc (XCH1..XCH3). Nombres = subcircuito AFE_CH de afe_channel.lib', 2)
     s.flag((-352, -224), 'VCC', 'In'); s.flag((-352, -160), 'VREF', 'In')
     s.text((-384, -288), 'Alimentacion', 2)
@@ -156,9 +156,10 @@ def canal():
     s.flag((1888, op['out'][1]), 'HPO')
     # salto de fila: HPO baja a la fila 2
     Y2 = 1056
-    s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (128, Y2))
+    s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (64, Y2))
     # ---- 5 LPF MFB con ganancia
-    s.box(-96, 688, 736, 1232, '5  LPF MFB 500 Hz, ganancia -25 (Q 0.54)', 'Butterworth 4o orden, seccion 1; invierte (no importa)')
+    s.box(-96, 688, 736, 1232, '5  G2 + LPF etapa A: MFB 500 Hz, ganancia -125 (Q 0.54)', 'Cm0 bloquea la DC (si no, Ib x Ra x G2 desplaza la salida); invierte (no importa)')
+    s.C('Cm0', (64, Y2), (128, Y2), '{CM0}')
     s.R('Rm1', (128, Y2), (208, Y2), '{RM1}')
     s.wire((208, Y2), (272, Y2), (352, Y2))
     s.C('Cm1', (272, Y2), (272, Y2 + 64), '{CM1}'); s.gnd((272, Y2 + 64))
@@ -190,9 +191,9 @@ def canal():
         s.flag((bx + 704, op['out'][1]), vout)
         return op['out'][1]
     y = lpf(800, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('{RLB}', '{RLB}', '{C21}', '{C22}'), 'LBO',
-            (736, 688, 1568, 1232, '6  LPF Sallen-Key 500 Hz (Q 1.31)', 'Butterworth 4o orden, seccion 2'))
+            (736, 688, 1568, 1232, '6  LPF etapa B + BUFFER: Sallen-Key 500 Hz, ganancia 1 (Q 1.31)', 'MFB + SK = Butterworth 4o orden; seguidor = salida de baja impedancia'))
     # ---- 7 bucket
-    s.box(1568, 688, 2112, 1232, '7  BUCKET -> ADC', '100 ohm + 1 nF (sin buffer)')
+    s.box(1568, 688, 2112, 1232, '7  RC -> ADC', '100 ohm + 1 nF')
     s.R('Rbk', (1600, y), (1680, y), '{RBK}')
     s.wire((1680, y), (1776, y), (1904, y))
     s.C('Cbk', (1776, y), (1776, y + 64), '{CBK}'); s.gnd((1776, y + 64))
@@ -206,9 +207,9 @@ SymbolType BLOCK
 RECTANGLE Normal -192 -160 192 160
 TEXT 0 -112 Center 2 CANAL sEMG
 TEXT 0 -40 Center 1 1 ESD  2 RFI  3 INA333 x20
-TEXT 0 -8 Center 1 4 HPF 20 Hz  5 G2 x25
-TEXT 0 24 Center 1 6-7 LPF 500 Hz  8 buffer
-TEXT 0 104 Center 1 ganancia 503, 20-500 Hz
+TEXT 0 -8 Center 1 4 HPF 20 Hz  5 G2 x125 + LPF A
+TEXT 0 24 Center 1 6 LPF B + buffer  7 RC
+TEXT 0 104 Center 1 ganancia 2500, 20-500 Hz
 PIN -192 -64 LEFT 8
 PINATTR PinName EP
 PINATTR SpiceOrder 1
@@ -326,11 +327,11 @@ PINATTR SpiceOrder 4
 # ---------------------------------------------------------------------------
 VALORES = """.param RS=100k RRFI=1k CCM=47p CD=100p RGH=2.7k
 .param CHP=100n RHP1=56k RHP2=110k
-.param RM1=3k RM2=75k RM3=20k CM1=68n CM2=1n
+.param CM0=10u RM1=2.4k RM2=300k RM3=2.2k CM1=150n CM2=1n
 .param RLB=56k C21=15n C22=2.2n
 .param RBK=100 CBK=1n RSM=620k CINT=1n RLIM=390k"""
 
-ESTIMULO = """.param KN=1 KSEM=25 NMOV=4.28m NWHT=82.4u
+ESTIMULO = """.param KN=1 KSEM=25 LSEM=1 CSEM=3.127u RSEM=807.8 NMOV=4.28m NWHT=82.4u
 .param AS1=50u AS2=40u AS3=25u
 .param GE1=120u GE2=50u GE3=250u
 .param CMB=3p RIMB=51k RER=20k CGE=1 VMAINS_TRAN=311 VMAINS_AC=0
@@ -340,16 +341,22 @@ SIM = """.include opa.lib
 .include models/ina_behav.lib
 .include afe_channel.lib
 .include models/tlv757_behav.lib
-.step param RLDMODE list 1 2
-.param RLIM_EF={if(RLDMODE==2,RLIM,1T)} RPAS_EF={if(RLDMODE==2,1T,if(RLDMODE==1,RLIM,1))}
 .tran 0 1.2 0 50u
 .options gmin=100f plotwinsize=0 gminsteps=0 srcsteps=0
+.meas tran VCC_V AVG V(vcc) FROM 0.3 TO 1.2
+.meas tran VREF_V AVG V(vref) FROM 0.3 TO 1.2
 .meas tran CM_cuerpo_Vpp PP V(body)-V(vref) FROM 0.3 TO 1.2"""
 for _k in range(1, 4):
     SIM += f"""
 .meas tran sEMG{_k}_uVrms RMS 1e6*V(semg{_k}) FROM 0.35 TO 0.49
-.meas tran ADC{_k}_rafaga_mVrms RMS 1000*(V(adc{_k})-1.65) FROM 0.35 TO 0.49
-.meas tran ADC{_k}_reposo_mVrms RMS 1000*(V(adc{_k})-1.65) FROM 0.58 TO 0.70
+.meas tran ADC{_k}_DC_V AVG V(adc{_k}) FROM 0.3 TO 1.2
+.meas tran ADC{_k}_pk_V MAX abs(V(adc{_k},vref)) FROM 0.3 TO 1.2
+.meas tran m{_k}r AVG 1000*V(adc{_k},vref) FROM 0.35 TO 0.49
+.meas tran q{_k}r RMS 1000*V(adc{_k},vref) FROM 0.35 TO 0.49
+.meas tran m{_k}s AVG 1000*V(adc{_k},vref) FROM 0.58 TO 0.70
+.meas tran q{_k}s RMS 1000*V(adc{_k},vref) FROM 0.58 TO 0.70
+.meas tran ADC{_k}_rafaga_mVrms param sqrt(q{_k}r**2-m{_k}r**2)
+.meas tran ADC{_k}_reposo_mVrms param sqrt(q{_k}s**2-m{_k}s**2)
 .meas tran SNR{_k}_salida_dB param 20*log10(ADC{_k}_rafaga_mVrms/ADC{_k}_reposo_mVrms)
 .meas tran PIN{_k}_min_V MIN V(pin{_k}) FROM 0.3 TO 1.2
 .meas tran PIN{_k}_max_V MAX V(pin{_k}) FROM 0.3 TO 1.2"""
@@ -407,8 +414,13 @@ def top():
         # sEMG: blanco -> pasabanda -> x envolvente
         s.two('bv', f'BW{k}', (-1504, y + 48), (-1504, y + 128), f'V=white(2e4*time+{k}e5)')
         s.label((-1504, y + 48), f'w{k}', dy=-16); s.gnd((-1504, y + 128))
-        s.symbol('e', f'EF{k}', (-1216, y + 32), 'R0', 'Laplace=(s/(2*pi*63))/((s/(2*pi*90))**2+s/(2*pi*63)+1)')
-        s.label((-1264, y + 64), f'w{k}', dx=-32); s.wire((-1264, y + 112), (-1264, y + 144)); s.flag((-1264, y + 144), '0')
+        # pasabanda RLC serie (f0 90 Hz, Q 0.7): misma H(s) que el Laplace anterior, sin convolucion
+        s.label((-1408, y + 48), f'w{k}', dy=-16)
+        s.two('ind', f'LSEM{k}', (-1408, y + 48), (-1328, y + 48), '{LSEM}')
+        s.C(f'CSEM{k}', (-1328, y + 48), (-1264, y + 48), '{CSEM}')
+        s.flag((-1328, y + 48), f'lc{k}')
+        s.wire((-1264, y + 48), (-1216, y + 48))
+        s.R(f'RSEM{k}', (-1216, y + 48), (-1216, y + 128), '{RSEM}')
         s.label((-1216, y + 48), f'f{k}', dy=-16); s.gnd((-1216, y + 128))
         s.two('bv', f'BSEM{k}', (-1504, y + 288), (-1504, y + 368), f'V={{AS{k}}}*{{KSEM}}*V(f{k})*V(env)')
         s.label((-1504, y + 288), f'semg{k}', dy=-16); s.gnd((-1504, y + 368))
@@ -442,8 +454,8 @@ def top():
         s.text((1568, cy - 128), f'CH{k} -> {DKPIN[k]}', 2)
     # --- RLD ---
     bx0 = 2464
-    s.box(bx0, -192, bx0 + 1312, 928, 'RLD (9o electrodo, clavicula)', 'integrador inversor; sensa el punto medio de RG de los 4 canales')
-    s.text((bx0 + 32, 48), 'RLDMODE 2 = con RLD (RLIM 390k) | 1 = sin RLD: ref. pasiva a VREF por 390k (RPAS)', 2)
+    s.box(bx0, -192, bx0 + 1312, 928, 'RLD (7o electrodo, clavicula)', 'integrador inversor; sensa el punto medio de RG de los 3 canales')
+    s.text((bx0 + 32, 48), 'Salida del integrador -> RLIM 390k -> electrodo RLD. Para probar SIN RLD: borra el cable marcado y vuelve a dar Run', 2)
     bx, by = bx0 + 160, 400
     for k in range(1, 4):
         yy = by + (k - 1) * 96
@@ -461,11 +473,10 @@ def top():
     s.wire((bx + 384, by - 48), (bx + 480, by - 48))
     s.wire((bx + 400, by - 176), (bx + 480, by - 176), (bx + 480, by - 48), (bx + 480, op['out'][1]))
     s.wire(op['out'], (bx + 480, op['out'][1]), (bx + 576, op['out'][1]))
-    s.R('RLIM', (bx + 576, op['out'][1]), (bx + 656, op['out'][1]), '{RLIM_EF}')
+    s.R('RLIM', (bx + 576, op['out'][1]), (bx + 656, op['out'][1]), '{RLIM}')
     e = (bx + 656, op['out'][1])
-    s.wire(e, (bx + 800, e[1]), (bx + 960, e[1]))
-    s.R('RPAS', (bx + 800, e[1]), (bx + 800, e[1] + 80), '{RPAS_EF}')
-    s.label((bx + 800, e[1] + 80), 'VREF', dy=16)
+    s.wire(e, (bx + 960, e[1]))   # cable RLD -> electrodo (borrarlo = sin RLD)
+    s.text((bx + 672, e[1] + 48), '^ cable RLD -> electrodo: borralo para probar sin RLD', 2)
     s.wire((bx + 960, e[1]), (bx + 960, e[1] - 96))
     s.symbol('ELECTRODO', 'XER', (bx + 960, e[1] - 192), 'R0', 'ELECTRODE', (('SpiceLine', 'Vhc=0 Re={RER}'),))
     s.label((bx + 960, e[1] - 192), 'BODY', dy=-16)

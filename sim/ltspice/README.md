@@ -5,16 +5,17 @@
 cd ~/SSI/sim/ltspice
 wine "C:\Program Files\ADI\LTspice\LTspice.exe" AuraVox_AFE.asc
 ```
-Run (~7 min con el macromodelo oficial del TS922). El Run hace 2 pasos: **paso 1 sin RLD** (referencia pasiva por 390k) y **paso 2 con RLD**.
-- Resultados numéricos: *View > SPICE Error Log* (`CM_cuerpo_Vpp`, `ADCk_rafaga/reposo_mVrms`, `SNRk_salida_dB`, `PINk_min/max_V`, `sEMGk_uVrms`).
-- Para ver las 7 etapas de un canal (ESD → RFI → INA333 ×20 → HPF 20 Hz → LPF MFB ×25 → LPF Sallen-Key → bucket): doble clic en un bloque `CANAL`.
+Run: una sola simulación de 1,2 s, con el RLD conectado (salida del integrador → RLIM 390k → electrodo RLD). Tarda unos 5 min con el macromodelo oficial del TS922.
+- **Para probar sin RLD:** en el recuadro RLD, borra el cable marcado entre RLIM y el electrodo RLD y vuelve a dar Run. Compara `CM_cuerpo_Vpp`, `V(body)` y `V(adc1..3)` con la corrida anterior. Con ese cable abierto el cuerpo queda sin camino de DC (igual que en la placa real) y el integrador del RLD se va al riel.
+- Resultados numéricos: *View > SPICE Error Log* (`VCC_V`, `VREF_V`, `CM_cuerpo_Vpp`, `ADCk_DC_V`, `ADCk_pk_V` (pico de la salida respecto a VREF), `ADCk_rafaga/reposo_mVrms`, `SNRk_salida_dB`, `PINk_min/max_V`, `sEMGk_uVrms`).
+- Para ver las 7 etapas de un canal (ESD → RFI → INA333 ×20 → HPF 20 Hz → G2 + LPF etapa A: MFB ×125 → LPF etapa B + buffer: Sallen-Key ×1 → RC): doble clic en un bloque `CANAL`.
 
 ## Cómo se simula cada entrada diferencial (todo en LTspice)
 La fuente `BINk` va entre el cuerpo (`BODY`) y el electrodo + del canal k. Su valor es la suma de:
 
 | Componente | Fuentes | Detalle |
 |---|---|---|
-| sEMG útil | `BWk` → `EFk` → `BSEMk` | Ruido blanco `white()`, filtrado por un pasabanda Laplace centrado en 90 Hz y multiplicado por la envolvente de habla `VENV`: ráfagas de 170 ms cada 420 ms, 5 % de tono en reposo. Amplitud `AS1..AS3` = 50/40/25 µV RMS (submentoniano, labio inferior, laringe) |
+| sEMG útil | `BWk` → `LSEMk`-`CSEMk`-`RSEMk` → `BSEMk` | Ruido blanco `white()`, filtrado por un pasabanda RLC serie (f0 = 90 Hz, Q = 0,7; antes era una fuente Laplace, que trababa la transitoria con el TS922 real) y multiplicado por la envolvente de habla `VENV`: ráfagas de 170 ms cada 420 ms, 5 % de tono en reposo. Amplitud `AS1..AS3` = 50/40/25 µV RMS (submentoniano, labio inferior, laringe) |
 | Movimiento | `white(3*time)` | 500 µV RMS, < 10 Hz |
 | ECG | `VECG` | PQRST que se repite a 72 lpm, con pico `GE1..GE3` = 120/50/250 µV (más fuerte en el cuello) |
 | Ruido blanco | `white(2e4*time)` | 20 µV RMS |
@@ -25,6 +26,26 @@ Además actúan, ya incluidos en el banco:
 - el desbalance 51k‖47n (IEC 60601-2-27).
 
 `KN=0` quita todo el ruido.
+
+### Qué es cada nodo y en qué unidades
+Los generadores son adimensionales (escala 1 V) y **no son señales del cuerpo**. Se escalan dentro de `BINk`.
+
+| Nodo | Qué es | Valor típico |
+|---|---|---|
+| `w1..w3` | ruido blanco unitario `white()` | ±0,5 V, 0,24 V RMS |
+| `f1..f3` | ese ruido pasado por el RLC de 90 Hz | ~0,04 V RMS (`KSEM=25` lo normaliza a 1) |
+| `env` | envolvente del habla | 0,05 (reposo) a 1 (ráfaga) |
+| `ecg` | latido PQRST de 72 lpm, normalizado | pico 1 V |
+| `semg1..3` | **sEMG real** en el electrodo | 50/40/25 µV RMS en ráfaga |
+| `V(n1)-V(BODY)` | **entrada diferencial total** del canal | ~540 µV RMS (domina el movimiento, < 10 Hz) |
+| `MAINS` | red de 220 Vrms (311 Vpk, 50 Hz) en el cableado del recinto | se acopla al cuerpo solo por `CMB` = 3 pF |
+| `BODY` | modo común del cuerpo | algunos mV sin RLD, mucho menos con RLD |
+| `adc1..3` | salida del AFE | DC ≈ VREF = 1,65 V; sEMG ≈ ±0,5 V en ráfaga |
+| `pin1..3` | lo que ve el ADC del DK (dominio 1,8 V) | ≈ 0,90 V ± varios cientos de mV en ráfaga |
+
+La red de 311 V no está aplicada al paciente: representa el cableado cercano, que acopla capacitivamente unos pocos mV de 50 Hz al cuerpo. Ese modo común es lo que el RLD debe cancelar.
+
+Las mediciones `ADCk_rafaga/reposo_mVrms` son solo la parte AC, porque restan el promedio. `ADCk_DC_V` es el nivel DC.
 
 ## Salidas al STM32N6570-DK (UM3300)
 `ADCk` (k = 1..3) pasa por el modelo del amplificador de la placa (3,3 V → 1,8 V, ganancia `GDK`; verificar en el esquemático MB1939) y por el muestreo del ADC, y llega a `pink`.
@@ -43,7 +64,8 @@ Recuadro **VALORES** de la hoja: un `.param` por componente, que usan las 3 copi
 ## Componentes activos
 - INA: módulo INA333 MCU-333 ×3 (+1), con RG = 2 × 2,7k y el punto medio al RLD.
 - Op-amp: TS922AIYDT ×6 (11 de las 12 secciones: 3 por canal + RLD + VREF), en adaptador SOIC-8 → DIP-8.
-- El LPF es de 4º orden: MFB + Sallen-Key. La ganancia es fija (G1 20 × G2 25 = ~500); el ajuste por sitio se hace en el firmware.
+- El LPF es de 4º orden: MFB + Sallen-Key. `Cm0` = 10 µF (electrolítico o cerámico) en serie a la entrada del MFB bloquea el DC. Sin él, la corriente de polarización del TS922 en Ra (110k) × G2 desplazaba la salida. La ganancia total es **2500** (G1 20 × G2 125): la escala completa es ±1,4 V en la salida del TS922, o sea 0,14–1,66 V en el pin del DK, para ±560 µV pico de entrada.
+- Mapeo al pipeline original (ESD, RFI, INA, HPF, G2, LPF, buffer): el **MFB** hace G2 + LPF etapa A, y el **Sallen-Key de ganancia 1** hace LPF etapa B + buffer. Son 3 op-amps por canal, porque solo hay 6 TS922 (12 secciones = 3 × 3 + RLD + VREF).
 
 ## Alimentación y seguridad
 - El AFE toma 5 V del pin +5V del STM32N6570-DK (Arduino CN8) → TLV75733P → 3,3 V (`VCC`). La GND es común con el DK.

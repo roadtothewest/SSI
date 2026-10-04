@@ -3,9 +3,9 @@ SymbolType BLOCK
 RECTANGLE Normal -192 -160 192 160
 TEXT 0 -112 Center 2 CANAL sEMG
 TEXT 0 -40 Center 1 1 ESD  2 RFI  3 INA333 x20
-TEXT 0 -8 Center 1 4 HPF 20 Hz  5 G2 x25
-TEXT 0 24 Center 1 6-7 LPF 500 Hz  8 buffer
-TEXT 0 104 Center 1 ganancia 503, 20-500 Hz
+TEXT 0 -8 Center 1 4 HPF 20 Hz  5 G2 x125 + LPF A
+TEXT 0 24 Center 1 6 LPF B + buffer  7 RC
+TEXT 0 104 Center 1 ganancia 2500, 20-500 Hz
 PIN -192 -64 LEFT 8
 PINATTR PinName EP
 PINATTR SpiceOrder 1
