@@ -148,14 +148,20 @@ CART = {
     'CBULK': (G, E10U, 2, 50, ''),
     'Conector de la placa para los 7 electrodos': (G, '1105-8X2 hembra doble fila 16 vias 2.54', 2, 150, ''),
     'Cable para puentes': (G, '6UNI UTP Cat6 4 pares 24 AWG unifilar (m)', 3, 300, '3 m'),
-    'Modulo microfono digital INMP441 (I2S)': (G, 'INMP411 sensor microfono omnidireccional (pagina 5044)', 1, 7790, 'VERIFICAR: el titulo dice INMP411. Debe ser el INMP441 I2S (pines SCK, WS, SD, L/R). El INMP411 es otro microfono, de salida analogica, y no sirve para el SAI'),
+    'Modulo microfono digital INMP441 (I2S)': (G, 'INMP441 sensor microfono omnidireccional (pagina 5044)', 1, 7790, ''),
+}
+# Por agregar al carrito de Global (encontrados en globalelectronica.cl el 4-oct-2026). Mismo formato que CART.
+ADD = {
+    'Cm1': (G, '2A104K poliester 100nF 100V + 2A473J poliester 47nF 100V, en paralelo (par)', 4, 130,
+            'No hay 150 nF en Global: 100n + 47n en paralelo = 147 nF (f0 +1 %, Q -1 %). Precio = el par ($70 + $60)'),
+    'C21': (G, '2A153J poliester 15nF 100V', 4, 60, ''),
+    'CLDOO cer.': (G, 'CM105 MLCC THD 1uF 50V X7R', 2, 50, ''),
 }
 STATES = '"Pendiente,En carrito,Comprado,No hay,No aplica"'
 # notas generales de la compra (hoja Resumen)
 AVISOS = [
-    'FALTAN en los carritos: Cm1 150 nF x4 (MFB) y C21 15 nF x4 (LPF Sallen-Key). Sin ellos el canal no funciona.',
-    'FALTAN: 1 uF ceramico X7R x2 para la salida del LDO; electrodos, cables de electrodo, jumpers Dupont (tira M-H y tira M-M), perfboard, tiras de header 1x40 y alcohol.',
-    'VERIFICAR el microfono: el carrito dice INMP411; el diseno usa el INMP441 (I2S).',
+    'AGREGAR al carrito de Global: 4 x 2A104K (100n poliester) + 4 x 2A473J (47n poliester) para Cm1 (100n + 47n en paralelo = 147 nF); 4 x 2A153J (15n poliester) para C21; 2 x CM105 (1 uF MLCC X7R) para la salida del LDO.',
+    'Pendiente (otra tienda): electrodos, cables de electrodo, jumpers Dupont (tira M-H y tira M-M), perfboard, tiras de header 1x40 y alcohol.',
     'Resistencias de carbon 5 % en vez de pelicula metalica 1 %: aceptado para la demo (ganancia por canal +-7 %, se normaliza en firmware). Para produccion: 1 %.',
     'Ajustes opcionales: S08D8 12 -> 7 (ahorro $1.250); 100k 2 W -> 1/4 W si hay stock (ahorro ~$1.700).',
     'Precios con IVA, sin despacho.',
@@ -198,7 +204,8 @@ def bom(wb):
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
             for j, v in enumerate([name, refs, comp, vd, vc, tipo], 1):
                 ws.cell(r, j, v)
-            cart = CART.get(key(refs, comp))
+            k = key(refs, comp)
+            cart = CART.get(k) or ADD.get(k)
             if qch is not None:
                 ws.cell(r, 7, qch); ws.cell(r, 8, nch); ws.cell(r, 9, f'=G{r}*H{r}')
                 ws.cell(r, 10, rep); ws.cell(r, 11, f'=I{r}+J{r}')
@@ -209,7 +216,9 @@ def bom(wb):
                     tienda, parte, cant, precio, nc = cart
                     for j, v in ((13, tienda), (14, parte), (15, cant), (16, precio)):
                         ws.cell(r, j, v)
-                    ws.cell(r, 18, 'En carrito')
+                    ws.cell(r, 18, 'En carrito' if k in CART else 'Pendiente')
+                    if k in ADD:
+                        nc = 'AGREGAR AL CARRITO DE GLOBAL' + ('. ' + nc if nc else '')
                     if nc:
                         nota = (nc + '. ' + nota) if nota else nc
                 else:
@@ -259,19 +268,21 @@ def resumen(wb, last):
     for j in range(1, 5):
         ws.cell(r, j).font = Font(name=F, bold=True); ws.cell(r, j).border = BOX
     r += 2
-    hdr(ws, r, ['Tienda', 'Subtotal en carrito (CLP)', '', ''])
+    hdr(ws, r, ['Tienda', 'En carrito (CLP)', 'Por agregar (CLP)', ''])
     for t in (G, M):
         r += 1
         ws.cell(r, 1, t).font = Font(name=F)
-        ws.cell(r, 2, f'=SUMIF({rng("M")},A{r},{rng("Q")})').number_format = CLP
+        ws.cell(r, 2, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"En carrito")').number_format = CLP
+        ws.cell(r, 3, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"Pendiente")').number_format = CLP
     r += 2
     ws.cell(r, 1, 'Faltan en los carritos').font = Font(name=F, bold=True, color='C00000')
     for _, nch, rows in MODULES:
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
             if qch is not None and key(refs, comp) not in CART:
                 r += 1
+                add = ADD.get(key(refs, comp))
                 ws.cell(r, 1, f'{qch * nch + rep} x {vc if vc != "-" else ""}  {comp}').font = Font(name=F)
-                ws.cell(r, 2, buscar).font = Font(name=F, color='595959')
+                ws.cell(r, 2, f'Global: {add[1]}' if add else buscar).font = Font(name=F, color='595959')
     r += 2
     ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
     for a in AVISOS:
@@ -402,10 +413,13 @@ def compact_purchase():
             k = (_cat(comp, tipo), vc if vc not in ('-',) else comp)
             a = agg.setdefault(k, {'tiendas': set(), 'cant': 0, 'precios': set(), 'pend': False})
             cart = CART.get(key(refs, comp))
+            add = ADD.get(key(refs, comp))
             if cart:
                 a['tiendas'].add(cart[0]); a['cant'] += cart[2]; a['precios'].add(cart[3])
             else:
                 a['pend'] = True
+                if add:
+                    a['tiendas'].add(add[0] + ' (agregar: ' + add[1] + ')')
     return agg
 
 
