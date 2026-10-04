@@ -58,7 +58,7 @@ MODULES = [
     ('7 BUCKET + SALIDA AL ADC', 3, [
         ('Rbk', 'Resistencia del bucket', '100', '100', 'pelicula metalica 1 %', 1, 1, 'resistencia 100 ohm 1%', ''),
         ('Cbk', 'Condensador del bucket', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
-        ('ADCk', 'Cable a Arduino A1..A3 del STM32N6570-DK', '-', 'jumper Dupont', '-', 1, 2, 'cable dupont macho-macho', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
+        ('ADCk', 'Cable a Arduino A1..A3 del STM32N6570-DK', '-', 'jumper Dupont M-H', '-', 1, 2, 'cable dupont macho-hembra (tira de 40)', 'CH1-A1 (PA9), CH2-A2 (PA10), CH3-A3 (PA12). Mas 1 cable de GND. A0 no: comparte ADC con USB1 ISENSE (UM3300)'),
     ]),
     ('8 VREF 1.65 V (compartido)', 1, [
         ('RA1, RA2', 'Divisor de VREF', '100k', '100k', 'pelicula metalica 1 %', 2, 0, 'resistencia 100k 1%', ''),
@@ -74,39 +74,101 @@ MODULES = [
     ]),
     ('10 OP-AMPS (paquetes)', 1, [
         ('XHP, XMF, XLB x3, XRLD, XVR', 'Op-amp doble TS922AIYDT (Global 001-TS922)', 'TS922', 'TS922AIYDT', 'SOIC-8', 6, 0, 'TS922AIYDT', '11 secciones = 3 por canal x 3 + RLD + VREF (1 libre). Solo habia 6 en stock'),
-        ('-', 'Adaptador SOP8/TSSOP8 a DIP8 doble cara (SOIC-8 1.27 mm + MSOP/TSSOP-8 0.65 mm)', '-', 'SOP8/TSSOP8 a DIP8', 'PCB adaptador doble cara', 6, 3, 'adaptador SOP8 TSSOP8 a DIP8', 'Cara SOIC-8: TS922. Cara MSOP-8: INA333 si hay que desoldarlo del modulo (3 extra). Soldar con flux y probar antes de montar'),
-        ('-', 'Zocalo DIP-8', '-', 'DIP-8', 'zocalo', 6, 1, 'zocalo DIP 8 pines', ''),
+        ('-', 'Adaptador SOIC-8 a DIP-8 (S08D8, Global; trae PCB y 2 headers de 4)', '-', 'S08D8', 'PCB adaptador', 6, 1, 'S08D8 adaptador SOIC 8 a DIP 8', 'Solo para los TS922 (SOIC-8, 1.27 mm). NO sirve para el TLV757 (SOT-23) ni para el INA333 (MSOP). Soldar con flux y probar antes de montar'),
+        ('-', 'Zocalo DIP-8 (opcional)', '-', 'DIP-8', 'zocalo', None, None, 'zocalo DIP 8 pines', 'Opcional: soldar los pines del S08D8 directo a la perfboard, o usar tira hembra 2.54 como zocalo'),
         ('-', 'Desacople de cada op-amp', '100n', '100n', 'ceramico X7R', 6, 2, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
     ('11 ALIMENTACION (5 V USB / powerbank -> 3.3 V)', 1, [
         ('XLDO', 'Regulador LDO 3.3 V TLV75733PDBVR (Global 014-75733)', 'TLV75733P', 'TLV75733PDBVR', 'SOT-23-5', 1, 1, 'TLV75733PDBVR', 'Entrada 5 V desde el pin +5V del STM32N6570-DK (Arduino CN8). EN unido a IN'),
-        ('-', 'Adaptador SOT-23-5 a DIP', '-', 'SOT23 a DIP', 'PCB adaptador', 1, 1, 'adaptador SOT23 a DIP', 'Para montar el TLV75733P en perfboard'),
+        ('-', 'Montaje del TLV757 sin adaptador (dead bug)', '-', '-', '-', None, None, '', 'Pegado boca arriba en la perfboard, hilo fino a cada pata. Pines: 1 IN, 2 GND, 3 EN (a IN), 4 NC, 5 OUT. El SOT23S3 de Global es de 3 pines: no sirve'),
         ('CLDOI, CLDOO', 'Condensadores del LDO (entrada y salida)', '1u', '1u', 'ceramico X7R', 2, 1, 'condensador ceramico 1uF', 'Pegados a los pines del LDO'),
+        ('CLDOO cer.', 'Condensador ceramico de salida del LDO (en paralelo con el electrolitico)', '1u', '1u X7R', 'MLCC X7R 16 V o mas', 1, 1, 'MLCC THD 1uF X7R', 'El TLV757 esta pensado para ceramico a la salida (>= 0.47 uF efectivos); un electrolitico solo puede oscilar'),
         ('CBULK', 'Condensador bulk del riel 3.3 V', '10u', '10u', 'ceramico o electrolitico', 1, 1, 'condensador 10uF', ''),
-        ('-', 'Cable 5 V y GND desde el DK', '-', 'jumper Dupont', '-', 2, 1, 'cable dupont macho-hembra', 'Usar powerbank o PC a bateria mientras haya electrodos puestos (ver Notas de seguridad)'),
+        ('-', 'Cable 5 V y GND desde el DK', '-', 'jumper Dupont M-H', '-', 2, 1, 'cable dupont macho-hembra', 'Usar powerbank o PC a bateria mientras haya electrodos puestos (ver Notas de seguridad)'),
     ]),
     ('12 ELECTRODOS Y CONECTORES (7)', 1, [
-        ('XE1P..XE3N, XER', 'Electrodo Ag/AgCl con broche', '-', '3M Red Dot 2228/2560', 'desechable', 7, 43, 'electrodo ECG 3M 2228', '7 por sesion (6 de senal + 1 RLD); caja de 50'),
+        ('XE1P..XE3N, XER', 'Electrodo Ag/AgCl con broche 4 mm', '-', 'Skintact FS-RG1/10 32x41', 'desechable', 7, 43, 'Skintact FS-RG1/10 / Kendall Arbo H124SG 24 mm', '7 por sesion (6 de senal + 1 RLD); caja de 50. Skintact para CH1, CH3 y RLD. CH2: Arbo H124SG (24 mm) o par sobre el menton. ISIMED 55x55 solo como RLD'),
         ('-', 'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado', '-', 'broche 4 mm a pin', '-', 7, 1, 'cable electrodo snap 4 mm / cable ECG broche', 'Uno por electrodo; trenzar los dos de cada par. REVISAR EL TERMINAL antes de comprar: debe calzar en header hembra 2.54 mm. Si termina en DIN 1.5 mm touchproof (DIN 42802), cortar y crimpar terminal Dupont hembra o comprar bases touchproof. Alternativa: cable de 3 electrodos con jack 3.5 mm (el de los kits AD8232) + jack hembra 3.5 mm TRS en la placa'),
-        ('-', 'Conector en la placa para los 7 cables', '-', 'header 2.54 mm 1x8 + hembra', '-', 1, 1, 'header 2.54mm 1x8 macho y hembra', 'Orden sugerido: CH1+ CH1- CH2+ CH2- CH3+ CH3- RLD GND(malla). Alternativa: bornera de tornillo 2.54/3.5 mm'),
+        ('-', 'Conector de la placa para los 7 electrodos', '-', 'hembra 2x8 2.54 THT', '-', 1, 1, '1105-8X2 conector hembra doble fila 16 vias', 'Una fila: CH1+ CH1- CH2+ CH2- CH3+ CH3- RLD GND(malla). Se enchufa el bus Dupont macho'),
+        ('-', 'Bus de 8 cables Dupont macho (separado de una tira de 40)', '-', 'jumper Dupont M-M', '-', 8, 0, 'cable dupont macho-macho 20 cm tira 40', 'Lado macho al conector 2x8; el otro extremo se une a los cables de electrodo (soldado + termorretractil o enchufado)'),
         ('-', 'Alcohol isopropilico / gel', '-', '-', '-', 1, 0, 'alcohol isopropilico', 'Preparar la piel'),
     ]),
     ('13 MECANICA E INTERCONEXION', 1, [
         ('-', 'Perfboard', '-', '10 x 15 cm', 'fibra de vidrio', 1, 1, 'placa perforada 10x15', ''),
-                        ('-', 'Tira de headers macho/hembra', '-', '2.54 mm', '-', 2, 1, 'header 2.54mm 40 pines', ''),
-        ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable rigido 24 AWG', ''),
+                        ('-', 'Tira de headers 1x40 2.54 THT (1 macho + 1 hembra)', '-', '2.54 mm', '-', 2, 1, 'tira header macho 1x40 / tira hembra 1x40', 'Macho: salidas A1-A3, GND, 5 V y microfono. Hembra: zocalo de los modulos INA333'),
+        ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable UTP Cat6 24 AWG unifilar (por metro)', 'UTP: 8 hilos rigidos por metro. Rigido: no usarlo para los cables de electrodo (se corta al doblarse)'),
     ]),
     ('14 MICROFONO DE REFERENCIA (I2S)', 1, [
         ('-', 'Modulo microfono digital INMP441 (I2S)', '-', 'INMP441', 'modulo', 1, 1, 'modulo microfono INMP441', 'A SAI/I2S del STM32N6570-DK (pines por definir en CubeMX). Alternativa sin cableado: microfono MEMS PDM que trae el DK (U13)'),
-        ('-', 'Cables Dupont para el microfono', '-', 'jumper Dupont', '-', 6, 0, 'cable dupont hembra-hembra', 'VDD 3.3V, GND, SCK, WS, SD, L/R (L/R a GND)'),
+        ('-', 'Cables Dupont para el microfono', '-', 'jumper Dupont M-H', '-', 6, 0, 'cable dupont macho-hembra', 'VDD 3.3V, GND, SCK, WS, SD, L/R (L/R a GND)'),
     ]),
 
 ]
 
+G, M = 'Global Electronica', 'MechatronicStore'
+X7R100N = 'K104K10X7RF53L2 MLCC X7R 100nF 50V'
+X7R1N = 'RPE110X7R102K050V MLCC X7R 1nF 50V'
+E10U = 'CE50103 electrolitico 10uF 50V'
+R100K = 'R2W100K carbon 2 W 5 % 100k'
+# Carritos del 4-oct-2026 (precios con IVA, sin despacho). clave = refs (o componente si refs es '-')
+#   -> (tienda, parte, cantidad asignada a esta fila, precio unitario, nota de compra)
+# Una linea del carrito que cubre varias filas se reparte entre ellas (la suma = lo comprado).
+CART = {
+    'Rsp, Rsn': (G, R100K, 8, 178, '2 W en vez de 1/4 W: funciona, pero es grande y caro (11 x $178). Si hay 100k 1/4 W, cambiarla'),
+    'Dp1, Dp2, Dn1, Dn2': (G, '1N4148', 16, 20, ''),
+    'Rfp, Rfn': (M, 'Resistencia carbon 1/4 W 1k (GK3-17)', 8, 100, ''),
+    'Ccmp, Ccmn': (G, 'C470NPO04D disco NPO 47pF 50V', 8, 30, ''),
+    'Cdif': (G, 'RPE110C0G101J050V MLCC C0G 100pF 50V', 4, 40, ''),
+    'XINA': (M, 'Modulo MCU-333 INA333 (GM2-4)', 4, 6790, ''),
+    'RGa, RGb': (G, '293-2.7K carbon 1/2 W 5 %', 10, 25, ''),
+    'C desac. INA': (G, X7R100N, 4, 40, ''),
+    'Chp1, Chp2': (G, X7R100N, 8, 40, 'X7R en vez de poliester: f0 del HPF +-10 %, aceptado para la demo'),
+    'R1': (G, '293-56K carbon 1/2 W 5 %', 4, 25, ''),
+    'Ra': (G, '291-110K carbon 1/4 W 5 %', 6, 20, ''),
+    'Cm0': (G, E10U, 4, 50, 'Electrolitico polarizado: aceptable para la demo (DC ~0 V entre sus patas, senal de mV). Para produccion: X7R o bipolar'),
+    'Rm1': (G, '291-2.4K carbon 1/4 W 5 %', 6, 20, ''),
+    'Rm2': (G, '291-300K carbon 1/4 W 5 %', 6, 20, ''),
+    'Rm3': (G, '293-2.2K carbon 1/2 W 5 %', 5, 25, ''),
+    'Cm2': (G, X7R1N, 4, 60, 'X7R en vez de C0G: aceptado para la demo'),
+    'Rlb1, Rlb2': (G, '293-56K carbon 1/2 W 5 %', 8, 25, ''),
+    'C22': (G, 'C222NPO05D disco NPO 2.2nF 50V', 4, 30, ''),
+    'Rbk': (G, 'R1W100 carbon 1 W 100 ohm', 6, 50, ''),
+    'Cbk': (G, X7R1N, 4, 60, ''),
+    'RA1, RA2': (G, R100K, 3, 178, ''),
+    'CA': (G, E10U, 1, 50, ''),
+    'RSM1..RSM3': (G, '291-620K carbon 1/4 W 5 %', 6, 20, ''),
+    'CINT': (G, X7R1N, 2, 60, ''),
+    'RPAR': (G, '291-10M carbon 1/4 W 5 %', 4, 20, ''),
+    'RLIM': (G, '293-390K carbon 1/2 W 5 %', 4, 25, ''),
+    'XHP, XMF, XLB x3, XRLD, XVR': (G, 'TS922AIYDT', 6, 2890, ''),
+    'Adaptador SOIC-8 a DIP-8 (S08D8, Global; trae PCB y 2 headers de 4)': (G, 'S08D8', 12, 250, 'En el carrito hay 12; bastan 7 (sobran 5 = $1.250)'),
+    'Desacople de cada op-amp': (G, X7R100N, 8, 40, ''),
+    'XLDO': (G, 'TLV75733PDBVR', 2, 950, ''),
+    'CLDOI, CLDOO': (G, 'CE50102 electrolitico 1uF 50V', 3, 90, 'Ver la fila CLDOO cer.: a la salida hace falta ademas un ceramico'),
+    'CBULK': (G, E10U, 2, 50, ''),
+    'Conector de la placa para los 7 electrodos': (G, '1105-8X2 hembra doble fila 16 vias 2.54', 2, 150, ''),
+    'Cable para puentes': (G, '6UNI UTP Cat6 4 pares 24 AWG unifilar (m)', 3, 300, '3 m'),
+    'Modulo microfono digital INMP441 (I2S)': (G, 'INMP411 sensor microfono omnidireccional (pagina 5044)', 1, 7790, 'VERIFICAR: el titulo dice INMP411. Debe ser el INMP441 I2S (pines SCK, WS, SD, L/R). El INMP411 es otro microfono, de salida analogica, y no sirve para el SAI'),
+}
+STATES = '"Pendiente,En carrito,Comprado,No hay,No aplica"'
+# notas generales de la compra (hoja Resumen)
+AVISOS = [
+    'FALTAN en los carritos: Cm1 150 nF x4 (MFB) y C21 15 nF x4 (LPF Sallen-Key). Sin ellos el canal no funciona.',
+    'FALTAN: 1 uF ceramico X7R x2 para la salida del LDO; electrodos, cables de electrodo, jumpers Dupont (tira M-H y tira M-M), perfboard, tiras de header 1x40 y alcohol.',
+    'VERIFICAR el microfono: el carrito dice INMP411; el diseno usa el INMP441 (I2S).',
+    'Resistencias de carbon 5 % en vez de pelicula metalica 1 %: aceptado para la demo (ganancia por canal +-7 %, se normaliza en firmware). Para produccion: 1 %.',
+    'Ajustes opcionales: S08D8 12 -> 7 (ahorro $1.250); 100k 2 W -> 1/4 W si hay stock (ahorro ~$1.700).',
+    'Precios con IVA, sin despacho.',
+]
+
 COLS = ['Modulo', 'Ref. en esquematico', 'Componente', 'Valor de diseno', 'Valor a comprar', 'Tipo / tolerancia',
         'Cant. por canal', 'N canales', 'Cant. total', 'Repuesto', 'A comprar', 'Buscar como', 'Tienda',
-        'Precio unit. (CLP)', 'Subtotal (CLP)', 'Estado', 'Notas']
-WID = [26, 22, 38, 14, 22, 26, 9, 9, 9, 9, 10, 32, 18, 13, 14, 12, 60]
+        'Parte en el carrito', 'Cant. en carrito', 'Precio unit. (CLP)', 'Subtotal (CLP)', 'Estado', 'Notas']
+WID = [26, 22, 38, 14, 22, 26, 9, 9, 9, 9, 10, 32, 18, 34, 10, 13, 14, 12, 70]
+
+
+def key(refs, comp):
+    return refs if refs != '-' else comp
 
 
 def hdr(ws, row, cols):
@@ -120,10 +182,11 @@ def bom(wb):
     ws = wb.active; ws.title = 'BoM por modulo'
     ws['A1'] = 'BoM AFE sEMG AuraVox: 3 canales (submentoniano, labio inferior, laringe), 7 electrodos, RLD. Ordenada por modulo, igual que los recuadros del esquematico LTspice (sim/ltspice).'
     ws['A1'].font = Font(name=F, bold=True, size=12)
-    ws['A2'] = 'Celdas amarillas = las llenas tu (tienda, precio, estado). SEGURIDAD: con electrodos puestos alimentar el DK con powerbank o PC a bateria, nunca con un cargador de pared.'
+    ws['A2'] = ('Carritos del 4-oct-2026 (Global Electronica + MechatronicStore) ya cargados. Celdas amarillas = editables. '
+                'SEGURIDAD: con electrodos puestos alimentar el DK con powerbank o PC a bateria, nunca con un cargador de pared.')
     ws['A2'].font = Font(name=F, italic=True, size=9)
     hdr(ws, 4, COLS)
-    dv = DataValidation(type='list', formula1='"Pendiente,Comprado,No hay,No aplica"', allow_blank=True)
+    dv = DataValidation(type='list', formula1=STATES, allow_blank=True)
     ws.add_data_validation(dv)
     r = 5
     for name, nch, rows in MODULES:
@@ -133,38 +196,46 @@ def bom(wb):
         ws.cell(r, 3, 'por canal (x3)' if nch == 3 else 'compartido')
         r += 1
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
-            vals = [name, refs, comp, vd, vc, tipo]
-            for j, v in enumerate(vals, 1):
+            for j, v in enumerate([name, refs, comp, vd, vc, tipo], 1):
                 ws.cell(r, j, v)
+            cart = CART.get(key(refs, comp))
             if qch is not None:
                 ws.cell(r, 7, qch); ws.cell(r, 8, nch); ws.cell(r, 9, f'=G{r}*H{r}')
                 ws.cell(r, 10, rep); ws.cell(r, 11, f'=I{r}+J{r}')
-                ws.cell(r, 15, f'=IF(N{r}="","",K{r}*N{r})')
-                for j in (13, 14, 16):
+                ws.cell(r, 17, f'=IF(P{r}="","",IF(O{r}="",K{r},O{r})*P{r})')
+                for j in (13, 14, 15, 16, 18):
                     ws.cell(r, j).fill = INP; ws.cell(r, j).font = Font(name=F, color='0000FF')
-                ws.cell(r, 16, 'Pendiente'); dv.add(ws.cell(r, 16))
-            ws.cell(r, 12, buscar); ws.cell(r, 17, nota)
+                if cart:
+                    tienda, parte, cant, precio, nc = cart
+                    for j, v in ((13, tienda), (14, parte), (15, cant), (16, precio)):
+                        ws.cell(r, j, v)
+                    ws.cell(r, 18, 'En carrito')
+                    if nc:
+                        nota = (nc + '. ' + nota) if nota else nc
+                else:
+                    ws.cell(r, 18, 'Pendiente')
+                    nota = ('FALTA EN EL CARRITO. ' + nota) if nota else 'FALTA EN EL CARRITO'
+                dv.add(ws.cell(r, 18))
+            else:
+                ws.cell(r, 18, 'No aplica')
+            ws.cell(r, 12, buscar); ws.cell(r, 19, nota)
             for j in range(1, len(COLS) + 1):
                 c = ws.cell(r, j); c.border = BOX
                 if c.font.name != F or c.font.color is None:
                     c.font = Font(name=F, color=c.font.color, bold=c.font.bold)
                 c.alignment = Alignment(wrap_text=True, vertical='top')
-            ws.cell(r, 14).number_format = CLP; ws.cell(r, 15).number_format = CLP
+            if ws.cell(r, 18).value == 'Pendiente':
+                ws.cell(r, 18).font = Font(name=F, bold=True, color='C00000')
+            ws.cell(r, 16).number_format = CLP; ws.cell(r, 17).number_format = CLP
             r += 1
     last = r - 1
-    # fila de ejemplo con precio real (MCP1700 en HUBOT)
-    for rr in range(5, last + 1):
-        if str(ws.cell(rr, 3).value).startswith(('Op-amp doble TS922', 'Regulador LDO 3.3 V TLV')):
-            ws.cell(rr, 13, 'Global Electronica')
-        if ws.cell(rr, 3).value == 'INA333 (modulo MCU-333)':
-            ws.cell(rr, 13, 'MechatronicStore'); ws.cell(rr, 14, 6790)
-    ws.cell(last + 2, 14, 'TOTAL').font = Font(name=F, bold=True)
-    ws.cell(last + 2, 15, f'=SUM(O5:O{last})').font = Font(name=F, bold=True)
-    ws.cell(last + 2, 15).number_format = CLP
+    ws.cell(last + 2, 16, 'TOTAL').font = Font(name=F, bold=True)
+    ws.cell(last + 2, 17, f'=SUM(Q5:Q{last})').font = Font(name=F, bold=True)
+    ws.cell(last + 2, 17).number_format = CLP
     for j, w in enumerate(WID, 1):
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.freeze_panes = 'C5'
-    ws.auto_filter.ref = f'A4:Q{last}'
+    ws.auto_filter.ref = f'A4:S{last}'
     return last
 
 
@@ -176,9 +247,9 @@ def resumen(wb, last):
     rng = lambda c: f"'BoM por modulo'!${c}$5:${c}${last}"
     for name, _, _ in MODULES:
         ws.cell(r, 1, name)
-        ws.cell(r, 2, f'=COUNTIFS({rng("A")},A{r},{rng("P")},"<>")')
-        ws.cell(r, 3, f'=COUNTIFS({rng("A")},A{r},{rng("P")},"Pendiente")')
-        ws.cell(r, 4, f'=SUMIF({rng("A")},A{r},{rng("O")})'); ws.cell(r, 4).number_format = CLP
+        ws.cell(r, 2, f'=COUNTIFS({rng("A")},A{r},{rng("R")},"<>No aplica",{rng("R")},"<>")')
+        ws.cell(r, 3, f'=COUNTIFS({rng("A")},A{r},{rng("R")},"Pendiente")')
+        ws.cell(r, 4, f'=SUMIF({rng("A")},A{r},{rng("Q")})'); ws.cell(r, 4).number_format = CLP
         for j in range(1, 5):
             ws.cell(r, j).font = Font(name=F); ws.cell(r, j).border = BOX
         r += 1
@@ -187,8 +258,26 @@ def resumen(wb, last):
     ws.cell(r, 4, f'=SUM(D4:D{r - 1})'); ws.cell(r, 4).number_format = CLP
     for j in range(1, 5):
         ws.cell(r, j).font = Font(name=F, bold=True); ws.cell(r, j).border = BOX
-    ws.cell(r + 2, 1, 'El total solo suma las filas con precio. Llena el precio en la hoja BoM por modulo.').font = Font(name=F, italic=True, size=9)
-    for j, w in enumerate([40, 10, 12, 16], 1):
+    r += 2
+    hdr(ws, r, ['Tienda', 'Subtotal en carrito (CLP)', '', ''])
+    for t in (G, M):
+        r += 1
+        ws.cell(r, 1, t).font = Font(name=F)
+        ws.cell(r, 2, f'=SUMIF({rng("M")},A{r},{rng("Q")})').number_format = CLP
+    r += 2
+    ws.cell(r, 1, 'Faltan en los carritos').font = Font(name=F, bold=True, color='C00000')
+    for _, nch, rows in MODULES:
+        for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
+            if qch is not None and key(refs, comp) not in CART:
+                r += 1
+                ws.cell(r, 1, f'{qch * nch + rep} x {vc if vc != "-" else ""}  {comp}').font = Font(name=F)
+                ws.cell(r, 2, buscar).font = Font(name=F, color='595959')
+    r += 2
+    ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
+    for a in AVISOS:
+        r += 1
+        ws.cell(r, 1, a).font = Font(name=F)
+    for j, w in enumerate([70, 44, 12, 16], 1):
         ws.column_dimensions[get_column_letter(j)].width = w
 
 
@@ -256,6 +345,7 @@ def requisitos(wb):
 
 
 TIENDAS = [
+    ('Global Electronica', 'Santiago', 'Web y tienda', 'TS922AIYDT, TLV75733PDBVR, S08D8, pasivos, conectores, INMP441 (carrito del 4-oct)', 'globalelectronica.cl'),
     ('Katode', 'San Martin 133 E, Santiago Centro', 'Retiro el mismo dia, L-V 9:30-14:00', 'Pasivos, zocalos, perfboard. Op-amps solo clasicos (TL07x, NE5532): NO sirven', 'katode.cl'),
     ('HUBOT', 'Santiago', 'Despacho el mismo dia si se pide antes de las 12:30', 'MCP1700-3302E (CLP 890)', 'hubot.cl'),
     ('MCI Electronics', 'Santiago', 'Retiro en tienda 8:30-17:30', 'Kits de resistencias 1 %, modulos', 'mcielectronics.cl'),
@@ -302,25 +392,54 @@ def compact_rows():
     return [(v, q, c) for (c, v), q in agg.items()]
 
 
+def compact_purchase():
+    """Por (categoria, valor): tiendas, cantidad en carrito, precio unitario (si es unico) y estado."""
+    agg = {}
+    for _, nch, rows in MODULES:
+        for refs, comp, vd, vc, tipo, qch, rep_, buscar, nota in rows:
+            if not qch:
+                continue
+            k = (_cat(comp, tipo), vc if vc not in ('-',) else comp)
+            a = agg.setdefault(k, {'tiendas': set(), 'cant': 0, 'precios': set(), 'pend': False})
+            cart = CART.get(key(refs, comp))
+            if cart:
+                a['tiendas'].add(cart[0]); a['cant'] += cart[2]; a['precios'].add(cart[3])
+            else:
+                a['pend'] = True
+    return agg
+
+
 def compacta():
     wb = Workbook(); ws = wb.active; ws.title = 'BoM compacta'
     ws['A1'] = 'BoM compacta AFE sEMG AuraVox (3 canales, incluye repuesto). Detalle por modulo en BoM_AFE_AuraVox.xlsx'
     ws['A1'].font = Font(name=F, bold=True, size=12)
-    hdr(ws, 3, ['Valor / parte', 'Cantidad', 'Componente', 'Precio unit. (CLP)', 'Subtotal (CLP)', 'Comprado'])
+    ws['A2'] = 'Carritos del 4-oct-2026 cargados. Precios con IVA, sin despacho. En rojo: falta en los carritos.'
+    ws['A2'].font = Font(name=F, italic=True, size=9)
+    hdr(ws, 3, ['Valor / parte', 'Cantidad', 'Componente', 'Tienda', 'En carrito', 'Precio unit. (CLP)', 'Subtotal (CLP)', 'Estado'])
+    pur = compact_purchase()
     rows = sorted(compact_rows(), key=lambda r: (r[2], r[0]))
     for i, (v, q, t) in enumerate(rows, 4):
-        for j, x in enumerate((v, q, t), 1):
+        a = pur[(t, v)]
+        estado = 'Pendiente' if a['pend'] and not a['cant'] else ('Parcial' if a['pend'] else 'En carrito')
+        precio = next(iter(a['precios'])) if len(a['precios']) == 1 else None
+        for j, x in enumerate((v, q, t, ', '.join(sorted(a['tiendas'])), a['cant'] or None, precio), 1):
             ws.cell(i, j, x).font = Font(name=F)
-        ws.cell(i, 5, f'=IF(D{i}="","",B{i}*D{i})').number_format = CLP
-        for j in (4, 6):
-            ws.cell(i, j).fill = INP; ws.cell(i, j).font = Font(name=F, color='0000FF')
-        ws.cell(i, 4).number_format = CLP
-        for j in range(1, 7):
+        ws.cell(i, 7, f'=IF(OR(E{i}="",F{i}=""),"",E{i}*F{i})').number_format = CLP
+        ws.cell(i, 8, estado).font = Font(name=F, bold=estado != 'En carrito', color='C00000' if estado != 'En carrito' else '000000')
+        for j in (4, 5, 6, 8):
+            ws.cell(i, j).fill = INP
+        ws.cell(i, 6).number_format = CLP
+        for j in range(1, 9):
             ws.cell(i, j).border = BOX
     n = 3 + len(rows)
-    ws.cell(n + 1, 4, 'TOTAL').font = Font(name=F, bold=True)
-    ws.cell(n + 1, 5, f'=SUM(E4:E{n})').number_format = CLP
-    for j, w in enumerate([30, 10, 34, 16, 16, 12], 1):
+    ws.cell(n + 1, 6, 'TOTAL').font = Font(name=F, bold=True)
+    ws.cell(n + 1, 7, f'=SUM(G4:G{n})').number_format = CLP
+    r = n + 3
+    ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
+    for a in AVISOS:
+        r += 1
+        ws.cell(r, 1, a).font = Font(name=F)
+    for j, w in enumerate([30, 10, 34, 20, 10, 16, 16, 12], 1):
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.freeze_panes = 'A4'
     out = OUT.replace('.xlsx', '_compacta.xlsx'); wb.save(out); print(out)
