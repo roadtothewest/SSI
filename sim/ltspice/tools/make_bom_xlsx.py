@@ -41,7 +41,7 @@ MODULES = [
         ('XHP', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
     ('5 G2 + LPF A: MFB 500 Hz x125 (Q 0.54)', 3, [
-        ('Cm0', 'Condensador de bloqueo DC a la entrada del MFB', '10u', '10u', 'ceramico X7R o electrolitico 16 V', 1, 1, 'condensador 10uF', 'Sin el, la corriente de polarizacion del TS922 por Ra (110k) x 25 deja +0.3 V de offset'),
+        ('Cm0', 'Condensador de bloqueo DC a la entrada del MFB', '10u', '10u', 'ceramico X7R 16 V o electrolitico BIPOLAR (NP)', 1, 1, 'condensador ceramico 10uF X7R / electrolitico bipolar 10uF', 'NO usar electrolitico polarizado: ambos lados quedan en ~1.65 V y la senal lo invierte. Sin Cm0, Ib del TS922 x Ra (110k) x G2 desplaza la salida'),
         ('Rm1', 'Resistencia de entrada (fija la ganancia)', '2.4k', '2.4k', 'pelicula metalica 1 %', 1, 1, 'resistencia 2.4k 1%', 'Ganancia = Rm2/Rm1 = 125 (total 2500). No poner trimmer aqui: cambia el Q del filtro'),
         ('Rm2', 'Resistencia de realimentacion', '300k', '300k', 'pelicula metalica 1 %', 1, 1, 'resistencia 300k 1%', 'Si no hay 300k: 2 x 150k en serie'),
         ('Rm3', 'Resistencia a la entrada inversora', '2.2k', '2.2k', 'pelicula metalica 1 %', 1, 1, 'resistencia 2.2k 1%', ''),
@@ -74,7 +74,7 @@ MODULES = [
     ]),
     ('10 OP-AMPS (paquetes)', 1, [
         ('XHP, XMF, XLB x3, XRLD, XVR', 'Op-amp doble TS922AIYDT (Global 001-TS922)', 'TS922', 'TS922AIYDT', 'SOIC-8', 6, 0, 'TS922AIYDT', '11 secciones = 3 por canal x 3 + RLD + VREF (1 libre). Solo habia 6 en stock'),
-        ('-', 'Adaptador SOIC-8 a DIP-8', '-', 'SOIC8 a DIP8', 'PCB adaptador', 6, 1, 'adaptador SOIC8 a DIP8', 'Soldar el TS922 al adaptador y probarlo antes de montarlo'),
+        ('-', 'Adaptador SOP8/TSSOP8 a DIP8 doble cara (SOIC-8 1.27 mm + MSOP/TSSOP-8 0.65 mm)', '-', 'SOP8/TSSOP8 a DIP8', 'PCB adaptador doble cara', 6, 3, 'adaptador SOP8 TSSOP8 a DIP8', 'Cara SOIC-8: TS922. Cara MSOP-8: INA333 si hay que desoldarlo del modulo (3 extra). Soldar con flux y probar antes de montar'),
         ('-', 'Zocalo DIP-8', '-', 'DIP-8', 'zocalo', 6, 1, 'zocalo DIP 8 pines', ''),
         ('-', 'Desacople de cada op-amp', '100n', '100n', 'ceramico X7R', 6, 2, 'condensador ceramico 100nF', 'Pegado al pin de alimentacion'),
     ]),
@@ -87,7 +87,7 @@ MODULES = [
     ]),
     ('12 ELECTRODOS Y CONECTORES (7)', 1, [
         ('XE1P..XE3N, XER', 'Electrodo Ag/AgCl con broche', '-', '3M Red Dot 2228/2560', 'desechable', 7, 43, 'electrodo ECG 3M 2228', '7 por sesion (6 de senal + 1 RLD); caja de 50'),
-        ('-', 'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado', '-', 'broche 4 mm a pin', '-', 7, 1, 'cable electrodo broche snap', 'Uno por electrodo; trenzar los dos de cada par'),
+        ('-', 'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado', '-', 'broche 4 mm a pin', '-', 7, 1, 'cable electrodo snap 4 mm / cable ECG broche', 'Uno por electrodo; trenzar los dos de cada par. REVISAR EL TERMINAL antes de comprar: debe calzar en header hembra 2.54 mm. Si termina en DIN 1.5 mm touchproof (DIN 42802), cortar y crimpar terminal Dupont hembra o comprar bases touchproof. Alternativa: cable de 3 electrodos con jack 3.5 mm (el de los kits AD8232) + jack hembra 3.5 mm TRS en la placa'),
         ('-', 'Conector en la placa para los 7 cables', '-', 'header 2.54 mm 1x8 + hembra', '-', 1, 1, 'header 2.54mm 1x8 macho y hembra', 'Orden sugerido: CH1+ CH1- CH2+ CH2- CH3+ CH3- RLD GND(malla). Alternativa: bornera de tornillo 2.54/3.5 mm'),
         ('-', 'Alcohol isopropilico / gel', '-', '-', '-', 1, 0, 'alcohol isopropilico', 'Preparar la piel'),
     ]),
