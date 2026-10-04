@@ -155,20 +155,26 @@ CART = {
     'CLDOO cer.': (G, 'CM105 MLCC THD 1uF 50V X7R', 2, 50, ''),
     'Tira de header macho 1x40 2.54 THT': (G, '1109-40L tira poste recto una fila 40 pines, pin largo', 1, 490, ''),
     'Tira de header hembra 1x40 2.54 THT': (M, 'Fila de 40 pines header hembra 2.54 (GD2-3)', 1, 490, ''),
-}
-# Por agregar al carrito de Global (encontrados en globalelectronica.cl el 4-oct-2026). Mismo formato que CART.
-ADD = {
     'C21': (G, '2A103J poliester 10nF 100V + 2A472K poliester 4.7nF 100V, en paralelo (par)', 4, 110,
             '15 nF agotado (2A153J en Global; tampoco en MechatronicStore): 10n + 4.7n en paralelo = 14.7 nF (f0 +1 %, Q -1 %). '
-            'Stock al 4-oct: 2A103J 22 u, 2A472K 122 u. Cantidad en pares; precio del par ($50 + $60)'),
+            'Cantidad en pares; precio del par ($50 + $60)'),
+    'ADCk': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida: A1-A3, 5 V/GND, microfono)', 5, None, 'Llenar tienda y precio de la tira'),
+    'Cable 5 V y GND desde el DK': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida)', 3, None, ''),
+    'Cables Dupont para el microfono': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida)', 6, None, ''),
+    'Bus de 8 cables Dupont macho (separado de una tira de 40)': ('Por confirmar', 'Tira de 40 jumpers Dupont M-M', 8, None, 'Llenar tienda y precio de la tira'),
 }
+# Ya los tiene el usuario (no se compran)
+OWNED = {'Perfboard'}
+# Por agregar al carrito de Global (encontrados en globalelectronica.cl el 4-oct-2026). Mismo formato que CART.
+ADD = {}
 # Lo que falta y no esta en ninguna fila de diseno (insumos de montaje)
-INSUMOS = [
+INSUMOS_TENIDOS = [  # estano, flux, malla y termorretractil: ya los tiene el usuario (4-oct)
     (1, 'Estano 0.5-0.8 mm con nucleo de flux', 'soldadura estano 0.8 mm', 'Global (soldadura)', ''),
     (1, 'Flux (lapiz o pasta)', 'flux', 'Global (flux y mallas)', 'Imprescindible para soldar los TS922 en los S08D8'),
     (1, 'Malla desoldadora', 'malla desoldadora', 'Global (flux y mallas)', 'Para sacar los trimmers de los modulos INA333'),
     (1, 'Termorretractil 2-3 mm (surtido)', 'tubo termo retractil', 'Global', 'Uniones bus Dupont - cable de electrodo'),
 ]
+INSUMOS = []
 DONDE = {
     'Electrodo Ag/AgCl con broche 4 mm': 'Tiendas de insumos medicos / Mercado Libre',
     'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado': 'MechatronicStore ("cable de electrodos AD8232") / tiendas medicas',
@@ -179,11 +185,12 @@ DONDE = {
     'Cables Dupont para el microfono': 'MechatronicStore / Global (misma tira M-H)',
     'Bus de 8 cables Dupont macho (separado de una tira de 40)': 'MechatronicStore / Global. 1 tira de 40 M-M',
 }
-STATES = '"Pendiente,En carrito,Comprado,No hay,No aplica"'
+STATES = '"Pendiente,En carrito,Comprado,Ya lo tengo,No hay,No aplica"'
 # notas generales de la compra (hoja Resumen)
 AVISOS = [
-    'AGREGAR al carrito de Global: 4 x 2A103J (10n poliester) + 4 x 2A472K (4.7n poliester) para C21 (10n + 4.7n en paralelo = 14.7 nF; el 15 nF esta agotado).',
-    'Pendiente (otra tienda): electrodos, cables de electrodo, jumpers Dupont (tira M-H y tira M-M), perfboard, tiras de header 1x40 y alcohol.',
+    'Cm1 = 100n + 47n poliester en paralelo (147 nF) y C21 = 10n + 4.7n poliester en paralelo (14.7 nF): no habia 150 nF y el 15 nF estaba agotado.',
+    'Falta: electrodos, cables de electrodo y alcohol (ver FALTA COMPRAR). Perfboard e insumos de soldadura: ya los tienes.',
+    'Tiras Dupont M-H y M-M: llenar tienda y precio en la hoja BoM por modulo.',
     'Resistencias de carbon 5 % en vez de pelicula metalica 1 %: aceptado para la demo (ganancia por canal +-7 %, se normaliza en firmware). Para produccion: 1 %.',
     'Ajustes opcionales: S08D8 12 -> 7 (ahorro $1.250); 100k 2 W -> 1/4 W si hay stock (ahorro ~$1.700).',
     'Precios con IVA, sin despacho.',
@@ -234,7 +241,9 @@ def bom(wb):
                 ws.cell(r, 17, f'=IF(P{r}="","",IF(O{r}="",K{r},O{r})*P{r})')
                 for j in (13, 14, 15, 16, 18):
                     ws.cell(r, j).fill = INP; ws.cell(r, j).font = Font(name=F, color='0000FF')
-                if cart:
+                if comp in OWNED:
+                    ws.cell(r, 18, 'Ya lo tengo')
+                elif cart:
                     tienda, parte, cant, precio, nc = cart
                     for j, v in ((13, tienda), (14, parte), (15, cant), (16, precio)):
                         ws.cell(r, j, v)
@@ -277,7 +286,7 @@ def falta_rows():
     for _, nch, rows in MODULES:
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
             k = key(refs, comp)
-            if qch is None or k in CART:
+            if qch is None or k in CART or comp in OWNED:
                 continue
             add = ADD.get(k)
             q = qch * nch + rep
@@ -465,8 +474,12 @@ def compact_purchase():
             a = agg.setdefault(k, {'tiendas': set(), 'cant': 0, 'precios': set(), 'pend': False})
             cart = CART.get(key(refs, comp))
             add = ADD.get(key(refs, comp))
-            if cart:
-                a['tiendas'].add(cart[0]); a['cant'] += cart[2]; a['precios'].add(cart[3])
+            if comp in OWNED:
+                a['tiendas'].add('ya lo tengo')
+            elif cart:
+                a['tiendas'].add(cart[0]); a['cant'] += cart[2]
+                if cart[3] is not None:
+                    a['precios'].add(cart[3])
             else:
                 a['pend'] = True
                 if add:
@@ -485,12 +498,14 @@ def compacta():
     rows = sorted(compact_rows(), key=lambda r: (r[2], r[0]))
     for i, (v, q, t) in enumerate(rows, 4):
         a = pur[(t, v)]
-        estado = 'Pendiente' if a['pend'] and not a['cant'] else ('Parcial' if a['pend'] else 'En carrito')
+        estado = ('Ya lo tengo' if a['tiendas'] == {'ya lo tengo'} else
+                  'Pendiente' if a['pend'] and not a['cant'] else ('Parcial' if a['pend'] else 'En carrito'))
         precio = next(iter(a['precios'])) if len(a['precios']) == 1 else None
         for j, x in enumerate((v, q, t, ', '.join(sorted(a['tiendas'])), a['cant'] or None, precio), 1):
             ws.cell(i, j, x).font = Font(name=F)
         ws.cell(i, 7, f'=IF(OR(E{i}="",F{i}=""),"",E{i}*F{i})').number_format = CLP
-        ws.cell(i, 8, estado).font = Font(name=F, bold=estado != 'En carrito', color='C00000' if estado != 'En carrito' else '000000')
+        roja = estado in ('Pendiente', 'Parcial')
+        ws.cell(i, 8, estado).font = Font(name=F, bold=roja, color='C00000' if roja else '000000')
         for j in (4, 5, 6, 8):
             ws.cell(i, j).fill = INP
         ws.cell(i, 6).number_format = CLP
