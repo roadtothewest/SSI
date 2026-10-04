@@ -67,6 +67,17 @@ Recuadro **VALORES** de la hoja: un `.param` por componente, que usan las 3 copi
 - El LPF es de 4º orden: MFB + Sallen-Key. `Cm0` = 10 µF (electrolítico o cerámico) en serie a la entrada del MFB bloquea el DC. Sin él, la corriente de polarización del TS922 en Ra (110k) × G2 desplazaba la salida. La ganancia total es **2500** (G1 20 × G2 125): la escala completa es ±1,4 V en la salida del TS922, o sea 0,14–1,66 V en el pin del DK, para ±560 µV pico de entrada.
 - Mapeo al pipeline original (ESD, RFI, INA, HPF, G2, LPF, buffer): el **MFB** hace G2 + LPF etapa A, y el **Sallen-Key de ganancia 1** hace LPF etapa B + buffer. Son 3 op-amps por canal, porque solo hay 6 TS922 (12 secciones = 3 × 3 + RLD + VREF).
 
+## Armado: condensadores en paralelo
+No había 150 nF ni 15 nF en las tiendas, así que cada uno se arma con dos de poliéster **en paralelo**, en cada uno de los 3 canales. La simulación ya usa los valores armados (`CM1=147n`, `C21=14.7n`).
+
+| Posición | Se arma con | Entre |
+|---|---|---|
+| **Cm1** (MFB) | 100 nF (2A104K) ∥ 47 nF (2A473J) = 147 nF | nodo MA (unión Rm1-Rm2-Rm3) y GND |
+| **C21** (Sallen-Key) | 10 nF (2A103J) ∥ 4,7 nF (2A472K) = 14,7 nF | unión Rlb1-Rlb2 y salida del op-amp del SK |
+| **Salida del LDO** | 1 µF cerámico (CM105) ∥ 1 µF electrolítico (CE50102) | OUT y GND, pegados al TLV757 |
+
+Cm0 (10 µF electrolítico) tiene ~0 V DC entre sus patas, así que cualquier orientación sirve. Por convención, + hacia la salida del HPF.
+
 ## Alimentación y seguridad
 - El AFE toma 5 V del pin +5V del STM32N6570-DK (Arduino CN8) → TLV75733P → 3,3 V (`VCC`). La GND es común con el DK.
 - Con electrodos puestos, el DK debe ir a **powerbank o a un PC funcionando a batería**. No uses un cargador de pared, porque el paciente queda referido a la red. La simulación ya usa ese peor caso (`CGE=1`).

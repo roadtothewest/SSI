@@ -45,13 +45,13 @@ MODULES = [
         ('Rm1', 'Resistencia de entrada (fija la ganancia)', '2.4k', '2.4k', 'pelicula metalica 1 %', 1, 1, 'resistencia 2.4k 1%', 'Ganancia = Rm2/Rm1 = 125 (total 2500). No poner trimmer aqui: cambia el Q del filtro'),
         ('Rm2', 'Resistencia de realimentacion', '300k', '300k', 'pelicula metalica 1 %', 1, 1, 'resistencia 300k 1%', 'Si no hay 300k: 2 x 150k en serie'),
         ('Rm3', 'Resistencia a la entrada inversora', '2.2k', '2.2k', 'pelicula metalica 1 %', 1, 1, 'resistencia 2.2k 1%', ''),
-        ('Cm1', 'Condensador a GND', '150n', '150n', 'poliester 5 %', 1, 1, 'condensador poliester 150nF', ''),
+        ('Cm1', 'Condensador a GND = 2 condensadores EN PARALELO', '150n', '100n + 47n en paralelo', 'poliester 100 V (2A104K + 2A473J)', 1, 1, 'condensador poliester 100nF + 47nF', 'ARMADO: soldar el 100n y el 47n entre los mismos dos puntos (nodo MA del MFB y GND), patas cortas. 147 nF: f0 +1 %'),
         ('Cm2', 'Condensador de realimentacion', '1n', '1n', 'ceramico C0G/NP0', 1, 1, 'condensador ceramico 1nF NP0', ''),
         ('XMF', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
     ('6 LPF Sallen-Key 500 Hz (Q 1.31)', 3, [
         ('Rlb1, Rlb2', 'Resistencia del LPF B', '54.9k', '56k', 'pelicula metalica 1 %', 2, 2, 'resistencia 56k 1%', 'Con 56k: f0 = 495 Hz'),
-        ('C21', 'Condensador de realimentacion', '15n', '15n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 15nF', ''),
+        ('C21', 'Condensador de realimentacion = 2 condensadores EN PARALELO', '15n', '10n + 4.7n en paralelo', 'poliester 100 V (2A103J + 2A472K)', 1, 1, 'condensador poliester 10nF + 4.7nF', 'ARMADO: soldar el 10n y el 4.7n entre los mismos dos puntos (union de Rlb1-Rlb2 y la salida del op-amp del SK), patas cortas. 14.7 nF: f0 +1 %'),
         ('C22', 'Condensador a GND', '2.2n', '2.2n', 'poliester 5 % o C0G', 1, 1, 'condensador poliester 2.2nF', ''),
         ('XLB', OPS, '-', '-', '-', None, None, '', 'Contada en el modulo 10 OP-AMPS'),
     ]),
@@ -100,7 +100,7 @@ MODULES = [
         ('-', 'Cable para puentes', '-', '24 AWG rigido', '-', 1, 0, 'cable UTP Cat6 24 AWG unifilar (por metro)', 'UTP: 8 hilos rigidos por metro. Rigido: no usarlo para los cables de electrodo (se corta al doblarse)'),
     ]),
     ('14 MICROFONO DE REFERENCIA (I2S)', 1, [
-        ('-', 'Modulo microfono digital INMP441 (I2S)', '-', 'INMP441', 'modulo', 1, 1, 'modulo microfono INMP441', 'A SAI/I2S del STM32N6570-DK (pines por definir en CubeMX). Alternativa sin cableado: microfono MEMS PDM que trae el DK (U13)'),
+        ('-', 'Modulo microfono digital INMP441 (I2S)', '-', 'INMP441', 'modulo', 1, 0, 'modulo microfono INMP441', 'A SAI/I2S del STM32N6570-DK (pines por definir en CubeMX). Alternativa sin cableado: microfono MEMS PDM que trae el DK (U13)'),
         ('-', 'Cables Dupont para el microfono', '-', 'jumper Dupont M-H', '-', 6, 0, 'cable dupont macho-hembra', 'VDD 3.3V, GND, SCK, WS, SD, L/R (L/R a GND)'),
     ]),
 
@@ -158,11 +158,11 @@ CART = {
     'C21': (G, '2A103J poliester 10nF 100V + 2A472K poliester 4.7nF 100V, en paralelo (par)', 4, 110,
             '15 nF agotado (2A153J en Global; tampoco en MechatronicStore): 10n + 4.7n en paralelo = 14.7 nF (f0 +1 %, Q -1 %). '
             'Cantidad en pares; precio del par ($50 + $60)'),
-    'ADCk': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida: A1-A3, 5 V/GND, microfono)', 5, None, 'Llenar tienda y precio de la tira'),
-    'Cable 5 V y GND desde el DK': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida)', 3, None, ''),
-    'Cables Dupont para el microfono': ('Por confirmar', 'Tira de 40 jumpers Dupont M-H (compartida)', 6, None, ''),
-    'Bus de 8 cables Dupont macho (separado de una tira de 40)': ('Por confirmar', 'Tira de 40 jumpers Dupont M-M', 8, None, 'Llenar tienda y precio de la tira'),
+    'ADCk': (G, 'JPMH20 cable Dupont M-H 20 cm (1 unidad)', 2, 50, 'Son cables sueltos, no una tira de 40'),
+    'Bus de 8 cables Dupont macho (separado de una tira de 40)': (G, 'JPMM20 cable Dupont M-M 20 cm (1 unidad)', 2, 50, 'Son cables sueltos, no una tira de 40'),
 }
+ORDERS = {G: 'Pedido BVGDHKTGU (4-oct-2026), retiro en tienda Global (Vina del Mar). Total $39.433',
+          M: 'Pedido del 4-oct-2026, despacho Bluexpress (gratis). Total $28.450'}
 # Ya los tiene el usuario (no se compran)
 OWNED = {'Perfboard'}
 # Por agregar al carrito de Global (encontrados en globalelectronica.cl el 4-oct-2026). Mismo formato que CART.
@@ -175,6 +175,13 @@ INSUMOS_TENIDOS = [  # estano, flux, malla y termorretractil: ya los tiene el us
     (1, 'Termorretractil 2-3 mm (surtido)', 'tubo termo retractil', 'Global', 'Uniones bus Dupont - cable de electrodo'),
 ]
 INSUMOS = []
+ARMADO = [
+    'Cm1 (MFB, x3 canales) = 100 nF (2A104K) EN PARALELO con 47 nF (2A473J): los dos entre el nodo MA (union Rm1-Rm2-Rm3) y GND.',
+    'C21 (Sallen-Key, x3 canales) = 10 nF (2A103J) EN PARALELO con 4.7 nF (2A472K): los dos entre la union Rlb1-Rlb2 y la salida del op-amp del SK.',
+    'Cm0 (10 uF electrolitico): entre sus patas hay ~0 V DC; cualquier orientacion sirve. Por convencion: + hacia la salida del HPF.',
+    'LDO: CM105 (1 uF ceramico) en paralelo con el CE50102 (1 uF electrolitico) a la salida, pegados a los pines OUT y GND.',
+    'La simulacion ya usa los valores armados: CM1 = 147n y C21 = 14.7n.',
+]
 DONDE = {
     'Electrodo Ag/AgCl con broche 4 mm': 'Tiendas de insumos medicos / Mercado Libre',
     'Cable de electrodo con broche (snap) 4 mm, idealmente apantallado': 'MechatronicStore ("cable de electrodos AD8232") / tiendas medicas',
@@ -185,15 +192,14 @@ DONDE = {
     'Cables Dupont para el microfono': 'MechatronicStore / Global (misma tira M-H)',
     'Bus de 8 cables Dupont macho (separado de una tira de 40)': 'MechatronicStore / Global. 1 tira de 40 M-M',
 }
-STATES = '"Pendiente,En carrito,Comprado,Ya lo tengo,No hay,No aplica"'
+STATES = '"Pendiente,En carrito,Comprado,Parcial,Ya lo tengo,No hay,No aplica"'
 # notas generales de la compra (hoja Resumen)
 AVISOS = [
-    'Cm1 = 100n + 47n poliester en paralelo (147 nF) y C21 = 10n + 4.7n poliester en paralelo (14.7 nF): no habia 150 nF y el 15 nF estaba agotado.',
-    'Falta: electrodos, cables de electrodo y alcohol (ver FALTA COMPRAR). Perfboard e insumos de soldadura: ya los tienes.',
-    'Tiras Dupont M-H y M-M: llenar tienda y precio en la hoja BoM por modulo.',
+    'Pedidos hechos el 4-oct-2026: Global $39.433 (retiro en tienda) + MechatronicStore $28.450 (Bluexpress) = $67.883.',
+    'Dupont: JPMH20/JPMM20 son cables SUELTOS. Tienes 2 M-H y 2 M-M; el diseno usa 14 M-H y 8 M-M (faltan 12 M-H y 6 M-M; Global tiene stock, $50 c/u).',
+    'Falta: electrodos, cables de electrodo y alcohol (ver FALTA COMPRAR).',
     'Resistencias de carbon 5 % en vez de pelicula metalica 1 %: aceptado para la demo (ganancia por canal +-7 %, se normaliza en firmware). Para produccion: 1 %.',
-    'Ajustes opcionales: S08D8 12 -> 7 (ahorro $1.250); 100k 2 W -> 1/4 W si hay stock (ahorro ~$1.700).',
-    'Precios con IVA, sin despacho.',
+    'Precios con IVA.',
 ]
 
 COLS = ['Modulo', 'Ref. en esquematico', 'Componente', 'Valor de diseno', 'Valor a comprar', 'Tipo / tolerancia',
@@ -247,7 +253,11 @@ def bom(wb):
                     tienda, parte, cant, precio, nc = cart
                     for j, v in ((13, tienda), (14, parte), (15, cant), (16, precio)):
                         ws.cell(r, j, v)
-                    ws.cell(r, 18, 'En carrito' if k in CART else 'Pendiente')
+                    need = qch * nch + rep
+                    st = ('Comprado' if tienda in ORDERS else 'En carrito') if k in CART else 'Pendiente'
+                    if k in CART and cant is not None and cant < need:
+                        st = 'Parcial'; nc = (nc + '. ' if nc else '') + f'FALTAN {need - cant}'
+                    ws.cell(r, 18, st)
                     if k in ADD:
                         nc = 'AGREGAR AL CARRITO DE GLOBAL' + ('. ' + nc if nc else '')
                     if nc:
@@ -264,7 +274,7 @@ def bom(wb):
                 if c.font.name != F or c.font.color is None:
                     c.font = Font(name=F, color=c.font.color, bold=c.font.bold)
                 c.alignment = Alignment(wrap_text=True, vertical='top')
-            if ws.cell(r, 18).value == 'Pendiente':
+            if ws.cell(r, 18).value in ('Pendiente', 'Parcial'):
                 ws.cell(r, 18).font = Font(name=F, bold=True, color='C00000')
             ws.cell(r, 16).number_format = CLP; ws.cell(r, 17).number_format = CLP
             r += 1
@@ -286,10 +296,14 @@ def falta_rows():
     for _, nch, rows in MODULES:
         for refs, comp, vd, vc, tipo, qch, rep, buscar, nota in rows:
             k = key(refs, comp)
-            if qch is None or k in CART or comp in OWNED:
+            if qch is None or comp in OWNED:
+                continue
+            q = qch * nch + rep
+            if k in CART:
+                if CART[k][2] is not None and CART[k][2] < q:
+                    out.append((q - CART[k][2], f'{vc} {comp}', buscar, DONDE.get(comp, ''), f'Compraste {CART[k][2]} de {q}'))
                 continue
             add = ADD.get(k)
-            q = qch * nch + rep
             que = f'{vc} {comp}' if vc not in ('-',) else comp
             if add:
                 out.append((q, que, add[1], 'Global (agregar al carrito)', add[4]))
@@ -328,12 +342,12 @@ def resumen(wb, last):
     for j in range(1, 5):
         ws.cell(r, j).font = Font(name=F, bold=True); ws.cell(r, j).border = BOX
     r += 2
-    hdr(ws, r, ['Tienda', 'En carrito (CLP)', 'Por agregar (CLP)', ''])
+    hdr(ws, r, ['Tienda', 'Comprado (CLP)', 'En carrito / por agregar (CLP)', ''])
     for t in (G, M):
         r += 1
         ws.cell(r, 1, t).font = Font(name=F)
-        ws.cell(r, 2, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"En carrito")').number_format = CLP
-        ws.cell(r, 3, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"Pendiente")').number_format = CLP
+        ws.cell(r, 2, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"Comprado")+SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"Parcial")').number_format = CLP
+        ws.cell(r, 3, f'=SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"En carrito")+SUMIFS({rng("Q")},{rng("M")},A{r},{rng("R")},"Pendiente")').number_format = CLP
     r += 2
     ws.cell(r, 1, 'Faltan en los carritos').font = Font(name=F, bold=True, color='C00000')
     for _, nch, rows in MODULES:
@@ -343,6 +357,16 @@ def resumen(wb, last):
                 add = ADD.get(key(refs, comp))
                 ws.cell(r, 1, f'{qch * nch + rep} x {vc if vc != "-" else ""}  {comp}').font = Font(name=F)
                 ws.cell(r, 2, f'Global: {add[1]}' if add else buscar).font = Font(name=F, color='595959')
+    r += 2
+    ws.cell(r, 1, 'Pedidos').font = Font(name=F, bold=True)
+    for t, o in ORDERS.items():
+        r += 1
+        ws.cell(r, 1, f'{t}: {o}').font = Font(name=F)
+    r += 2
+    ws.cell(r, 1, 'ARMADO: condensadores en paralelo y polaridades').font = Font(name=F, bold=True, color='1F3A5F')
+    for a in ARMADO:
+        r += 1
+        ws.cell(r, 1, a).font = Font(name=F)
     r += 2
     ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
     for a in AVISOS:
@@ -499,7 +523,8 @@ def compacta():
     for i, (v, q, t) in enumerate(rows, 4):
         a = pur[(t, v)]
         estado = ('Ya lo tengo' if a['tiendas'] == {'ya lo tengo'} else
-                  'Pendiente' if a['pend'] and not a['cant'] else ('Parcial' if a['pend'] else 'En carrito'))
+                  'Pendiente' if a['pend'] and not a['cant'] else
+                  'Parcial' if a['pend'] or (a['cant'] < q and not v.endswith('paralelo')) else 'Comprado')
         precio = next(iter(a['precios'])) if len(a['precios']) == 1 else None
         for j, x in enumerate((v, q, t, ', '.join(sorted(a['tiendas'])), a['cant'] or None, precio), 1):
             ws.cell(i, j, x).font = Font(name=F)
@@ -516,6 +541,11 @@ def compacta():
     ws.cell(n + 1, 7, f'=SUM(G4:G{n})').number_format = CLP
     falta(ws, n + 3)
     r = n + 6 + len(falta_rows())
+    ws.cell(r, 1, 'ARMADO: condensadores en paralelo y polaridades').font = Font(name=F, bold=True, color='1F3A5F')
+    for a in ARMADO:
+        r += 1
+        ws.cell(r, 1, a).font = Font(name=F)
+    r += 2
     ws.cell(r, 1, 'Avisos de la compra').font = Font(name=F, bold=True)
     for a in AVISOS:
         r += 1

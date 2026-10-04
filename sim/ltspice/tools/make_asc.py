@@ -158,7 +158,7 @@ def canal():
     Y2 = 1056
     s.wire((1888, op['out'][1]), (2016, op['out'][1]), (2016, 624), (-160, 624), (-160, Y2), (64, Y2))
     # ---- 5 LPF MFB con ganancia
-    s.box(-96, 688, 736, 1232, '5  G2 + LPF etapa A: MFB 500 Hz, ganancia -125 (Q 0.54)', 'Cm0 bloquea la DC (si no, Ib x Ra x G2 desplaza la salida); invierte (no importa)')
+    s.box(-96, 688, 736, 1232, '5  G2 + LPF etapa A: MFB 500 Hz, ganancia -125 (Q 0.54)', 'ARMADO: Cm1 = 100n || 47n poliester (147n). Cm0 bloquea la DC; invierte (no importa)')
     s.C('Cm0', (64, Y2), (128, Y2), '{CM0}')
     s.R('Rm1', (128, Y2), (208, Y2), '{RM1}')
     s.wire((208, Y2), (272, Y2), (352, Y2))
@@ -191,7 +191,7 @@ def canal():
         s.flag((bx + 704, op['out'][1]), vout)
         return op['out'][1]
     y = lpf(800, y, ('Rlb1', 'Rlb2', 'C21', 'C22', 'XLB'), ('{RLB}', '{RLB}', '{C21}', '{C22}'), 'LBO',
-            (736, 688, 1568, 1232, '6  LPF etapa B + BUFFER: Sallen-Key 500 Hz, ganancia 1 (Q 1.31)', 'MFB + SK = Butterworth 4o orden; seguidor = salida de baja impedancia'))
+            (736, 688, 1568, 1232, '6  LPF etapa B + BUFFER: Sallen-Key 500 Hz, ganancia 1 (Q 1.31)', 'ARMADO: C21 = 10n || 4.7n poliester (14.7n). MFB + SK = Butterworth 4o orden'))
     # ---- 7 bucket
     s.box(1568, 688, 2112, 1232, '7  RC -> ADC', '100 ohm + 1 nF')
     s.R('Rbk', (1600, y), (1680, y), '{RBK}')
@@ -327,8 +327,8 @@ PINATTR SpiceOrder 4
 # ---------------------------------------------------------------------------
 VALORES = """.param RS=100k RRFI=1k CCM=47p CD=100p RGH=2.7k
 .param CHP=100n RHP1=56k RHP2=110k
-.param CM0=10u RM1=2.4k RM2=300k RM3=2.2k CM1=150n CM2=1n
-.param RLB=56k C21=15n C22=2.2n
+.param CM0=10u RM1=2.4k RM2=300k RM3=2.2k CM1=147n CM2=1n
+.param RLB=56k C21=14.7n C22=2.2n
 .param RBK=100 CBK=1n RSM=620k CINT=1n RLIM=390k"""
 
 ESTIMULO = """.param KN=1 KSEM=25 LSEM=1 CSEM=3.127u RSEM=807.8 NMOV=4.28m NWHT=82.4u
