@@ -1,0 +1,191 @@
+AURAVOX - PLAN DE ACTIVIDADES DEL 5 AL 15 DE OCTUBRE DE 2026
+==============================================================
+Meta: el 15-oct, demo de punta a punta funcionando:
+  3 canales sEMG + INMP441 -> STM32N6570-DK -> SPI -> Raspberry Pi (servicio Go)
+  -> HMI con escalogramas CWT, causalidad sEMG->voz y round-trip WORLD.
+
+Regla: cada modulo se cierra con su criterio "LISTO SI". No se pasa al
+siguiente sin cumplirlo, para no depurar todo junto al final.
+
+Resumen
+-------
+  Fecha      Hardware                              Software (en paralelo)
+  ---------  ------------------------------------  ------------------------------------
+  Lu 05-oct  Comprar cables y electrodos;          Diseno de alto nivel del FW (A4)
+             retirar pedido Global
+  Ma 06-oct  Armar alimentacion, VREF y CH1        FW: ADC + DMA + timer (A5.1)
+  Mi 07-oct  Validar CH1; armar CH2, CH3 y RLD     FW: SAI/I2S del INMP441 (A5.2)
+  Ju 08-oct  Validar el AFE completo (A3)          FW: tramas + SPI hacia la Pi (A5.3)
+  Vi 09-oct  AFE en el cuerpo: reposo/habla, RLD   Go: ingesta SPI + servicio systemd (A6.1)
+  Sa 10-oct  Cables definitivos, fijacion          FW: CWT con Helium (A5.4); Go: CWT (A6.2)
+  Do 11-oct  -                                     Go: HMI (A6.3); WORLD round-trip (A7)
+  Lu 12-oct  -                                     Causalidad: lag sEMG->audio (A6.4)
+  Ma 13-oct  Integracion de punta a punta (A8)
+  Mi 14-oct  Ensayo de la demo + grabacion de respaldo (A8)
+  Ju 15-oct  Margen para imprevistos / ENTREGA
+
+
+A1. COMPRAS QUE FALTAN (lunes 05-oct)
+-------------------------------------
+[ ] Retirar el pedido de Global (BVGDHKTGU, Vina del Mar).
+[ ] MechatronicStore: seguimiento del despacho Bluexpress (INA333 x4, tira hembra, 1k).
+[ ] 12 Dupont M-H y 6 Dupont M-M sueltos (JPMH20 / JPMM20 en Global, $50 c/u),
+    o una tira de 40 de cada tipo.
+[ ] Electrodos: caja de 50 Skintact FS-RG1/10 (CH1, CH3, RLD). Para CH2, Kendall
+    Arbo H124SG (24 mm) si se encuentra; si no, el par va sobre el menton.
+[ ] Alcohol isopropilico.
+[ ] Cables de electrodo (ver A2): es la compra critica.
+
+A2. CABLES ELECTRODO -> AFE (critico: que no sean antenas)
+----------------------------------------------------------
+El cable es la parte del sistema con mas captura de 50 Hz. Reglas:
+  - UN CABLE APANTALLADO DE 2 CONDUCTORES POR CANAL. El + y el - van por dentro,
+    juntos (trenzados si el cable lo permite), bajo la malla. Es un par
+    diferencial: los dos hilos ven el mismo campo y el INA lo rechaza como modo comun.
+  - Malla conectada SOLO del lado del AFE (pin 8 del conector 2x8, GND).
+    Del lado del electrodo, la malla queda al aire y aislada con termorretractil.
+  - RLD: un cable apantallado de 1 conductor (o uno de 2 con un hilo sin usar),
+    con la misma regla para la malla.
+  - Largo minimo posible: 30-50 cm. Sin rollos ni lazos sobrantes. Los 4 cables
+    van juntos hasta el AFE (un solo haz) y lejos de cargadores, USB y cables de red.
+  - Los ultimos 3-5 cm hasta cada broche, separados lo minimo indispensable.
+Que comprar (buscar como):
+  [ ] "cable de microfono estereo apantallado 2 conductores" o "cable audio
+      blindado 2x" (Global, categoria Cables para audio): 3 m.
+  [ ] "broche snap 4 mm para soldar" / "conector snap electrodo": 7 (+1).
+      Alternativa: cables ECG con broche ya armados, cortados cortos y empalmados
+      al cable apantallado (union soldada + termorretractil, lo mas cerca del broche).
+  [ ] Del lado del AFE: hilo -> terminal Dupont macho -> conector hembra 2x8.
+Orden en el conector (una fila): CH1+ CH1- CH2+ CH2- CH3+ CH3- RLD GND(malla).
+Etiquetar cada cable (CH1/CH2/CH3/RLD y +/-) antes de soldar.
+LISTO SI: continuidad punta a punta correcta; malla sin corto a los hilos;
+el piso de ruido con electrodos puestos y sin habla no sube al mover los cables (ver A3.6).
+
+A3. ARMAR Y VALIDAR EL AFE (06 al 09-oct)
+-----------------------------------------
+Armar por etapas y medir cada una antes de seguir. Esquema:
+sim/ltspice/AuraVox_AFE.asc. Armado: sim/ltspice/README.md (paralelos y polaridades).
+Instrumentos: multimetro. Senal de prueba: salida de audio del PC a ~0.2 Vpp con un
+divisor de 1000:1 (p. ej. 100k + 100 ohm) para tener ~0.2 mVpp a 100 Hz. Ojo: 1 mV
+ya satura la salida con ganancia 2500.
+
+A3.1 Alimentacion y VREF
+  [ ] TLV75733P dead bug + 1 uF ceramico ∥ 1 uF electrolitico en OUT; EN unido a IN.
+  [ ] Divisor de VREF 2 x 100k + 10 uF + seguidor TS922.
+  LISTO SI: VCC = 3.30 V +-0.05; VREF = 1.65 V +-0.08; nada se calienta.
+A3.2 Op-amps y modulos INA333
+  [ ] Soldar los 6 TS922 en los S08D8 (con flux) y revisar puentes con lupa.
+  [ ] Revisar con multimetro los modulos MCU-333: que REF no vaya a GND y que no
+      haya resistencias de IN+/IN- a GND. Quitar el trimmer y poner 2.7k + 2.7k
+      con un cable del punto medio al RLD.
+  [ ] La seccion libre del TS922 se conecta como seguidor de VREF.
+A3.3 CH1 completo: ESD -> RFI -> INA -> HPF -> MFB -> Sallen-Key -> RC
+  [ ] Cm1 = 100n ∥ 47n; C21 = 10n ∥ 4.7n (poliester, patas cortas).
+  LISTO SI, con las entradas en corto a VREF: salida DC = VREF +-50 mV.
+  LISTO SI, con 0.2 mVpp / 100 Hz diferencial: salida ~0.5 Vpp (ganancia ~2500, +-10 %).
+  LISTO SI: a 20 Hz y a 500 Hz la salida cae a ~70 % de la de 100 Hz.
+A3.4 CH2 y CH3 (copiar CH1) + RLD (integrador, RSM 620k x3, RLIM 390k)
+  LISTO SI: los 3 canales cumplen A3.3 y la salida del RLD queda cerca de VREF
+  con las entradas en corto.
+A3.5 Seguridad
+  [ ] Con electrodos puestos, el DK va SOLO con powerbank o PC a bateria.
+A3.6 En el cuerpo (09-oct)
+  [ ] 3 condiciones por canal: electrodos desconectados / puestos sin habla /
+      habla. Graficar las salidas en el DK o en un osciloscopio.
+  [ ] RLD: comparar con y sin el cable RLD -> electrodo (cortarlo). Medir 50 Hz en
+      cada salida.
+  LISTO SI: rafagas de habla visibles sobre el reposo en los 3 canales; con RLD,
+  el 50 Hz queda claramente menor que sin RLD; ningun canal satura (0.25-3.05 V).
+
+A4. DISENO DE ALTO NIVEL DEL FW DEL STM32N6570-DK (05-oct)
+-----------------------------------------------------------
+Tareas y flujo (sin RTOS o con FreeRTOS; decidir hoy):
+  1. TIMER -> dispara ADC1 en modo scan: 3 canales (A1 = PA9 INP10, A2 = PA10 INP11,
+     A3 = PA12 INP13). fs = 2 kHz por canal. DMA circular con doble buffer.
+  2. SAI en modo I2S <- INMP441: 16 kHz, 24 bits en tramas de 32. DMA circular,
+     doble buffer. Pines por definir en CubeMX.
+  3. Reloj comun (sync_timer) que marca con tiempo cada medio buffer de ADC y SAI:
+     es la base de la medicion de lag sEMG -> audio.
+  4. Empaquetado de tramas: EMG (tipo 0x03) y AUDIO (tipo 0x02), segun
+     AFE_EMG_Diseno.md §5.1 y firmware/Core/Src/frame.c.
+  5. CWT en Helium (CMSIS-DSP) sobre ventanas de >= 50-100 ms con hop de 5/10/20 ms
+     (refactor-emg-software.md §5), con un contador de ciclos por ventana para el benchmark.
+  6. SPI5 (D10-D13) hacia la Raspberry Pi. Propuesta: la Pi es maestro (spidev) y
+     el DK es esclavo con DMA, mas 1 GPIO "dato listo" hacia la Pi.
+  Entregable: un diagrama de bloques + tabla de pines (CubeMX) en docs/.
+  LISTO SI: el presupuesto de ancho de banda cierra:
+  3 ch x 2 kHz x 2 B + 16 kHz x 4 B + escalogramas < capacidad del SPI.
+
+A5. FW DEL STM32N6570-DK (06 al 10-oct)
+---------------------------------------
+A5.1 [ ] ADC + timer + DMA. LISTO SI: con el AFE en corto, el ADC lee VREF*0.545
+         (~0.9 V) estable, y el periodo medido es 500 us +-1 %.
+A5.2 [ ] SAI/I2S del INMP441 + DMA. LISTO SI: un aplauso se ve en las muestras y
+         no se pierde ningun buffer en 60 s.
+A5.3 [ ] Tramas + SPI esclavo con DMA + GPIO de dato listo. LISTO SI: la Pi recibe
+         10 min sin tramas perdidas ni corruptas (CRC/contador de secuencia).
+A5.4 [ ] CWT con Helium. LISTO SI: el escalograma de una senoide de prueba coincide
+         con la referencia en Python/Go (error < 1 %) y se reporta el costo en ciclos.
+
+A6. BINARIO GO EN LA RASPBERRY (RASPBIAN) COMO SERVICIO SYSTEMD (08 al 12-oct)
+-------------------------------------------------------------------------------
+Base existente: ssr-testbed/pc-tools/ssr-ingest (parser/frame.go, buffer/ring.go,
+storage/writer.go, display/stats.go).
+A6.1 [ ] Cambiar el transporte de USB-CDC a SPI (spidev) + GPIO de dato listo.
+         Unit file systemd (Restart=always). Requisito: no caerse si el AFE o el DK
+         se desconectan.
+         LISTO SI: el servicio arranca solo al encender la Pi y reconecta tras
+         desenchufar y volver a enchufar.
+A6.2 [ ] Ingesta de tuplas: cada tupla guarda los datos crudos + timestamps
+         suficientes para recalcular el lag (refactor §4).
+         CWT en Go con los mismos parametros que el FW (ventana/hop separados).
+         Comparar escalogramas STM32-Helium vs Go: error, latencia y costo por ventana.
+A6.3 [ ] HMI web servida por el mismo binario, con 4 pestanas (refactor §8):
+         - Por canal: 3 sEMG + INMP441 crudos, con selector de condicion.
+         - Comparacion CWT: Helium vs Go lado a lado + metricas.
+         - Causalidad: correlacion cruzada con lag sEMG->audio, en vivo.
+         - Round-trip WORLD: audio original vs resintetizado + PESQ/STOI.
+A6.4 [ ] Causalidad: lag de la correlacion cruzada entre la envolvente sEMG y la
+         envolvente acustica, por canal y por repeticion.
+         LISTO SI: el sEMG adelanta al audio en decenas de ms, con signo estable entre
+         repeticiones. Ojo con el confusor laringeo (CH3, refactor §3.3).
+
+A7. COMPROBAR EL ALGORITMO WORLD (11-oct)
+-----------------------------------------
+[ ] Extender ssr-testbed/pc-tools/ssr-roundtrip con una ruta WORLD (pyworld):
+    harvest/dio -> F0, cheaptrick -> envolvente espectral, d4c -> aperiodicidad,
+    synthesize -> audio. Los vectores auxiliares (de apoyo) son F0 + envolvente + aperiodicidad.
+[ ] Round-trip con grabaciones reales del INMP441. Comparar con la ruta Mel +
+    Griffin-Lim actual usando PESQ/STOI (ya implementados en roundtrip.py).
+LISTO SI: WORLD supera a Mel+GL en PESQ/STOI y la resintesis es determinista
+(dos corridas dan el mismo archivo).
+[ ] Llevar el resultado a la pestana Round-trip WORLD de la HMI (A6.3).
+
+A8. VALIDACION POR MODULO E INTEGRACION (13 y 14-oct)
+------------------------------------------------------
+Tabla de cierre (marcar con fecha):
+  [ ] Alimentacion/VREF (A3.1)    [ ] CH1 [ ] CH2 [ ] CH3 (A3.3-A3.4)
+  [ ] RLD con/sin (A3.6)          [ ] Cables apantallados (A2)
+  [ ] ADC+DMA (A5.1)              [ ] I2S INMP441 (A5.2)
+  [ ] SPI + tramas (A5.3)         [ ] CWT Helium (A5.4)
+  [ ] Servicio Go + systemd (A6.1) [ ] CWT Go + comparacion (A6.2)
+  [ ] HMI 4 pestanas (A6.3)       [ ] Causalidad/lag (A6.4)
+  [ ] WORLD round-trip (A7)
+[ ] Prueba de punta a punta: 10 min continuos sin perdida de tramas, con la HMI viva.
+[ ] Protocolo de demo: colocar los electrodos (alcohol, posiciones marcadas), leer
+    una lista fija de palabras y mostrar las 4 pestanas.
+[ ] Grabar un video y un dataset de respaldo por si algo falla el dia de la demo.
+[ ] Actualizar docs: los 3 canales (refactor-emg-software.md aun dice 4) y los
+    resultados medidos.
+
+RIESGOS Y PLAN B
+----------------
+- Cables de electrodo no llegan a tiempo: cables ECG con broche cortos y trenzados a
+  mano (+ con -), malla improvisada con papel aluminio unido a GND, y lo mas corto posible.
+- Un modulo INA333 defectuoso: usar el repuesto (hay 4).
+- SPI inestable: volver temporalmente a USB-CDC (el codigo ya existe) para no
+  bloquear la HMI.
+- CWT en Helium no alcanza: mostrar el benchmark con lo que haya y calcular la CWT
+  en Go para la HMI.
+- Granger/transferencia de entropia: solo si sobra tiempo. El lag de la correlacion
+  cruzada es el resultado principal.
