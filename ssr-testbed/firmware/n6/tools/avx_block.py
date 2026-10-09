@@ -56,11 +56,21 @@ def main():
     c = sub.add_parser("check", help="validate a block file")
     c.add_argument("file")
     c.add_argument("--expect", nargs="*", default=[], help="key=value (int, 0x.. allowed)")
+    c.add_argument("--ts-check", action="store_true",
+                   help="ts_us of tuple i = t0_us + 500 i, and t0_us = 10000 * seq (firmware rule)")
     a = ap.parse_args()
     with open(a.file, "rb") as f:
         p = parse(f.read())
     ok = p["sync_ok"] and p["crc_ok"]
     print(" ".join(f"{k}={p[k]}" for k in FIELDS), f"sync_ok={p['sync_ok']} crc_ok={p['crc_ok']}")
+    if a.ts_check:
+        for i, tup in enumerate(p["tuples"]):
+            if tup[0] != (p["t0_us"] + 500 * i) & 0xFFFFFFFF:
+                print(f"MISMATCH ts{i}: got {tup[0]}, expected t0_us + {500 * i}")
+                ok = False
+        if p["t0_us"] != (10000 * p["seq"]) & 0xFFFFFFFF:
+            print(f"MISMATCH t0_us: got {p['t0_us']}, expected 10000 * seq = {10000 * p['seq']}")
+            ok = False
     for item in a.expect:
         key, want = item.split("=", 1)
         got = value(p, key)

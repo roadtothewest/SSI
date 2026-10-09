@@ -70,7 +70,8 @@ def capture(dev, baud, secs, start=None, wait=20.0, drain=0.0):
         os.close(fd)
     if not started:
         return None
-    return data.decode("ascii", "replace").replace("\r", "")
+    text = data.decode("ascii", "replace").replace("\r", "")
+    return text[: text.rfind("\n") + 1]  # drop a line cut by the end of the capture
 
 
 def kv_lines(text):

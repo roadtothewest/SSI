@@ -1,0 +1,40 @@
+#ifndef ACQ_H
+#define ACQ_H
+
+#include <stdint.h>
+
+#include "ssi_config.h"
+#include "tx_api.h"
+
+/* Requests to acq (any thread), on the same flags group as the CAP_EVT_* driver events. */
+#define ACQ_EVT_RESTART 0x10u /* stop and restart the capture: new epoch, indices from 0 */
+#define ACQ_EVT_DIAG    0x20u /* arm a 1 s diag capture from the first valid-audio window */
+
+typedef struct {
+  uint32_t windows;    /* blocks queued since boot */
+  uint32_t emg_blocks; /* windows completed in the current epoch */
+  uint32_t aud_blocks;
+  uint32_t lost;       /* windows overwritten before packaging, since boot */
+  uint32_t drop;       /* blocks dropped (pool or queue full), since boot */
+  uint32_t err;        /* SAI + ADC/DMA error callbacks, since boot */
+  uint32_t peak;       /* last 100 windows: max |audio| */
+  uint32_t rms;        /* last 100 windows: audio rms */
+  uint32_t rslot;      /* last 100 windows: frames with right-slot data (must be 0) */
+  uint16_t emg_min[SSI_EMG_CH];
+  uint16_t emg_max[SSI_EMG_CH];
+  uint32_t epoch;
+} acq_stats_t;         /* one TX_16_ULONG message (64 bytes max) */
+
+typedef struct {
+  TX_EVENT_FLAGS_GROUP *flags; /* CAP_EVT_* from the drivers + ACQ_EVT_* requests */
+  TX_BLOCK_POOL *pool;         /* PKT_SIZE blocks */
+  TX_QUEUE *out;               /* packet pointers, TX_1_ULONG */
+  TX_QUEUE *stats;             /* acq_stats_t every 100 windows, TX_16_ULONG */
+} acq_cfg_t;
+
+void acq_configure(const acq_cfg_t *cfg); /* before the thread runs */
+void acq_thread_entry(ULONG arg);
+void acq_request_restart(void);
+void acq_request_diag(void);
+
+#endif

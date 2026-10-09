@@ -2,7 +2,7 @@
 
 > **Para agentes:** SUB-SKILL REQUERIDA: `superpowers:executing-plans` (ejecución nativa, tarea por tarea; Matías pidió "cada módulo de forma procedural, con pruebas"). Los pasos usan casillas (`- [ ]`).
 
-**Goal:** firmware FSBL + ThreadX que adquiere 3 canales EMG a 4 kHz y audio del INMP441 a 16 kHz en un solo dominio de reloj y arma paquetes DATA de 1024 B verificados, probado módulo a módulo en el DK, sin la RPi5.
+**Goal:** firmware FSBL + ThreadX que adquiere 3 canales EMG a 2 kHz y audio del INMP441 a 16 kHz en un solo dominio de reloj y arma los bloques de 538 B de `ssr-testbed/firmware/PROTOCOLO_SPI.md` (Vicente), probado módulo a módulo en el DK, sin la RPi5. (Revisado el 2026-10-09 para la spec v0.3; ver el ledger para las decisiones.)
 
 **Architecture:** CubeMX genera solo la base: relojes, MPU y caché, ThreadX, TIM6 como tick de la HAL y USART1. Cada periférico de la captura vive en un módulo propio en `FSBL/App/`, con su handle HAL `static`, sus pines, su reloj, su DMA y su configuración RIF; así la regeneración de CubeMX no lo toca. La lógica pura (CRC, paquetes, decodificación del audio, emparejamiento de ventanas) se prueba en el PC con gcc; los drivers, en el DK con logs por el VCP y volcados de memoria por SWD.
 
@@ -31,10 +31,10 @@
 
 ## Review Focus
 
-1. **`acq` atrasado más de 10 ms:** la DMA sobrescribe la mitad del búfer antes de copiarla. Se espera que la ventana se cuente como `lost` y marque b2, nunca datos mezclados. Pruebas: casos de salto en `test_acq_logic` (Task 2) y 60 s con `lost == 0` (Task 5).
+1. **`acq` atrasado más de 10 ms:** la DMA sobrescribe la mitad del búfer antes de copiarla. Se espera que la ventana se cuente como `lost`, que su `seq` se salte y que el siguiente bloque marque bit0; nunca datos mezclados. Pruebas: casos de salto en `test_acq_logic` (Task 2) y 60 s con `lost == 0` (Task 5).
 2. **Orden de arranque roto** (el SAI arranca antes de armar ADC y TIM1): `c` cambiaría entre reinicios. Se espera `c` constante. Prueba: pulso común con 10 reinicios (Task 5).
 3. **Micrófono mal cableado** (L/R a 3,3 V o SD suelto): el audio cae en la ranura derecha o queda en cero. Se espera verlo en `rslot` y `peak`. Prueba: criterios `rslot == 0` y `peak > 0` (Task 3).
-4. **Salida del AFE fuera de rango:** códigos pegados en 0 o 4095. Se espera la bandera b1. Prueba: saturación alta y baja en `test_packet` (Task 2).
+4. **Salida del AFE fuera de rango:** códigos pegados en 0 o 4095. El protocolo no tiene bandera de saturación: la Pi ve los códigos crudos (0..4095) y `SIG` muestra mínimo y máximo por canal. Prueba: `test_avx_block` verifica que los códigos pasan sin alterarse (Task 2).
 5. **Sección no cacheable fuera de la región de la MPU:** el CPU vería datos viejos de la DMA. Se espera un fallo visible al arrancar. Prueba: línea `NC ... OK` del arranque (Task 1).
 
 ## Mapa de archivos
@@ -2367,104 +2367,52 @@ Expected: `RESULT: PASS` (A4 a 3,3 V → 1,794 V en el ADC → código ≈ 4082)
 
 ---
 
-### Task 5: Hilo `acq`, paquetes DATA, consumidor provisional y pruebas P3, P4 y P7
+### Task 5: Hilo `acq`, bloques del protocolo, consumidor provisional y pruebas P3, P4 y P7
+
+**Revisión del 2026-10-09 (ejecutada):** `acq` arma los bloques de PROTOCOLO_SPI.md (spec v0.3 §6). Sin micrófono ni cables, las pruebas en la placa se corren con el build de banco (`SSI_SYNC_LPTIM=ON`). P3, P4 y P7 quedan pendientes hasta tener el cableado.
 
 **Files:**
-- Modify: `FSBL/App/Inc/acq_logic.h`, `FSBL/App/Src/acq_logic.c`, `tests/host/test_acq_logic.c` (raíz cuadrada entera para el RMS)
 - Create: `FSBL/App/Inc/{acq.h,diag.h,testpulse.h,sink.h}`, `FSBL/App/Src/{acq.c,diag.c,testpulse.c,sink.c}`
-- Modify: `FSBL/App/Inc/mon.h`, `FSBL/App/Src/mon.c` (final), `FSBL/App/Src/app.c` (final)
-- Create: `tools/swd.py`, `tools/diag.py`
+- Modify: `FSBL/App/Inc/mon.h`, `FSBL/App/Src/mon.c` (final), `FSBL/App/Src/app.c` (final), `FSBL/App/Src/emg_adc.c` (DMA mode on restart)
+- Create: `tools/swd.py`, `tools/diag.py`, `tools/restart_test.sh`; Modify: `tools/avx_block.py` (`--ts-check`), `tools/uart_log.py` (descarta la última línea cortada)
 
 **Interfaces:**
-- Consume: Tasks 1–4 (`acq_select`, `pkt_build_data`, `pkt_header_t`, `PKT_*`, `audio_extract_left`, `audio_right_activity`, `crc32_update`, `capture_*`, `CAP_EVT_*`, `mic_sai_*`, `emg_adc_*`); `tools/ssi_packet.py` (`parse`, `PKT_SIZE`).
+- Consume: Tasks 1–4 (`acq_select`, `acq_isqrt64`, `avx_block_build`, `AVX_*`, `audio_extract_left`, `audio_right_activity`, `avx_crc16`, `capture_*`, `CAP_EVT_*`, `mic_sai_*`, `emg_adc_*`); `tools/avx_block.py` (`parse`, `BLOCK_SIZE`).
 - Produce:
-  - `uint32_t acq_isqrt64(uint64_t v)`: lógica pura, probada en el PC.
   - `acq.h`: `ACQ_EVT_RESTART 0x10`, `ACQ_EVT_DIAG 0x20`, `acq_stats_t`, `acq_cfg_t {flags, pool, out, stats}`, `void acq_configure(const acq_cfg_t *cfg)`, `void acq_thread_entry(ULONG arg)`, `void acq_request_restart(void)`, `void acq_request_diag(void)`.
-  - `diag.h`: `DIAG_WINDOWS 100`, `diag_hdr_t`, `void diag_arm(uint32_t min_window)`, `void diag_feed(uint32_t k, uint8_t epoch, const uint32_t *raw, const int32_t *audio, const uint16_t *emg)`. Solo los llama `acq`.
+  - `diag.h`: `DIAG_WINDOWS 100`, `diag_hdr_t`, `void diag_arm(uint32_t min_window)`, `void diag_feed(uint32_t k, uint8_t epoch, const uint32_t *raw, const int32_t *audio, const uint16_t *emg)` (solo `acq`).
   - `testpulse.h`: `void testpulse_init(void)`, `void testpulse_thread_entry(ULONG arg)`, `void testpulse_set(int on)`.
-  - `sink.h`: `sink_stats_t {rx, crc_err, gap, ainv}`, `sink_cfg_t {in, stats}`, `void sink_configure(const sink_cfg_t *cfg)`, `void sink_thread_entry(ULONG arg)`.
+  - `sink.h`: `sink_stats_t {rx, crc_err, gap, ovf}`, `sink_cfg_t {in, stats}`, `void sink_configure(const sink_cfg_t *cfg)`, `void sink_thread_entry(ULONG arg)`.
   - `mon.h`: `mon_cfg_t {acq_stats, sink_stats}`, `void mon_configure(const mon_cfg_t *cfg)`, `void mon_thread_entry(ULONG arg)`.
-  - Símbolos que las herramientas leen o escriben por SWD: `s_mon_dbg_cmd` (buzón de comandos, en NC), `s_diag` (89 312 B) y `s_sink_sample` (1024 B).
-  - `tools/swd.py sym|cmd|sample`; `tools/diag.py audio|emg|noise|pulse`.
+  - Símbolos para el SWD: `s_mon_dbg_cmd` (buzón en NC), `s_diag` (77 312 B), `s_sink_sample` (538 B).
+  - `tools/swd.py sym|cmd|sample`; `tools/diag.py audio|emg|noise|pulse`; `tools/restart_test.sh`.
 
-**Hilos y objetos (spec §5):** `acq` con prioridad 2, `sink` 8, `testpulse` 9 y `mon` 10. Un grupo de event flags `acq` recibe los eventos de las DMA y los pedidos de `mon`. Hay un block pool de 16 × 1024 B en NC, una cola de 16 punteros a paquetes y dos colas de estadísticas: `acq` → `mon` (TX_16_ULONG) y `sink` → `mon` (TX_4_ULONG). No se comparte nada fuera de esas primitivas: `diag` lo toca solo `acq`, y el buzón `s_mon_dbg_cmd` solo `mon` y el depurador.
+**Política del bloque (spec v0.3 §6–7):**
+- `seq` = `seq_base` + *k*. Una ventana perdida o descartada no se envía, pero consume su `seq`: la Pi ve el salto.
+- `ts_us` = 10 000 · `seq` + 500 · *i*.
+- `flags`: bit0 por error del ADC o por una ventana sobrescrita antes de armarse; bit1 por error del SAI. La contrapresión del SPI no se marca, porque el salto de `seq` ya la reporta.
+- Un reinicio de captura deja un `seq` sin usar y pone bit0 en su primer bloque.
 
-**Regla de copia de `acq`:** primero se copia la ventana *k* de los dos búferes DMA y después se vuelve a leer `blocks_done`. Si alguna corriente ya pasó de *k* + 1, su DMA pudo empezar a reescribir esa mitad durante la copia: la ventana se descarta y se cuenta en `lost`. El contador sube en la ISR antes de que la DMA escriba la primera palabra nueva (31 µs después en el audio, 250 µs en el EMG), así que la verificación es segura.
+**Regla de copia de `acq`:** primero se copia la ventana *k* y después se vuelve a leer `blocks_done`. Si alguna corriente pasó de *k* + 1, la ventana se descarta (`lost`).
 
-**Por qué `c = min(d) + 3` (prueba de pulsos, P4):** el mismo pulso de D7 entra al ADC por A1 y al SAI por SD. Sea *j* la primera trama de audio no nula y *m* la primera muestra EMG del canal 0 sobre 2048; entonces `d = j − 4m`. Si la muestra EMG *i* se toma en la trama 4*i* + *c*, `d` cae en {*c* − 3, …, *c* + 1}, y vale *c* − 3 cada vez que el pulso sube justo después de una muestra EMG (≈ 20 % de los pulsos, si la fase de los flancos es uniforme). `testpulse` da unos 45 pulsos por segundo con fase casi uniforme (retardo aleatorio de 0–2 ms). Verificado en el PC con un modelo de tiempos de la trama I²S y del ADC (2026-10-09): 0 estimaciones erradas en 900 capturas sintéticas con *c* = 2, 3 y 4, incluso sin deriva entre el HSI y el HSE. Con el retardo anterior, de 0–0,4 ms (6,4 tramas, que no es múltiplo de 4), fallaba el 0,44 % de las capturas.
+**Hallazgo (2026-10-09):** en la HAL v1.4.1, `HAL_ADC_Stop_DMA` borra `CFGR1.DMNGT` y `HAL_ADC_Start_DMA` nunca lo restaura. Sin corrección, cualquier reinicio de captura dejaba el EMG convirtiendo sin DMA. Se vio leyendo los registros por SWD. `emg_adc_start` ahora fija `LL_ADC_REG_DMA_TRANSFER_UNLIMITED` antes de cada arranque, y `tools/restart_test.sh` lo cubre.
 
-- [ ] **Step 1: Prueba de `acq_isqrt64` (falla)**
+**`c` en la prueba de pulsos (P4):** `d = j − 8m`, con *j* = primera trama de audio no nula y *m* = primera muestra EMG del canal 0 sobre 2048. Si la muestra EMG *i* cae en la trama 8*i* + *c*, `d` ∈ {*c* − 7, …, *c* + 1}, y el mínimo aparece en ~10 % de los pulsos (fase uniforme gracias al retardo aleatorio de 0–2 ms). Con 2 capturas por reinicio (~90 pulsos), simulación del 2026-10-09: 0 errores en 1000 reinicios para *c* = 0, 1, 3 y 7.
 
-Agregar al final de `tests/host/test_acq_logic.c`, antes de `TEST_END();`:
-
-```c
-  /* integer square root for the audio RMS */
-  CHECK_EQ(acq_isqrt64(0u), 0);
-  CHECK_EQ(acq_isqrt64(15u), 3);
-  CHECK_EQ(acq_isqrt64(16u), 4);
-  CHECK_EQ(acq_isqrt64(8388607ull * 8388607ull), 8388607);
-  CHECK_EQ(acq_isqrt64(UINT64_MAX), 4294967295ll);
-```
-
-Run: `cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6/ssi_capture/tests/host && cmake --build build 2>&1 | tail -3`
-Expected: error de compilación (`implicit declaration of function 'acq_isqrt64'`, que `-Werror` vuelve fatal).
-
-- [ ] **Step 2: Implementar `acq_isqrt64`**
-
-En `FSBL/App/Inc/acq_logic.h`, antes de `#endif`:
-
-```c
-/* floor(sqrt(v)): audio RMS in acq's statistics. */
-uint32_t acq_isqrt64(uint64_t v);
-```
-
-Al final de `FSBL/App/Src/acq_logic.c`:
-
-```c
-uint32_t acq_isqrt64(uint64_t v)
-{
-  uint64_t r = 0u;
-  uint64_t bit = 1ull << 62;
-  while (bit > v) {
-    bit >>= 2;
-  }
-  while (bit != 0u) {
-    if (v >= r + bit) {
-      v -= r + bit;
-      r = (r >> 1) + bit;
-    } else {
-      r >>= 1;
-    }
-    bit >>= 2;
-  }
-  return (uint32_t)r;
-}
-```
-
-Run: `cmake --build build && ctest --test-dir build --output-on-failure`
-Expected: `100% tests passed, 0 tests failed out of 6`.
-
-- [ ] **Step 3: Escribir la prueba en el DK y verificar que falla**
-
-Cableado 5a (ver la tabla del comienzo): micrófono como en la Task 3, puente D6 → D2, y A1, A4 y A5 al punto medio del divisor 10k/10k con 100 nF (≈ 1,65 V, código ≈ 2041).
+- [ ] **Step 1: Prueba (falla: no hay `STAT`)**
 
 ```bash
 cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6
-tools/fw.sh build && tools/run_test.sh 65 --skip 2 \
-  --expect 'INIT cap=0 step=0' --reject 'ERR ' \
-  --check 'STAT:lost==0 and drop==0 and err==0 and crc==0 and gap==0' \
+SSI_SYNC_LPTIM=ON tools/fw.sh build && tools/run_test.sh 65 --skip 2 \
+  --expect 'INIT cap=0 step=0 sync=1' --reject 'ERR ' \
+  --check 'STAT:lost==0 and drop==0 and err==0 and crc==0 and gap==0 and ovf==0' \
   --check 'STAT:d_win==100 and abs(emgblk-audblk)<=1 and abs(d_ms-1000)<=30' \
-  --check 'STAT:ainv==30' \
-  --check 'SIG:rslot==0 and peak>0' \
-  --check 'SIG:e0lo>1700 and e0hi<2400 and e1lo>1700 and e1hi<2400 and e2lo>1700 and e2hi<2400'
+  --check 'SIG:rslot==0 and peak==0' \
+  --check 'SIG:e0hi<200 and e1hi<200 and e2hi<200'
 ```
-Expected: `RESULT: FAIL` (no hay líneas `STAT` ni `SIG`).
+Expected: `RESULT: FAIL` (`no STAT lines`). Con el micrófono conectado, `peak==0` pasa a `peak>0`. Con el divisor de 1,65 V, los niveles pasan a `e*lo>1700 and e*hi<2400`.
 
-Qué mide cada chequeo: `lost`, `drop`, `crc` y `gap` en cero durante 60 s (Review Focus 1); exactamente 100 paquetes por mensaje de estadísticas; 1 s de datos por segundo según el HSI (±3 %, R1); `ainv == 30`, o sea, los primeros 300 ms de cada `epoch` marcados como audio inválido (P3); la ranura derecha en silencio; y los tres canales en el nivel medio, sin saturar.
-
-- [ ] **Step 4: Módulo `diag`**
-
-`FSBL/App/Inc/diag.h`:
+- [ ] **Step 2: `diag`** — `FSBL/App/Inc/diag.h`:
 
 ```c
 #ifndef DIAG_H
@@ -2514,7 +2462,7 @@ typedef struct {
 _Static_assert(offsetof(diag_buf_t, raw) == 32u, "tools/diag.py layout");
 _Static_assert(offsetof(diag_buf_t, audio) == 1312u, "tools/diag.py layout");
 _Static_assert(offsetof(diag_buf_t, emg) == 65312u, "tools/diag.py layout");
-_Static_assert(sizeof(diag_buf_t) == 89312u, "tools/diag.py layout");
+_Static_assert(sizeof(diag_buf_t) == 77312u, "tools/diag.py layout"); /* 2 kHz EMG: 2000 x 3 */
 
 /* Cacheable RAM (too big for NC): cleaned to SRAM before the debugger may read it. */
 static diag_buf_t s_diag __attribute__((aligned(32), used));
@@ -2555,9 +2503,7 @@ void diag_feed(uint32_t k, uint8_t epoch, const uint32_t *raw, const int32_t *au
 }
 ```
 
-- [ ] **Step 5: Módulo `testpulse`**
-
-`FSBL/App/Inc/testpulse.h`:
+- [ ] **Step 3: `testpulse`** — `FSBL/App/Inc/testpulse.h`:
 
 ```c
 #ifndef TESTPULSE_H
@@ -2566,7 +2512,7 @@ void diag_feed(uint32_t k, uint8_t epoch, const uint32_t *raw, const int32_t *au
 #include "tx_api.h"
 
 /* Sync test (P4): ~10 ms pulses on PD6 (D7), about 45 per second. Each rising edge is delayed
-   by a random 0-2 ms busy-wait: that spans many 4-frame EMG periods (250 us each), so the
+   by a random 0-2 ms busy-wait: that spans several 8-frame EMG periods (500 us each), so the
    edges land at a nearly uniform phase of that period. */
 void testpulse_init(void); /* app_start: pin low, flags created */
 void testpulse_thread_entry(ULONG arg);
@@ -2632,9 +2578,7 @@ void testpulse_thread_entry(ULONG arg)
 }
 ```
 
-- [ ] **Step 6: Módulo `sink`**
-
-`FSBL/App/Inc/sink.h`:
+- [ ] **Step 4: `sink`** — `FSBL/App/Inc/sink.h`:
 
 ```c
 #ifndef SINK_H
@@ -2644,18 +2588,18 @@ void testpulse_thread_entry(ULONG arg)
 
 #include "tx_api.h"
 
-/* Provisional packet consumer (Plan 2 replaces it with the SPI link): checks every packet as
-   the RPi5 will, then releases its block. */
+/* Provisional block consumer (the SPI link replaces it): checks every block as auravoxd on the
+   RPi5 does (PROTOCOLO_SPI.md §3, §6), then releases it. */
 typedef struct {
-  uint32_t rx;      /* packets received since boot */
-  uint32_t crc_err; /* bad magic or CRC */
-  uint32_t gap;     /* seq discontinuities (a numbered packet was dropped) */
-  uint32_t ainv;    /* packets without b0 (audio valid) in the current epoch */
+  uint32_t rx;      /* blocks received since boot */
+  uint32_t crc_err; /* bad sync bytes or CRC-16 */
+  uint32_t gap;     /* seq jumps (lost or dropped windows) */
+  uint32_t ovf;     /* blocks with flags != 0 (the Pi's "Desbordes") */
 } sink_stats_t;     /* one TX_4_ULONG message */
 
 typedef struct {
-  TX_QUEUE *in;    /* packet pointers from acq */
-  TX_QUEUE *stats; /* sink_stats_t every 100 packets */
+  TX_QUEUE *in;    /* block pointers from acq */
+  TX_QUEUE *stats; /* sink_stats_t every 100 blocks */
 } sink_cfg_t;
 
 void sink_configure(const sink_cfg_t *cfg);
@@ -2671,8 +2615,7 @@ void sink_thread_entry(ULONG arg);
 
 #include <string.h>
 
-#include "crc32.h"
-#include "packet.h"
+#include "avx_block.h"
 #include "stm32n6xx_hal.h"
 
 _Static_assert(sizeof(sink_stats_t) == 4u * sizeof(ULONG), "sink_stats_t is a TX_4_ULONG message");
@@ -2683,13 +2626,17 @@ static sink_cfg_t s_cfg;
 static sink_stats_t s_st;
 static uint32_t s_last_seq;
 static int s_have_seq;
-static uint8_t s_epoch;
-/* Copy of every 100th packet for tools/swd.py sample, cleaned to SRAM after the copy. */
-static uint8_t s_sink_sample[PKT_SIZE] __attribute__((aligned(32), used));
+/* Copy of every 100th block for tools/swd.py sample, cleaned to SRAM after the copy. */
+static uint8_t s_sink_sample[AVX_BLOCK_SIZE] __attribute__((aligned(32), used));
 
 static uint32_t rd32(const uint8_t *p)
 {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint16_t rd16(const uint8_t *p)
+{
+  return (uint16_t)(p[0] | (p[1] << 8));
 }
 
 void sink_configure(const sink_cfg_t *cfg)
@@ -2697,11 +2644,11 @@ void sink_configure(const sink_cfg_t *cfg)
   s_cfg = *cfg;
 }
 
-static void check(const uint8_t *pkt)
+static void check(const uint8_t *blk)
 {
-  const uint32_t seq = rd32(pkt + 8);
-  const uint16_t flags = (uint16_t)(pkt[6] | (pkt[7] << 8));
-  if (rd32(pkt) != PKT_MAGIC || rd32(pkt + PKT_CRC_OFFSET) != crc32_update(0u, pkt, PKT_CRC_OFFSET)) {
+  const uint32_t seq = rd32(blk + 4);
+  if (blk[0] != AVX_SYNC0 || blk[1] != AVX_SYNC1 ||
+      rd16(blk + AVX_CRC_OFFSET) != avx_crc16(blk, AVX_CRC_OFFSET)) {
     s_st.crc_err++;
   }
   if (s_have_seq && seq != s_last_seq + 1u) {
@@ -2709,12 +2656,8 @@ static void check(const uint8_t *pkt)
   }
   s_last_seq = seq;
   s_have_seq = 1;
-  if (pkt[31] != s_epoch) {
-    s_epoch = pkt[31];
-    s_st.ainv = 0u;
-  }
-  if ((flags & PKT_F_AUDIO_VALID) == 0u) {
-    s_st.ainv++;
+  if (rd16(blk + 14) != 0u) {
+    s_st.ovf++;
   }
 }
 
@@ -2726,21 +2669,19 @@ void sink_thread_entry(ULONG arg)
     if (tx_queue_receive(s_cfg.in, &msg, TX_WAIT_FOREVER) != TX_SUCCESS) {
       continue;
     }
-    uint8_t *pkt = (uint8_t *)(uintptr_t)msg;
-    check(pkt);
+    uint8_t *blk = (uint8_t *)(uintptr_t)msg;
+    check(blk);
     if (++s_st.rx % SAMPLE_EVERY == 0u) {
-      memcpy(s_sink_sample, pkt, PKT_SIZE);
-      SCB_CleanDCache_by_Addr(s_sink_sample, (int32_t)PKT_SIZE);
+      memcpy(s_sink_sample, blk, AVX_BLOCK_SIZE);
+      SCB_CleanDCache_by_Addr(s_sink_sample, (int32_t)AVX_BLOCK_SIZE);
       (void)tx_queue_send(s_cfg.stats, &s_st, TX_NO_WAIT);
     }
-    (void)tx_block_release(pkt);
+    (void)tx_block_release(blk);
   }
 }
 ```
 
-- [ ] **Step 7: Módulo `acq`**
-
-`FSBL/App/Inc/acq.h`:
+- [ ] **Step 5: `acq`** — `FSBL/App/Inc/acq.h`:
 
 ```c
 #ifndef ACQ_H
@@ -2756,11 +2697,11 @@ void sink_thread_entry(ULONG arg)
 #define ACQ_EVT_DIAG    0x20u /* arm a 1 s diag capture from the first valid-audio window */
 
 typedef struct {
-  uint32_t windows;    /* packets queued since boot */
+  uint32_t windows;    /* blocks queued since boot */
   uint32_t emg_blocks; /* windows completed in the current epoch */
   uint32_t aud_blocks;
   uint32_t lost;       /* windows overwritten before packaging, since boot */
-  uint32_t drop;       /* packets dropped (pool or queue full), since boot */
+  uint32_t drop;       /* blocks dropped (pool or queue full), since boot */
   uint32_t err;        /* SAI + ADC/DMA error callbacks, since boot */
   uint32_t peak;       /* last 100 windows: max |audio| */
   uint32_t rms;        /* last 100 windows: audio rms */
@@ -2794,27 +2735,33 @@ void acq_request_diag(void);
 
 #include "acq_logic.h"
 #include "audio_decode.h"
+#include "avx_block.h"
 #include "capture.h"
 #include "diag.h"
 #include "emg_adc.h"
 #include "log.h"
 #include "mic_sai.h"
-#include "packet.h"
 
 _Static_assert(sizeof(acq_stats_t) <= 16u * sizeof(ULONG), "acq_stats_t must fit TX_16_ULONG");
+_Static_assert(SSI_WIN_EMG == AVX_TUPLES && SSI_WIN_AUDIO == AVX_TUPLES * AVX_VOZ_PER_TUPLE &&
+                   SSI_EMG_CH == AVX_ADC_CH,
+               "a 10 ms window must be exactly one SPI block");
 
 #define STATS_WINDOWS   100u                                /* one stats message per second */
-#define DIAG_MIN_WINDOW (SSI_AUDIO_STARTUP / SSI_WIN_AUDIO) /* 30: first valid-audio window */
+#define DIAG_MIN_WINDOW (SSI_AUDIO_STARTUP / SSI_WIN_AUDIO) /* 30: after the INMP441 start-up */
+#define WINDOW_US       (AVX_TUPLES * AVX_TUPLE_US)         /* 10000 */
 
 static acq_cfg_t s_cfg;
 static uint32_t s_raw[2u * SSI_WIN_AUDIO];
 static int32_t s_audio[SSI_WIN_AUDIO];
 static uint16_t s_emg[SSI_WIN_EMG * SSI_EMG_CH];
 
-static uint32_t s_next;    /* next window to package (current epoch) */
-static uint32_t s_seq;     /* packets numbered since boot, sent or not */
-static uint32_t s_dropped; /* windows lost + packets dropped since boot (header field) */
-static uint16_t s_pending; /* b2/b3 events not yet reported in a packet */
+static uint32_t s_next;     /* next window to package (current epoch) */
+static uint32_t s_seq_base; /* seq of window 0 of the current epoch: seq = s_seq_base + k */
+static uint16_t s_pending;  /* AVX_F_* events not yet reported in a block */
+static uint32_t s_adc_err;  /* driver error counts already reported */
+static uint32_t s_sai_err;
+static int s_started;
 static uint8_t s_epoch;
 static acq_stats_t s_st;
 static uint64_t s_sq;   /* audio sum of squares in the stats period */
@@ -2849,20 +2796,33 @@ static void period_reset(void)
 
 static void start_capture(void)
 {
+  if (s_started) {
+    /* Restart: leave one seq unused and set bit0, so the RPi5 sees the discontinuity. */
+    s_seq_base += s_next + 1u;
+    s_pending |= AVX_F_ADC_LOST;
+  }
   const int rc = capture_start();
   if (rc != 0) {
     log_printf("ERR capture_start=%d", rc); /* streams stopped: logging costs no data */
   }
+  s_started = 1;
   s_epoch = capture_epoch();
   s_next = 0u;
   period_reset();
 }
 
-static void note_loss(uint32_t n, uint32_t *counter)
+static void check_errors(void)
 {
-  *counter += n;
-  s_dropped += n;
-  s_pending |= PKT_F_DROPPED;
+  const uint32_t adc = emg_adc_errors();
+  const uint32_t sai = mic_sai_errors();
+  if (adc != s_adc_err) {
+    s_adc_err = adc;
+    s_pending |= AVX_F_ADC_LOST;
+  }
+  if (sai != s_sai_err) {
+    s_sai_err = sai;
+    s_pending |= AVX_F_SAI_ERR;
+  }
 }
 
 static void update_stats(void)
@@ -2895,39 +2855,30 @@ static void build_window(uint32_t k)
     s_emg[i] = (uint16_t)ew[i];
   }
   /* Copy first, then check: a stream past k + 1 may have started rewriting window k's half
-     during the copy. */
+     during the copy. The window is lost; its seq is never sent, so the RPi5 sees a jump. */
   if (mic_sai_blocks_done() > k + 1u || emg_adc_blocks_done() > k + 1u) {
-    note_loss(1u, &s_st.lost);
+    s_st.lost++;
+    s_pending |= AVX_F_ADC_LOST;
     return;
   }
   audio_extract_left(s_raw, s_audio, SSI_WIN_AUDIO);
   update_stats();
   diag_feed(k, s_epoch, s_raw, s_audio, s_emg);
 
-  pkt_header_t h = {0};
-  h.flags = (uint16_t)(s_pending |
-                       ((k * SSI_WIN_AUDIO >= SSI_AUDIO_STARTUP) ? PKT_F_AUDIO_VALID : 0u));
-  h.seq = s_seq++;
-  h.emg_index = k * SSI_WIN_EMG;
-  h.audio_index = k * SSI_WIN_AUDIO;
-  h.n_emg = SSI_WIN_EMG;
-  h.n_audio = SSI_WIN_AUDIO;
-  h.dropped = s_dropped;
-  h.n_ch = SSI_EMG_CH;
-  h.epoch = s_epoch;
-
   VOID *blk;
   if (tx_block_allocate(s_cfg.pool, &blk, TX_NO_WAIT) != TX_SUCCESS) {
-    note_loss(1u, &s_st.drop); /* s_pending kept: reported on the next packet */
+    s_st.drop++; /* SPI backpressure: the seq jump reports it (spec §7) */
     return;
   }
+  const uint32_t seq = s_seq_base + k;
+  const uint16_t flags = s_pending;
+  avx_block_build((uint8_t *)blk, seq, seq * WINDOW_US, flags, s_emg, s_audio);
   s_pending = 0u;
-  pkt_build_data((uint8_t *)blk, &h, s_emg, s_audio);
   ULONG msg = (ULONG)(uintptr_t)blk;
   if (tx_queue_send(s_cfg.out, &msg, TX_NO_WAIT) != TX_SUCCESS) {
     (void)tx_block_release(blk);
-    s_pending = (uint16_t)(h.flags & PKT_F_DMA_ERR);
-    note_loss(1u, &s_st.drop);
+    s_pending |= flags; /* not sent: report the events on the next block */
+    s_st.drop++;
     return;
   }
   s_st.windows++;
@@ -2942,7 +2893,7 @@ static void stats_push(void)
   memset(&m, 0, sizeof m);
   s_st.emg_blocks = emg_adc_blocks_done();
   s_st.aud_blocks = mic_sai_blocks_done();
-  s_st.err = emg_adc_errors() + mic_sai_errors();
+  s_st.err = s_adc_err + s_sai_err;
   s_st.rms = acq_isqrt64(s_sq / ((uint64_t)s_nwin * SSI_WIN_AUDIO));
   s_st.epoch = s_epoch;
   m.s = s_st;
@@ -2968,16 +2919,15 @@ void acq_thread_entry(ULONG arg)
     if ((got & ACQ_EVT_DIAG) != 0u) {
       diag_arm(DIAG_MIN_WINDOW);
     }
-    if ((got & CAP_EVT_ERR) != 0u) {
-      s_pending |= PKT_F_DMA_ERR; /* stop, ERROR state and new epoch (spec §7): ctrl, Plan 2 */
-    }
+    check_errors(); /* error recovery (stop, ERROR state, new epoch) is the link/ctrl's job */
     for (;;) {
       uint32_t k = 0u;
       uint32_t lost = 0u;
       const acq_step_t step =
           acq_select(&s_next, emg_adc_blocks_done(), mic_sai_blocks_done(), &lost, &k);
       if (lost != 0u) {
-        note_loss(lost, &s_st.lost);
+        s_st.lost += lost;
+        s_pending |= AVX_F_ADC_LOST;
       }
       if (step == ACQ_NONE) {
         break;
@@ -2995,9 +2945,7 @@ void acq_thread_entry(ULONG arg)
 
 `acq` no escribe en el log mientras captura: `log_printf` puede esperar el mutex mientras `mon` imprime una línea (~11 ms a 115 200 baud), más que una ventana de 10 ms.
 
-- [ ] **Step 8: `mon` final**
-
-`FSBL/App/Inc/mon.h` (reemplaza la versión 1):
+- [ ] **Step 6: `mon` final** — `FSBL/App/Inc/mon.h`:
 
 ```c
 #ifndef MON_H
@@ -3016,7 +2964,7 @@ void mon_thread_entry(ULONG arg);
 #endif
 ```
 
-`FSBL/App/Src/mon.c` (reemplaza la versión 3):
+`FSBL/App/Src/mon.c`:
 
 ```c
 #include "mon.h"
@@ -3082,12 +3030,12 @@ static void run_cmd(uint32_t cmd)
 static void print_stats(uint32_t t, const acq_stats_t *a, const sink_stats_t *k)
 {
   log_printf("STAT t=%lu ms=%lu ep=%lu win=%lu emgblk=%lu audblk=%lu lost=%lu drop=%lu err=%lu "
-             "rx=%lu crc=%lu gap=%lu ainv=%lu",
+             "rx=%lu crc=%lu gap=%lu ovf=%lu",
              (unsigned long)t, (unsigned long)HAL_GetTick(), (unsigned long)a->epoch,
              (unsigned long)a->windows, (unsigned long)a->emg_blocks,
              (unsigned long)a->aud_blocks, (unsigned long)a->lost, (unsigned long)a->drop,
              (unsigned long)a->err, (unsigned long)k->rx, (unsigned long)k->crc_err,
-             (unsigned long)k->gap, (unsigned long)k->ainv);
+             (unsigned long)k->gap, (unsigned long)k->ovf);
   log_printf("SIG t=%lu peak=%lu rms=%lu rslot=%lu e0lo=%u e0hi=%u e1lo=%u e1hi=%u e2lo=%u e2hi=%u",
              (unsigned long)t, (unsigned long)a->peak, (unsigned long)a->rms,
              (unsigned long)a->rslot, (unsigned)a->emg_min[0], (unsigned)a->emg_max[0],
@@ -3132,9 +3080,7 @@ void mon_thread_entry(ULONG arg)
 }
 ```
 
-- [ ] **Step 9: `app.c` final**
-
-Reemplaza la versión 1 completa (`app_early_init` no cambia):
+- [ ] **Step 7: `app.c` final**
 
 ```c
 #include "app.h"
@@ -3144,7 +3090,7 @@ Reemplaza la versión 1 completa (`app_early_init` no cambia):
 #include "log.h"
 #include "mon.h"
 #include "nc_mem.h"
-#include "packet.h"
+#include "avx_block.h"
 #include "sink.h"
 #include "ssi_config.h"
 #include "testpulse.h"
@@ -3156,11 +3102,12 @@ extern uint32_t __enoncacheable;
 #define NC_BASE 0x341F8000u
 #define NC_END  0x34200000u
 
-#define POOL_BLOCKS 16u /* spec §5: 16 packets x 1024 B = 160 ms of data */
+#define POOL_BLOCKS 16u                                /* spec §5: 160 ms of blocks */
+#define BLOCK_BYTES ((AVX_BLOCK_SIZE + 3u) & ~3u)       /* ThreadX rounds blocks to 4 B */
 
 static TX_EVENT_FLAGS_GROUP s_acq_flags;
 static TX_BLOCK_POOL s_pool;
-static UCHAR s_pool_mem[POOL_BLOCKS * (PKT_SIZE + sizeof(void *))] NC_MEM; /* + block header */
+static UCHAR s_pool_mem[POOL_BLOCKS * (BLOCK_BYTES + sizeof(void *))] NC_MEM; /* + block header */
 static TX_QUEUE s_pkt_q;
 static ULONG s_pkt_q_mem[POOL_BLOCKS];
 static TX_QUEUE s_acq_stats_q;
@@ -3196,8 +3143,8 @@ void app_start(void)
   UINT rc = TX_SUCCESS;
   log_rtos_init();
   rc |= tx_event_flags_create(&s_acq_flags, "acq");
-  rc |= tx_block_pool_create(&s_pool, "pkt_pool", PKT_SIZE, s_pool_mem, sizeof s_pool_mem);
-  rc |= tx_queue_create(&s_pkt_q, "pkt_q", TX_1_ULONG, s_pkt_q_mem, sizeof s_pkt_q_mem);
+  rc |= tx_block_pool_create(&s_pool, "blk_pool", BLOCK_BYTES, s_pool_mem, sizeof s_pool_mem);
+  rc |= tx_queue_create(&s_pkt_q, "blk_q", TX_1_ULONG, s_pkt_q_mem, sizeof s_pkt_q_mem);
   rc |= tx_queue_create(&s_acq_stats_q, "acq_st", TX_16_ULONG, s_acq_stats_mem,
                         sizeof s_acq_stats_mem);
   rc |= tx_queue_create(&s_sink_stats_q, "sink_st", TX_4_ULONG, s_sink_stats_mem,
@@ -3226,14 +3173,16 @@ void app_start(void)
 }
 ```
 
-Uso de NC: 2560 B (audio) + 960 B (EMG) + 16 448 B (pool) + nodos y buzón ≈ 20 KB de 32 KB.
+- [ ] **Step 8: Corrección del ADC al reiniciar** — en `emg_adc_start`, antes de `HAL_ADC_Start_DMA`:
 
-- [ ] **Step 10: Compilar y correr la prueba del Step 3**
+```c
+  /* HAL v1.4.1: HAL_ADC_Stop_DMA clears DMNGT and HAL_ADC_Start_DMA does not restore it, so a
+     restarted capture would convert without DMA. Restore the circular mode on every start
+     (ADSTART = 0 here, so CFGR1 is writable). */
+  LL_ADC_REG_SetDataTransferMode(s_adc.Instance, LL_ADC_REG_DMA_TRANSFER_UNLIMITED);
+```
 
-Run: el comando del Step 3.
-Expected: `RESULT: PASS` en unas 63 líneas `STAT`/`SIG`, por ejemplo `STAT t=12 ms=13077 ep=1 win=1200 emgblk=1201 audblk=1200 lost=0 drop=0 err=0 rx=1200 crc=0 gap=0 ainv=30` y `SIG t=12 peak=2311 rms=402 rslot=0 e0lo=2035 e0hi=2046 ...`. El LED verde parpadea a 0,5 Hz y el rojo queda apagado.
-
-- [ ] **Step 11: `tools/swd.py` y verificación de un paquete real**
+- [ ] **Step 9: Herramientas por SWD** — `tools/swd.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -3244,7 +3193,7 @@ STM32_Programmer_CLI in HOTPLUG mode (no halt, no reset) plus the ELF symbol tab
 
   swd.py sym NAME        address and size of a symbol
   swd.py cmd N           write the mon debug mailbox and wait until mon has run it
-  swd.py sample OUT.bin  last packet sampled by sink, CRC-checked
+  swd.py sample OUT.bin  last SPI block sampled by sink, CRC-checked
 """
 import argparse
 import os
@@ -3256,7 +3205,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import ssi_packet  # noqa: E402
+import avx_block  # noqa: E402
 
 ELF = os.path.join(HERE, "..", "ssi_capture", "FSBL", "build", "Debug", "ssi_capture_FSBL.elf")
 CLI = "STM32_Programmer_CLI"
@@ -3312,12 +3261,12 @@ def cmd(n, timeout=6.0):
 def sample(retries=3):
     addr, _ = symbol("s_sink_sample")
     for _ in range(retries):
-        buf = read(addr, ssi_packet.PKT_SIZE)
-        p = ssi_packet.parse(buf)
-        if p["magic_ok"] and p["crc_ok"]:
+        buf = read(addr, avx_block.BLOCK_SIZE + 2)[: avx_block.BLOCK_SIZE]  # word-sized read
+        p = avx_block.parse(buf)
+        if p["sync_ok"] and p["crc_ok"]:
             return buf
         time.sleep(0.3)  # torn read while sink was copying: read again
-    raise RuntimeError("no valid packet in s_sink_sample")
+    raise RuntimeError("no valid block in s_sink_sample")
 
 
 def main():
@@ -3344,25 +3293,14 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-Run (con el firmware corriendo después del Step 10):
-
-```bash
-cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6 && source ~/2026-2/SSI/tools/stm32-env.sh >/dev/null && mkdir -p out
-python3 tools/swd.py sym s_mon_dbg_cmd
-python3 tools/swd.py sample out/pkt.bin
-python3 tools/ssi_packet.py check out/pkt.bin --expect version=1 type=1 flags=1 n_emg=40 \
-  n_audio=160 n_ch=3 payload_len=880 dropped=0
-```
-Expected: `s_mon_dbg_cmd addr=0x341f8...` (dentro de NC) y `RESULT: PASS`. El parser que usará la RPi5 valida un paquete armado por el firmware (offsets, CRC y banderas).
-
-- [ ] **Step 12: `tools/diag.py`**
+`tools/diag.py`:
 
 ```python
 #!/usr/bin/env python3
 """1-second diagnostic captures over SWD (firmware module diag) and their analysis.
 
 s_diag layout (diag.c): u32 header[8] = {state, first_window, n, gaps, epoch, 0, 0, 0},
-u32 raw[320] at 32, i32 audio[16000] at 1312, u16 emg[4000][3] at 65312; 89312 bytes.
+u32 raw[320] at 32, i32 audio[16000] at 1312, u16 emg[2000][3] at 65312; 77312 bytes.
 
   diag.py audio [--tone HZ] [--out DIR]          P3: dominant tone, rms, peak, WAV
   diag.py emg [--ch N --tone HZ] [--out DIR]     P2: EMG statistics, CSV, generator tone
@@ -3382,10 +3320,11 @@ from array import array
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import swd  # noqa: E402
 
-FS_AUDIO, FS_EMG, CH = 16000, 4000, 3
-SIZE, OFF_RAW, OFF_AUDIO, OFF_EMG = 89312, 32, 1312, 65312
+FS_AUDIO, FS_EMG, CH = 16000, 2000, 3
+EMG_DIV = FS_AUDIO // FS_EMG  # 8 audio frames per EMG sample
+SIZE, OFF_RAW, OFF_AUDIO, OFF_EMG = 77312, 32, 1312, 65312
 CMD_RESTART, CMD_DIAG, CMD_PULSE_ON, CMD_PULSE_OFF, CMD_SCK_OFF, CMD_SCK_ON = 1, 2, 3, 4, 5, 6
-SSI_SYNC_C = 3       # keep equal to ssi_config.h
+SSI_SYNC_C = 0       # keep equal to ssi_config.h
 EMG_THRESHOLD = 2048  # pulse test: A1 driven to 0 / 3.3 V
 
 
@@ -3521,16 +3460,16 @@ def cmd_noise(a):
 
 
 def pulse_offsets(d):
-    """d = j - 4m per pulse: j = first non-zero audio frame, m = first EMG ch0 sample over the
-    threshold. With EMG sample i taken at frame 4i + c, d spans {c-3 .. c+1}; c = min(d) + 3."""
+    """d = j - 8m per pulse: j = first non-zero audio frame, m = first EMG ch0 sample over the
+    threshold. With EMG sample i taken at frame 8i + c, d spans {c-7 .. c+1}; c = min(d) + 7."""
     au, ch0 = d["audio"], d["emg"][0::CH]
     out = []
     for j in range(1, len(au)):
         if au[j] == 0 or au[j - 1] != 0:
             continue
-        for m in range(max(1, j // 4 - 4), min(len(ch0), j // 4 + 4)):
+        for m in range(max(1, j // EMG_DIV - 4), min(len(ch0), j // EMG_DIV + 4)):
             if ch0[m] > EMG_THRESHOLD >= ch0[m - 1]:
-                out.append(j - 4 * m)
+                out.append(j - EMG_DIV * m)
                 break
     return out
 
@@ -3543,13 +3482,13 @@ def cmd_pulse(a):
         for r in range(1, a.restarts + 1):
             swd.cmd(CMD_RESTART)
             d = capture()
-            ds = pulse_offsets(d)
-            if len(ds) < 30:
+            ds = pulse_offsets(d) + pulse_offsets(capture())  # 2 s: min bin is ~10 % of pulses
+            if len(ds) < 60:
                 print(f"PULSE r={r} epoch={d['epoch']} n={len(ds)}: too few pulses (D7 -> A1 and D8?)")
                 return False
-            c = min(ds) + 3
+            c = min(ds) + EMG_DIV - 1
             cs.append(c)
-            ok = ok and max(ds) - min(ds) <= 4
+            ok = ok and max(ds) - min(ds) <= EMG_DIV
             print(f"PULSE r={r} epoch={d['epoch']} n={len(ds)} dmin={min(ds)} dmax={max(ds)} c={c}")
     finally:
         swd.cmd(CMD_PULSE_OFF)
@@ -3583,78 +3522,67 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 13: P3, tono de referencia**
-
-Con el cableado 5a, poner un celular con un generador de tonos de 1 kHz a 10–20 cm del micrófono:
+`tools/restart_test.sh`:
 
 ```bash
-python3 tools/diag.py audio --tone 1000 --out out/p3
+#!/usr/bin/env bash
+# Usage: restart_test.sh [uart_log.py args...]
+# Loads the current build, asks mon for a capture restart over SWD ~4 s after boot and checks
+# the VCP log across it (12 s from the boot banner): STAT lines must go on with ep=2.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ENV_SH="${STM32_ENV:-$HOME/2026-2/SSI/tools/stm32-env.sh}"
+# shellcheck disable=SC1090
+if [ -f "$ENV_SH" ]; then source "$ENV_SH" >/dev/null; fi
+"$HERE/run_test.sh" 12 "$@" &
+TEST=$!
+sleep 10 # run_test.sh: 1.5 s drain + ~4 s load, so this is ~4 s after boot
+python3 "$HERE/swd.py" cmd 1 >/dev/null
+wait "$TEST"
 ```
-Expected: `AUDIO ... f0=1000.0x ...` y `RESULT: PASS`. Escuchar `out/p3/audio.wav` (1 s): el tono debe sonar limpio, sin clics. El error de f0 refleja el reloj del celular y el HSE de la N6, y debe quedar muy por debajo de 2 Hz.
 
-- [ ] **Step 14: P2, señal de generador (opcional, si hay generador)**
+`tools/avx_block.py` agrega `--ts-check` (`ts` de la tupla *i* = `t0_us` + 500 · *i*, y `t0_us` = 10 000 · `seq`). `tools/uart_log.py` descarta la última línea si la captura la cortó.
 
-Sacar A1 del divisor y aplicar un seno de 100 Hz entre ~0,5 y 2,8 V (siempre dentro de 0–3,3 V):
+- [ ] **Step 10: Correr las pruebas de banco (medidas el 2026-10-09)**
 
-```bash
-python3 tools/diag.py emg --ch 0 --tone 100 --out out/p2
-```
-Expected: `EMG ch0 f0=100.0x` y `RESULT: PASS`; `out/p2/emg.csv` muestra el seno. Sin generador, P2 queda cubierta por los niveles de la Task 4 y por las cuentas por segundo; anotarlo en `MEMORY.md`. Devolver A1 al divisor.
+1. El comando del Step 1 da `RESULT: PASS`: 64 líneas `STAT` (6400 bloques) con `lost`, `drop`, `err`, `crc`, `gap` y `ovf` en 0, y `emgblk == audblk`.
+2. Bloque real por SWD:
+   ```bash
+   source ~/2026-2/SSI/tools/stm32-env.sh >/dev/null; mkdir -p out
+   python3 tools/swd.py sample out/blk.bin
+   python3 tools/avx_block.py check out/blk.bin --ts-check --expect type=4 version=1 n=20 flags=0
+   ```
+   Resultado: `RESULT: PASS`, con los primeros bytes `AA 55 04 01` y `seq` en little-endian (PROTOCOLO §7.3).
+3. Captura de diagnóstico: `python3 tools/diag.py emg --out out/emg_bench` da `RESULT: PASS` (2000 × 3 muestras, en 4,5 s).
+4. Reinicio: `tools/restart_test.sh --skip 0 --expect ' ep=2 ' --check 'STAT:lost==0 and drop==0 and err==0 and crc==0'` da `RESULT: PASS`, con `gap=1` y `ovf=1` después del reinicio.
+5. Build por defecto (ETR) sin puente: `tools/fw.sh build && tools/run_test.sh 5 --expect 'INIT cap=0 step=0 sync=0' --expect 'IDLE ms=' --reject 'ERR '` da `RESULT: PASS`.
 
-- [ ] **Step 15: P7, interferencia del SCK**
+- [ ] **Step 11 (pendiente, necesita micrófono y cables)**
 
-```bash
-python3 tools/diag.py noise
-```
-Expected: tres líneas `NOISE chN std_on=… std_off=… dstd=… dmean=…` y `RESULT: PASS` (|Δstd| < 1 LSB rms). Anotar `dmean` en `MEMORY.md`: la spec (§9) espera que el SCK aparezca como un offset fijo, no como ruido.
+| Prueba | Cableado | Orden | Aceptación |
+|---|---|---|---|
+| Flujo con ETR | 5a | Step 1 sin `SSI_SYNC_LPTIM`, con `sync=0`, `peak>0` y los niveles a 1,65 V | `RESULT: PASS` |
+| P3 tono | 5a + celular a 1 kHz | `python3 tools/diag.py audio --tone 1000 --out out/p3` | `f0` a ±2 Hz; WAV limpio |
+| P7 ruido del SCK | 5a | `python3 tools/diag.py noise` | \|Δstd\| < 1 LSB por canal; anotar `dmean` |
+| P4 sincronización | 5b | `python3 tools/diag.py pulse --restarts 10` | el mismo `c` en los 10 reinicios; si no es 0, ajustar `SSI_SYNC_C` |
+| P2 generador (opcional) | seno de 100 Hz en A1 | `python3 tools/diag.py emg --ch 0 --tone 100` | `f0` a ±1 Hz |
 
-- [ ] **Step 16: P4, sincronización con 10 reinicios**
-
-Cableado 5b: SD del micrófono fuera de D8; D7 → D8 y D7 → A1 (A1 fuera del divisor).
-
-```bash
-python3 tools/diag.py pulse --restarts 10
-```
-Expected: 10 líneas `PULSE r=… epoch=… n≈45 dmin=… dmax=… c=…` con el mismo `c`, seguidas de `SYNC c=…` y `RESULT: PASS`. Esto cierra R3 (`c` constante entre sesiones) y R4 (`|c|` · 62,5 µs < 1 ms; con `c` conocido, la RPi5 lo compensa).
-
-Después, con el firmware todavía corriendo:
-
-```bash
-python3 tools/uart_log.py --secs 4 --check 'STAT:ep>=11 and lost==0 and drop==0 and err==0 and crc==0 and gap==0'
-```
-Expected: `RESULT: PASS`. Los reinicios no pierden ventanas ni dejan huecos en `seq`.
-
-- [ ] **Step 17: Si `c` medido ≠ `SSI_SYNC_C`**
-
-Poner el valor medido en `SSI_SYNC_C` (`FSBL/App/Inc/ssi_config.h`) y en `tools/diag.py`, recompilar y repetir el Step 16. Registrar la causa en `MEMORY.md` (lo más probable es el nivel inicial de la FS al habilitar el SAI).
-
-- [ ] **Step 18: Si falla**
-
-| Síntoma | Qué revisar |
-|---|---|
-| No aparecen `STAT` sino `IDLE` | La línea `INIT cap=…` dice qué paso falló; `acq` queda suspendido |
-| `lost>0` | Algo bloquea a `acq` más de 10 ms: ¿un `log_printf` dentro del ciclo de `acq`? ¿Una ISR larga? |
-| `drop>0` | `sink` no libera bloques: revisar `tx_block_release` y su prioridad |
-| `crc>0` | El pool de paquetes debe estar en NC: `python3 tools/swd.py sym s_pool_mem` tiene que dar una dirección entre `0x341f8000` y `0x341fffff` (`nm` también lista los `static`) |
-| `gap>0` con `drop=0` | `seq` se numera mal: revisar `build_window` |
-| `ainv` ≠ 30 | Se perdieron ventanas al arrancar, o `SSI_AUDIO_STARTUP` cambió |
-| `pulse` con `n` bajo | Cableado 5b, o `testpulse` sin habilitar (buscar `CMD n=3` en el log) |
-| `c` distinto entre reinicios | El orden de `capture_start` o un flanco espurio en la FS al arrancar: medir D6 con el osciloscopio durante un reinicio |
-| `swd.py` falla al conectar | Modo desarrollo (BOOT1 = H) y que nada más use el ST-LINK (cerrar el gdbserver) |
-
-- [ ] **Step 19: Registrar en `MEMORY.md`** los resultados de P3 (f0), P7 (Δstd y Δmean por canal), P4 (`c`) y la corrida de 60 s. Commit solo si Matías lo autoriza: `feat: acq pipeline with DATA packets, SWD diagnostics and sync tests`.
+- [ ] **Step 12: `MEMORY.md` y commit:** `feat(n6): acq pipeline building PROTOCOLO_SPI blocks, SWD diagnostics and restart fix`.
 
 ---
 
 ## Cierre del Plan 1
 
-| Requisito o prueba | Dónde se verifica |
-|---|---|
-| R1: EMG a 4 kHz | Task 4 Step 7 (`d_emgblk`), Task 5 Step 10 (`d_win`, `d_ms`), P2 opcional en el Step 14 |
-| R2: audio de 24 bits | Task 2 (decodificación), Task 3 (`AUD`), Task 5 Step 13 (P3) |
-| R3: un solo reloj, `c` constante | Task 4 Steps 7 y 8, Task 5 Step 16 (P4) |
-| R4: alineamiento < 1 ms | Task 5 Step 16 (`c` medido) |
-| R7: modular sobre ThreadX | Estructura de `App/`; comunicación solo por primitivas de ThreadX |
-| P1 (RAM), P3, P4, P7 | Tasks 1, 5 (Steps 13, 16 y 15) |
+Estado al 2026-10-09 (detalle en el ledger `SSI-repo/.superpowers/sdd/2026-10-09-ssi-capture-plan-1/progress.md`):
 
-Al terminar se escribe el Plan 2: `link` (SPI5 esclavo + DRDY en PH5) en lugar de `sink`, `ctrl` (comandos START/STOP/INFO, estados, recuperación de la §7, INFO con `c`), watchdog, arranque desde flash (R5, R6, P5, P6) y el lector de la RPi5 basado en `tools/ssi_packet.py`.
+| Requisito o prueba | Dónde se verifica | Estado |
+|---|---|---|
+| R1: EMG a 2 kHz | Task 4 (`d_emgblk`), Task 5 (`d_win`, `d_ms`, `emgblk == audblk`) | OK en banco; con ETR falta el puente |
+| R2: audio de 24 bits (int16 en el enlace) | Task 2 (decodificación), Task 3 (reloj y DMA), P3 | Reloj y DMA OK; contenido pendiente (sin micrófono) |
+| R3: un solo reloj, `c` constante | Task 4 (ETR/LPTIM), P4 | Frecuencia OK en banco; `c` pendiente (pulsos) |
+| R4: alineamiento < 1 ms | P4 (`c` medido) | Pendiente (cables) |
+| R7: modular sobre ThreadX | Estructura de `App/`; solo primitivas de ThreadX | OK |
+| P1 (RAM), reinicio, formato del bloque | Tasks 1 y 5 (`restart_test.sh`, `swd.py sample` + `avx_block.py --ts-check`) | OK |
+| P3, P4, P7 | Task 5 Step 11 | Pendientes (micrófono y cables) |
+
+Sigue el Plan 2: `link` (SPI5 esclavo + DMA + DRDY en PH5, re-armado según PROTOCOLO §4) en lugar de `sink`, recuperación ante errores (§7), watchdog y arranque desde flash (R5, R6, P5, P6). El lector de la RPi5 es `auravoxd` de Vicente; `tools/avx_block.py` sirve para validar del lado del PC.

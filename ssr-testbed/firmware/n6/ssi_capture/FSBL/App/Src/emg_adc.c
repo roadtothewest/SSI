@@ -172,6 +172,10 @@ int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error
 int emg_adc_start(void)
 {
   s_blocks = 0u;
+  /* HAL v1.4.1: HAL_ADC_Stop_DMA clears DMNGT and HAL_ADC_Start_DMA does not restore it, so a
+     restarted capture would convert without DMA. Restore the circular mode on every start
+     (ADSTART = 0 here, so CFGR1 is writable). */
+  LL_ADC_REG_SetDataTransferMode(s_adc.Instance, LL_ADC_REG_DMA_TRANSFER_UNLIMITED);
   return (HAL_ADC_Start_DMA(&s_adc, s_buf, EMG_WORDS) == HAL_OK) ? 0 : -1;
 }
 
