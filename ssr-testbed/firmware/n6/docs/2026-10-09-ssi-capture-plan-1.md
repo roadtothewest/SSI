@@ -210,6 +210,9 @@ esac
 #!/usr/bin/env python3
 """Capture the ST-LINK VCP and check it (standard library only).
 
+--start REGEX        drop everything before the first line matching REGEX (the boot banner),
+                     then capture --secs seconds; the ST-LINK VCP replays stale bytes on open
+--drain SECS         discard input for SECS first (run_test.sh drains before the reset)
 --expect REGEX       must appear in the log
 --reject REGEX       must not appear
 --check 'TAG[/N]:EXPR'
@@ -243,10 +246,20 @@ def open_tty(path, baud):
     return fd
 
 
-def capture(dev, baud, secs):
+def capture(dev, baud, secs, start=None, wait=20.0, drain=0.0):
+    """Return the text read in secs seconds; with start, timing begins at that line.
+    drain: seconds of input discarded first (bytes the VCP bridge buffered earlier)."""
     fd = open_tty(dev, baud)
-    end = time.time() + secs
+    t_drain = time.time() + drain
+    while time.time() < t_drain:
+        if select.select([fd], [], [], 0.05)[0]:
+            try:
+                os.read(fd, 4096)
+            except BlockingIOError:
+                pass
+    end = time.time() + (wait + secs if start else secs)
     data = b""
+    started = start is None
     try:
         while time.time() < end:
             ready, _, _ = select.select([fd], [], [], 0.1)
@@ -255,8 +268,17 @@ def capture(dev, baud, secs):
                     data += os.read(fd, 4096)
                 except BlockingIOError:
                     pass
+            if not started:
+                text = data.decode("ascii", "replace")
+                m = re.search(r"^.*" + start, text, re.M)
+                if m:
+                    data = data[m.start():]
+                    started = True
+                    end = time.time() + secs
     finally:
         os.close(fd)
+    if not started:
+        return None
     return data.decode("ascii", "replace").replace("\r", "")
 
 
@@ -307,12 +329,19 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--secs", type=float, default=5.0)
     ap.add_argument("--skip", type=int, default=1)
+    ap.add_argument("--start")
+    ap.add_argument("--wait", type=float, default=20.0)
+    ap.add_argument("--drain", type=float, default=0.0)
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--reject", action="append", default=[])
     ap.add_argument("--check", action="append", default=[])
     ap.add_argument("--out")
     a = ap.parse_args()
-    text = capture(a.dev, a.baud, a.secs)
+    text = capture(a.dev, a.baud, a.secs, a.start, a.wait, a.drain)
+    if text is None:
+        print(f"MISSING START: {a.start} (waited {a.wait} s)")
+        print("RESULT: FAIL")
+        return 1
     sys.stdout.write(text)
     if a.out:
         with open(a.out, "w") as f:
@@ -341,13 +370,14 @@ if __name__ == "__main__":
 #!/usr/bin/env bash
 # Usage: run_test.sh SECS [uart_log.py args...]
 # Starts the VCP reader, loads the current build to RAM (reset + load) and returns the check result.
+# SECS counts from the boot banner, so the ~4 s load and stale VCP bytes are excluded.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SECS="$1"
 shift
-python3 -I "$HERE/uart_log.py" --secs "$SECS" "$@" &
+python3 -I "$HERE/uart_log.py" --drain 1 --start "SSI capture fw" --secs "$SECS" "$@" &
 READER=$!
-sleep 0.5
+sleep 1.5 # let the reader drain stale VCP bytes before the reset
 "$HERE/fw.sh" ram >/dev/null
 wait "$READER"
 ```
@@ -381,12 +411,12 @@ Expected ahora: `RESULT: FAIL` (la base no imprime nada; incluso puede fallar el
 
 /* Acquisition constants shared by drivers, pure logic and packet format (spec v0.2). */
 #define SSI_AUDIO_FS_HZ    16000u
-#define SSI_EMG_DIV        4u                               /* EMG fs = audio fs / 4 */
+#define SSI_EMG_DIV        8u                               /* EMG fs = audio fs / 8 = 2 kHz */
 #define SSI_EMG_CH         3u
 #define SSI_WIN_AUDIO      160u                             /* frames per 10 ms window */
-#define SSI_WIN_EMG        (SSI_WIN_AUDIO / SSI_EMG_DIV)    /* 40 */
-#define SSI_AUDIO_STARTUP  4800u                            /* frames flagged invalid (~300 ms) */
-#define SSI_SYNC_C         3                                /* audio frame of EMG sample 0 (spec §4) */
+#define SSI_WIN_EMG        (SSI_WIN_AUDIO / SSI_EMG_DIV)    /* 20 = tuples per SPI block */
+#define SSI_AUDIO_STARTUP  4800u                            /* INMP441 start-up (~300 ms): diag skips it */
+#define SSI_SYNC_C         0                                /* audio frame of EMG sample 0 (spec §4) */
 
 #define SSI_FW_VERSION     0x000100u                        /* 0.1.0 */
 

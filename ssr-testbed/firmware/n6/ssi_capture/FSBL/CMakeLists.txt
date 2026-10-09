@@ -26,7 +26,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 set(STM32_MCU_FLAGS  "-mcpu=cortex-m55 -mfpu=fpv5-d16 -mfloat-abi=hard -mcmse " )
 
 #Linker options
-set(STM32_LINKER_SCRIPT STM32N657XX_AXISRAM2_fsbl.ld)
+set(STM32_LINKER_SCRIPT ssi_capture_fsbl.ld)
 set(STM32_LINKER_OPTION  )
 
 # Set the project name
@@ -38,6 +38,23 @@ add_executable(${CMAKE_PROJECT_NAME})
 
 # Include mx-generated
 include("mx-generated.cmake")
+
+# --- ssi_capture: HAL modules used by App/ but not configured in CubeMX ---
+target_compile_definitions(stm32cubemx INTERFACE
+    HAL_ADC_MODULE_ENABLED
+    HAL_SAI_MODULE_ENABLED
+    HAL_SPI_MODULE_ENABLED
+)
+target_sources(STM32_Drivers PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_adc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_adc_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_sai.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_sai_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi_ex.c
+)
+file(GLOB APP_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/App/Src/*.c)
+set_source_files_properties(${APP_SRC} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 
 
 # In order to use CMake for cross-compiling
@@ -54,11 +71,13 @@ enable_language(C ASM)
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_CURRENT_SOURCE_DIR}/App/Inc
 )
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    ${APP_SRC}
 )
 
 # Link directories setup
