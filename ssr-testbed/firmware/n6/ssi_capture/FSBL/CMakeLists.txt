@@ -44,6 +44,7 @@ target_compile_definitions(stm32cubemx INTERFACE
     HAL_ADC_MODULE_ENABLED
     HAL_SAI_MODULE_ENABLED
     HAL_SPI_MODULE_ENABLED
+    HAL_LPTIM_MODULE_ENABLED
 )
 target_sources(STM32_Drivers PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_adc.c
@@ -52,9 +53,14 @@ target_sources(STM32_Drivers PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_sai_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_lptim.c
 )
 file(GLOB APP_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/App/Src/*.c)
 set_source_files_properties(${APP_SRC} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+option(SSI_SYNC_LPTIM "Bench build: ADC triggered by LPTIM1 (HSE) instead of the D6->D2 bridge" OFF)
+if(SSI_SYNC_LPTIM)
+    set_property(SOURCE ${APP_SRC} APPEND PROPERTY COMPILE_DEFINITIONS SSI_SYNC_SRC=1)
+endif()
 
 
 # In order to use CMake for cross-compiling

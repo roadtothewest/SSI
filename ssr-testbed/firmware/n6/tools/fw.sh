@@ -12,7 +12,8 @@ if [ -f "$ENV_SH" ]; then source "$ENV_SH" >/dev/null; fi
 case "${1:-}" in
   build)
     cd "$FSBL"
-    cmake --preset Debug >/dev/null
+    # SSI_SYNC_LPTIM=ON: bench build without the D6->D2 bridge (see ssi_config.h)
+    cmake --preset Debug -DSSI_SYNC_LPTIM="${SSI_SYNC_LPTIM:-OFF}" >/dev/null
     cmake --build --preset Debug
     ;;
   ram)

@@ -12,4 +12,13 @@
 
 #define SSI_FW_VERSION     0x000100u                        /* 0.1.0 */
 
+/* ADC trigger source (sync module). ETR: TIM1 counts the SAI FS through the D6->D2 bridge,
+   phase locked in hardware (spec §4). LPTIM: bench build without the bridge, LPTIM1 clocked
+   by the HSE (same crystal as the audio), phase fixed by the start sequence. */
+#define SSI_SYNC_ETR       0
+#define SSI_SYNC_LPTIM     1
+#ifndef SSI_SYNC_SRC
+#define SSI_SYNC_SRC       SSI_SYNC_ETR
+#endif
+
 #endif

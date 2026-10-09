@@ -1708,45 +1708,47 @@ Silbar a unos 10 cm del micrófono durante la captura. Expected: `peak` sube de 
 
 ### Task 4: Sincronización por la FS (`sync`), ADC de 3 canales (`emg_adc`) y orden de arranque (`capture`)
 
+**Revisión del 2026-10-09 (ejecutada):** EMG a 2 kHz (TIM1 ARR = 7) con el contador precargado en 7, de modo que la muestra EMG *i* cae a mitad de la trama 8*i* (*c* = 0, spec v0.3 §4). Se agrega una fuente de banco, que se elige al compilar (`SSI_SYNC_LPTIM=ON tools/fw.sh build`): el LPTIM1 toma reloj de CLKP = HSE (el mismo cristal del audio) y dispara el ADC por `LPTIM1_CH1`, así que la cadena EMG se prueba sin el puente D6 → D2. Por defecto sigue el TIM1/ETR. `emg_adc_init` recibe el disparo como parámetro.
+
 **Files:**
 - Create: `FSBL/App/Inc/{sync.h,emg_adc.h,capture.h}`, `FSBL/App/Src/{sync.c,emg_adc.c,capture.c}`
-- Modify: `FSBL/App/Src/mon.c` (v3: arranca la captura completa y reporta `CAP` cada segundo)
+- Modify: `FSBL/App/Inc/ssi_config.h` (`SSI_SYNC_*`), `FSBL/App/Src/mon.c` (v3), `FSBL/CMakeLists.txt` (opción `SSI_SYNC_LPTIM`, módulo LPTIM de la HAL), `tools/fw.sh` (pasa la opción)
 
 **Interfaces:**
 - Consume: todo `mic_sai` (Task 3), `NC_MEM`, `SSI_*`, `log_printf`, `led_toggle`.
 - Produce:
-  - `int sync_init(void)`, `void sync_start(void)`, `void sync_stop(void)`.
-  - `int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error)`: devuelve 0 o el paso que falló: −1 reloj, −2 init, −3 multimodo, −4 canal, −5 calibración, −6 y −7 lista DMA, −8 atributos de la DMA.
-  - `int emg_adc_start(void)`, `void emg_adc_stop(void)`, `uint32_t emg_adc_blocks_done(void)`, `uint32_t emg_adc_errors(void)`, `uint32_t emg_adc_clock_hz(void)`.
+  - `int sync_init(void)` (después de `mic_sai_init`), `void sync_start(void)`, `void sync_stop(void)`, `uint32_t sync_adc_trigger(void)`, `uint32_t sync_source(void)` (`SSI_SYNC_ETR` = 0, `SSI_SYNC_LPTIM` = 1).
+  - `int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error, uint32_t trigger)`: devuelve 0 o el paso que falló (−1 reloj, −2 init, −3 multimodo, −4 canal, −5 calibración, −6 y −7 lista DMA, −8 atributos de la DMA). `int emg_adc_start(void)`, `void emg_adc_stop(void)`, `uint32_t emg_adc_blocks_done(void)`, `uint32_t emg_adc_errors(void)`, `uint32_t emg_adc_clock_hz(void)`.
   - `const uint32_t *emg_adc_window(uint32_t k)`: `SSI_WIN_EMG*SSI_EMG_CH` palabras `[s0c0, s0c1, s0c2, s1c0, ...]`, con el código de 12 bits en los bits 11..0.
-  - `capture.h`: `CAP_EVT_EMG 0x01`, `CAP_EVT_AUD 0x02`, `CAP_EVT_ERR 0x04`; `int capture_init(TX_EVENT_FLAGS_GROUP *flags)` (escribe la línea `INIT cap=…`), `int capture_start(void)`, `void capture_stop(void)`, `uint8_t capture_epoch(void)`.
+  - `capture.h`: `CAP_EVT_EMG 0x01`, `CAP_EVT_AUD 0x02`, `CAP_EVT_ERR 0x04`; `int capture_init(TX_EVENT_FLAGS_GROUP *flags)` (escribe `INIT cap=… step=… sync=… hse=… sai_ck=… adc_ck=…`), `int capture_start(void)`, `void capture_stop(void)`, `uint8_t capture_epoch(void)`.
 
-**Verificado en el paquete N6 v1.4.1 (2026-10-09):**
-- `NUCLEO-N657X0-Q/Examples/ADC/ADC_SingleConversion_TriggerTimer_DMA`: reloj `RCC_ADCCLKSOURCE_TIMG` con `AdcDivider`, `HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED)`, ADC12 en `SEC|NPRIV` en el RIF, y DMA con anchos de **palabra** desde `DR`. Por eso el búfer es `uint32_t`: así no se arriesga un acceso de media palabra a un registro del ADC.
-- `stm32n6xx_hal_adc.c`: `HAL_ADC_Start_DMA` pasa `Length` a bytes según el ancho del nodo y habilita la interrupción de overrun; `ADC_DMAConvCplt` sigue llamando a los callbacks en modo circular.
-- `stm32n6xx_hal_rcc_ex.c`: `HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC)` devuelve la frecuencia ya dividida por `AdcDivider`. `stm32n6xx_hal_tim_ex.h`: `TIM_TIM1_ETR_GPIO = 0` (valor de reset), así que el ETR del TIM1 viene del pin.
-- Reloj del ADC ≤ 50 MHz, por prudencia (el ejemplo de ST usa TIMG/6). Con 246,5 ciclos, la secuencia de 3 canales dura ≈ 15,5 µs, muy por debajo de los 250 µs entre disparos.
+**Verificado (2026-10-09):** ejemplo `ADC_SingleConversion_TriggerTimer_DMA` (reloj TIMG con `AdcDivider`, calibración, RIF del ADC12, DMA en palabras); `HAL_ADC_Start_DMA` en lista circular; `TIM_TIM1_ETR_GPIO` = 0; HAL del N6: CLKP puede salir del HSE (`RCC_CLKPCLKSOURCE_HSE`), LPTIM1 desde CLKP, disparo `ADC_EXTERNALTRIG_LPTIM1_CH1`. CLKP no lo usa nada en la base (USART1 va por PCLK2). En el DK, las entradas A1/A4/A5 al aire leen 15–57 códigos (12–25 mV, piso del buffer TSZ122), no 0.
 
-**Por qué `c = 3` en teoría (spec §4):** en el I²S estándar, la FS baja al comienzo de la trama (ranura izquierda) y sube a mitad de trama. El TIM1 cuenta flancos de subida desde 0 y emite el TRGO en el 4.º flanco, a mitad de la trama 3; la muestra EMG *i* se toma entonces en el flanco de subida de la trama 4*i* + 3. Si al habilitarse el SAI la FS arrancara en alto, se contaría un flanco extra y `c` valdría 2, pero seguiría siendo constante. La prueba de pulsos de la Task 5 mide el valor real.
-
-- [ ] **Step 1: Cablear (además de lo de la Task 3)**
-
-Puente D6 (CN11-7) → D2 (CN11-3). A4 (CN7-5) → +3V3 (CN8-4). A1 y A5 al aire: el divisor 470k/560k de la placa las lleva a 0 V.
-
-- [ ] **Step 2: Escribir la prueba y verificar que falla**
+- [ ] **Step 1: Prueba (falla: `capture` no existe)**
 
 ```bash
 cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6
-tools/fw.sh build && tools/run_test.sh 6 \
-  --expect 'INIT cap=0 step=0' --expect 'START rc=0 epoch=1' \
+SSI_SYNC_LPTIM=ON tools/fw.sh build && tools/run_test.sh 6 \
+  --expect 'INIT cap=0 step=0 sync=1' --expect 'START rc=0 epoch=1' \
   --check 'INIT/0:abs(sai_ck-49152000)<=100 and adc_ck<=50000000' \
   --check 'CAP:abs(emgblk-audblk)<=1 and abs(d_emgblk-100)<=2' \
   --check 'CAP:eerr==0 and aerr==0' \
-  --check 'CAP:e1>4000 and e0<50 and e2<50'
+  --check 'CAP:e0<100 and e1<100 and e2<100'
 ```
-Expected: `RESULT: FAIL` (aún no existen `INIT cap` ni `CAP`).
+Expected: `RESULT: FAIL` (no hay `INIT cap` ni `CAP`).
 
-Valores esperados: A4 a 3,3 V da 3,3 · 560/1030 = 1,794 V en el ADC, es decir, un código ≈ 4082. `emgblk` puede ir una ventana adelante de `audblk`, porque la última muestra EMG de una ventana se convierte a mitad de su última trama de audio.
+- [ ] **Step 2: `ssi_config.h`**: después de `SSI_FW_VERSION`, agregar:
+
+```c
+/* ADC trigger source (sync module). ETR: TIM1 counts the SAI FS through the D6->D2 bridge,
+   phase locked in hardware (spec §4). LPTIM: bench build without the bridge, LPTIM1 clocked
+   by the HSE (same crystal as the audio), phase fixed by the start sequence. */
+#define SSI_SYNC_ETR       0
+#define SSI_SYNC_LPTIM     1
+#ifndef SSI_SYNC_SRC
+#define SSI_SYNC_SRC       SSI_SYNC_ETR
+#endif
+```
 
 - [ ] **Step 3: `sync.h` y `sync.c`**
 
@@ -1756,11 +1758,16 @@ Valores esperados: A4 a 3,3 V da 3,3 · 560/1030 = 1,794 V en el ADC, es decir, 
 #ifndef SYNC_H
 #define SYNC_H
 
-/* TIM1 counts SAI FS rising edges on ETR (PD0/D2, bridged from D6) and fires TRGO on every
-   SSI_EMG_DIV-th edge: the ADC trigger is phase-locked to the audio frames (spec §4). */
-int sync_init(void);
-void sync_start(void); /* counter := 0, then enable: call before the SAI starts */
+#include <stdint.h>
+
+/* EMG trigger, phase-locked to the audio frames (spec §4). Default (SSI_SYNC_ETR): TIM1 counts
+   SAI FS rising edges on ETR (PD0/D2, bridged from D6) and fires TRGO on every SSI_EMG_DIV-th
+   edge. Bench (SSI_SYNC_LPTIM): LPTIM1 PWM at FS / SSI_EMG_DIV from the HSE, no bridge. */
+int sync_init(void);           /* after mic_sai_init (the LPTIM backend needs the HSE running) */
+void sync_start(void);         /* call before the SAI starts */
 void sync_stop(void);
+uint32_t sync_adc_trigger(void); /* ADC_EXTERNALTRIG_* for emg_adc_init */
+uint32_t sync_source(void);      /* SSI_SYNC_ETR or SSI_SYNC_LPTIM */
 
 #endif
 ```
@@ -1772,6 +1779,8 @@ void sync_stop(void);
 
 #include "ssi_config.h"
 #include "stm32n6xx_hal.h"
+
+#if SSI_SYNC_SRC == SSI_SYNC_ETR
 
 static TIM_HandleTypeDef s_tim;
 
@@ -1794,7 +1803,7 @@ int sync_init(void)
   s_tim.Instance = TIM1;
   s_tim.Init.Prescaler = 0;
   s_tim.Init.CounterMode = TIM_COUNTERMODE_UP;
-  s_tim.Init.Period = SSI_EMG_DIV - 1u; /* update = TRGO on every 4th FS edge */
+  s_tim.Init.Period = SSI_EMG_DIV - 1u; /* update = TRGO on every SSI_EMG_DIV-th FS edge */
   s_tim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   s_tim.Init.RepetitionCounter = 0;
   s_tim.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -1819,13 +1828,83 @@ int sync_init(void)
 
 void sync_start(void)
 {
-  __HAL_TIM_SET_COUNTER(&s_tim, 0u);
+  /* Preset to DIV - 1: the first FS rising edge (mid-frame 0) overflows the counter, so EMG
+     sample i is converted at mid-frame SSI_EMG_DIV * i (c = 0, spec §4). */
+  __HAL_TIM_SET_COUNTER(&s_tim, SSI_EMG_DIV - 1u);
   (void)HAL_TIM_Base_Start(&s_tim);
 }
 
 void sync_stop(void)
 {
   (void)HAL_TIM_Base_Stop(&s_tim);
+}
+
+uint32_t sync_adc_trigger(void)
+{
+  return ADC_EXTERNALTRIG_T1_TRGO;
+}
+
+#else /* SSI_SYNC_LPTIM */
+
+#define LPTIM_KERNEL_HZ 48000000u /* CLKP = HSE: the crystal that also feeds PLL4 (audio) */
+
+static LPTIM_HandleTypeDef s_lptim;
+
+int sync_init(void)
+{
+  RCC_PeriphCLKInitTypeDef clk = {0};
+  LPTIM_OC_ConfigTypeDef oc = {0};
+
+  clk.PeriphClockSelection = RCC_PERIPHCLK_CKPER | RCC_PERIPHCLK_LPTIM1;
+  clk.CkperClockSelection = RCC_CLKPCLKSOURCE_HSE;
+  clk.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_CLKP;
+  if (HAL_RCCEx_PeriphCLKConfig(&clk) != HAL_OK) {
+    return -1;
+  }
+  __HAL_RCC_LPTIM1_CLK_ENABLE();
+  HAL_RIF_RISC_SetSlaveSecureAttributes(RIF_RISC_PERIPH_INDEX_LPTIM1,
+                                        RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_NPRIV);
+  s_lptim.Instance = LPTIM1;
+  s_lptim.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC; /* count the kernel clock */
+  s_lptim.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  s_lptim.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
+  s_lptim.Init.Period = LPTIM_KERNEL_HZ / (SSI_AUDIO_FS_HZ / SSI_EMG_DIV) - 1u; /* 23999 */
+  s_lptim.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
+  s_lptim.Init.CounterSource = LPTIM_COUNTERSOURCE_INTERNAL;
+  s_lptim.Init.Input1Source = LPTIM_INPUT1SOURCE_GPIO;
+  s_lptim.Init.Input2Source = LPTIM_INPUT2SOURCE_GPIO;
+  s_lptim.Init.RepetitionCounter = 0;
+  if (HAL_LPTIM_Init(&s_lptim) != HAL_OK) {
+    return -2;
+  }
+  oc.Pulse = (s_lptim.Init.Period + 1u) / 2u;
+  oc.OCPolarity = LPTIM_OCPOLARITY_HIGH;
+  if (HAL_LPTIM_OC_ConfigChannel(&s_lptim, &oc, LPTIM_CHANNEL_1) != HAL_OK) {
+    return -3;
+  }
+  return 0;
+}
+
+void sync_start(void)
+{
+  (void)HAL_LPTIM_PWM_Start(&s_lptim, LPTIM_CHANNEL_1);
+}
+
+void sync_stop(void)
+{
+  (void)HAL_LPTIM_PWM_Stop(&s_lptim, LPTIM_CHANNEL_1);
+}
+
+uint32_t sync_adc_trigger(void)
+{
+  return ADC_EXTERNALTRIG_LPTIM1_CH1;
+}
+
+#endif
+
+uint32_t sync_source(void)
+{
+  return SSI_SYNC_SRC;
 }
 ```
 
@@ -1842,11 +1921,12 @@ void sync_stop(void)
 #include "tx_api.h"
 
 /* ADC1 regular scan, ranks 1..3 = INP10 (PA9, A1), INP16 (PF3, A4), INP8 (PB10, A5); 12 bits,
-   246.5-cycle sampling, one sequence per TIM1 TRGO (4 kHz). Circular DMA over two windows of
+   246.5-cycle sampling, one sequence per trigger (2 kHz, sync module). Circular DMA over two windows of
    SSI_WIN_EMG sequences: window k lives in half k % 2. The callbacks set flag_block
    (flag_error on ADC overrun or DMA error) when flags != TX_NULL. */
-int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error);
-int emg_adc_start(void);                     /* arms the ADC: conversions start at the next TRGO */
+int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error,
+                 uint32_t trigger); /* trigger: ADC_EXTERNALTRIG_* from sync_adc_trigger() */
+int emg_adc_start(void);                     /* arms the ADC: conversions start at the next trigger */
 void emg_adc_stop(void);
 uint32_t emg_adc_blocks_done(void);          /* windows completed since the last start */
 const uint32_t *emg_adc_window(uint32_t k);  /* SSI_WIN_EMG * SSI_EMG_CH words: s0c0, s0c1, ... */
@@ -1877,6 +1957,7 @@ static uint32_t s_buf[EMG_WORDS] NC_MEM;
 static TX_EVENT_FLAGS_GROUP *s_flags;
 static ULONG s_flag_block;
 static ULONG s_flag_error;
+static uint32_t s_trigger;
 static volatile uint32_t s_blocks;
 static volatile uint32_t s_errors;
 
@@ -1932,7 +2013,7 @@ static int adc_init(void)
   s_adc.Init.ContinuousConvMode = DISABLE;
   s_adc.Init.NbrOfConversion = SSI_EMG_CH;
   s_adc.Init.DiscontinuousConvMode = DISABLE;
-  s_adc.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO;
+  s_adc.Init.ExternalTrigConv = s_trigger;
   s_adc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   s_adc.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DMA_CIRCULAR;
   s_adc.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
@@ -2011,9 +2092,11 @@ static int dma_init(void)
   return 0;
 }
 
-int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error)
+int emg_adc_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error,
+                 uint32_t trigger)
 {
   int rc;
+  s_trigger = trigger;
   s_flags = flags;
   s_flag_block = flag_block;
   s_flag_error = flag_error;
@@ -2146,15 +2229,15 @@ int capture_init(TX_EVENT_FLAGS_GROUP *flags)
   int rc = mic_sai_init(flags, CAP_EVT_AUD, CAP_EVT_ERR);
   if (rc == 0) {
     step = 2;
-    rc = emg_adc_init(flags, CAP_EVT_EMG, CAP_EVT_ERR);
+    rc = emg_adc_init(flags, CAP_EVT_EMG, CAP_EVT_ERR, sync_adc_trigger());
   }
   if (rc == 0) {
     step = 3;
     rc = sync_init();
   }
-  log_printf("INIT cap=%d step=%d hse=%lu sai_ck=%lu adc_ck=%lu", rc, (rc == 0) ? 0 : step,
-             (unsigned long)mic_sai_hse_mode(), (unsigned long)mic_sai_clock_hz(),
-             (unsigned long)emg_adc_clock_hz());
+  log_printf("INIT cap=%d step=%d sync=%lu hse=%lu sai_ck=%lu adc_ck=%lu", rc, (rc == 0) ? 0 : step,
+             (unsigned long)sync_source(), (unsigned long)mic_sai_hse_mode(),
+             (unsigned long)mic_sai_clock_hz(), (unsigned long)emg_adc_clock_hz());
   return rc;
 }
 
@@ -2164,8 +2247,8 @@ int capture_start(void)
     capture_stop();
   }
   s_epoch++;
-  /* Fixed order, fixed c: the ADC waits for TRGO, TIM1 counts FS edges from 0, and only then
-     the SAI produces its first FS edge. */
+  /* Fixed order, fixed c: the ADC waits for its trigger, the trigger source is armed, and only
+     then the SAI produces its first FS edge. */
   if (emg_adc_start() != 0) {
     return -1;
   }
@@ -2193,9 +2276,7 @@ uint8_t capture_epoch(void)
 }
 ```
 
-- [ ] **Step 6: `mon.c` v3**
-
-Reemplaza la versión 2 completa:
+- [ ] **Step 6: `mon.c` v3** (reemplaza la versión 2 completa)
 
 ```c
 #include "mon.h"
@@ -2230,32 +2311,59 @@ void mon_thread_entry(ULONG arg)
 }
 ```
 
-- [ ] **Step 7: Correr la prueba**
+- [ ] **Step 7: CMake y `fw.sh`**
 
-Run: el comando del Step 2.
-Expected: `RESULT: PASS`. Ejemplo: `INIT cap=0 step=0 hse=1 sai_ck=49152000 adc_ck=50000000`, `START rc=0 epoch=1` y `CAP t=3 emgblk=300 audblk=300 eerr=0 aerr=0 e0=2 e1=4081 e2=1`. Esto cubre R1 (4000 muestras/s por índices) y la primera parte de R3: EMG y audio avanzan juntos porque los cuenta el mismo reloj.
+En `FSBL/CMakeLists.txt`, agregar `HAL_LPTIM_MODULE_ENABLED` a las definiciones de `stm32cubemx` y `stm32n6xx_hal_lptim.c` a `STM32_Drivers`. Después de `set_source_files_properties(...)`:
 
-- [ ] **Step 8: Prueba negativa del puente**
+```cmake
+option(SSI_SYNC_LPTIM "Bench build: ADC triggered by LPTIM1 (HSE) instead of the D6->D2 bridge" OFF)
+if(SSI_SYNC_LPTIM)
+    set_property(SOURCE ${APP_SRC} APPEND PROPERTY COMPILE_DEFINITIONS SSI_SYNC_SRC=1)
+endif()
+```
 
-Sacar el puente D6 → D2 y correr:
+En `tools/fw.sh`, la configuración pasa la opción en forma explícita (así el caché de CMake no recuerda un build anterior):
 
 ```bash
-tools/run_test.sh 4 --check 'CAP:emgblk==0 and audblk>0'
+    # SSI_SYNC_LPTIM=ON: bench build without the D6->D2 bridge (see ssi_config.h)
+    cmake --preset Debug -DSSI_SYNC_LPTIM="${SSI_SYNC_LPTIM:-OFF}" >/dev/null
 ```
-Expected: `RESULT: PASS`. Sin FS en el ETR no hay disparos del ADC, y el audio sigue corriendo. Esto muestra que el EMG depende solo de la FS. Volver a poner el puente.
 
-- [ ] **Step 9: Si falla**
+- [ ] **Step 8: Correr la prueba de banco (Step 1)**
+
+Expected: `RESULT: PASS`. Medido el 2026-10-09: `INIT cap=0 step=0 sync=1 hse=1 sai_ck=49152000 adc_ck=50000000`, `CAP t=5 emgblk=503 audblk=503 eerr=0 aerr=0 e0=25 e1=34 e2=57`. EMG y audio completan exactamente las mismas ventanas porque comparten el cristal.
+
+- [ ] **Step 9: Build por defecto (ETR) sin el puente**
+
+```bash
+tools/fw.sh build && tools/run_test.sh 4 --expect 'INIT cap=0 step=0 sync=0' \
+  --check 'CAP:emgblk==0 and audblk>0 and eerr==0 and aerr==0'
+```
+Expected: `RESULT: PASS`. Sin FS en el ETR no hay disparos del ADC, y el audio sigue corriendo.
+
+- [ ] **Step 10 (pendiente, necesita cables): ETR con el puente y niveles**
+
+Cableado: puente D6 (CN11-7) → D2 (CN11-3), A4 (CN7-5) → +3V3 (CN8-4), A1 y A5 al aire.
+
+```bash
+tools/fw.sh build && tools/run_test.sh 6 --expect 'INIT cap=0 step=0 sync=0' \
+  --check 'CAP:abs(emgblk-audblk)<=1 and abs(d_emgblk-100)<=2' \
+  --check 'CAP:eerr==0 and aerr==0' --check 'CAP:e1>4000 and e0<100 and e2<100'
+```
+Expected: `RESULT: PASS` (A4 a 3,3 V → 1,794 V en el ADC → código ≈ 4082).
+
+- [ ] **Step 11: Si falla**
 
 | Síntoma | Qué revisar |
 |---|---|
 | `INIT cap=<n> step=2` | `emg_adc_init` devolvió `n` (ver la lista de códigos en Interfaces) |
-| `INIT cap=<n> step=3` | `sync_init`: TIM1, ETR o TRGO |
+| `INIT cap=<n> step=3` | `sync_init`: TIM1/ETR, o en banco el reloj CLKP/LPTIM1 |
 | `emgblk=0` con el puente puesto | FS en D2 con el osciloscopio; AF1 de PD0; `TIM_CLOCKSOURCE_ETRMODE2` |
-| `emgblk` avanza, pero `e1` ≈ 0 | A4 sin conectar a +3V3, o el orden de los rangos no corresponde a 10/16/8 |
+| `emgblk` avanza, pero `e1` ≈ 0 con A4 a 3,3 V | A4 sin conectar, o el orden de los rangos no corresponde a 10/16/8 |
 | `eerr>0` | Overrun del ADC: la DMA no está leyendo (revisar que `s_buf` y `s_node` estén en NC) |
-| `abs(emgblk-audblk)` crece | El ADC no se dispara en cada TRGO: ¿la secuencia dura más de 250 µs? (`adc_ck` muy bajo) |
 
-- [ ] **Step 10: Registrar en `MEMORY.md`** (`adc_ck`, códigos de A4 a 3,3 V y al aire). Commit solo si Matías lo autoriza: `feat: FS-locked 4 kHz EMG acquisition (TIM1 ETR, ADC1 scan, DMA)`.
+- [ ] **Step 12: `MEMORY.md` y commit:** `feat(n6): FS-locked 2 kHz EMG (TIM1 ETR) with a bench LPTIM trigger, ADC1 scan and DMA`.
+
 
 ---
 
