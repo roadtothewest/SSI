@@ -1,0 +1,8 @@
+# CubeMX copies the whole STM32CubeN6 HAL/CMSIS and ThreadX (~50 MB) here.
+# Regenerate them with scripts/mx_generate_ssi_capture.txt (package STM32Cube_FW_N6_V1.4.1).
+ssi_capture/Drivers/
+ssi_capture/Middlewares/
+build/
+out/
+__pycache__/
+*.pyc
