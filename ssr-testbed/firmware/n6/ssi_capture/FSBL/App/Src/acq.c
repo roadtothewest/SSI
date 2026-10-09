@@ -51,6 +51,11 @@ void acq_request_diag(void)
   (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_DIAG, TX_OR);
 }
 
+void acq_request_stall(void)
+{
+  (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_STALL, TX_OR);
+}
+
 static void period_reset(void)
 {
   s_st.peak = 0u;
@@ -75,23 +80,33 @@ static void start_capture(void)
     log_printf("ERR capture_start=%d", rc); /* streams stopped: logging costs no data */
   }
   s_started = 1;
+  /* Errors raised by the stop/start itself must not trigger another restart. */
+  s_adc_err = emg_adc_errors();
+  s_sai_err = mic_sai_errors();
   s_epoch = capture_epoch();
   s_next = 0u;
   period_reset();
 }
 
-static void check_errors(void)
+/* Returns 1 when a driver reported a new error since the last check (or restart). */
+static int check_errors(void)
 {
   const uint32_t adc = emg_adc_errors();
   const uint32_t sai = mic_sai_errors();
+  int fresh = 0;
   if (adc != s_adc_err) {
+    s_st.err += adc - s_adc_err;
     s_adc_err = adc;
     s_pending |= AVX_F_ADC_LOST;
+    fresh = 1;
   }
   if (sai != s_sai_err) {
+    s_st.err += sai - s_sai_err;
     s_sai_err = sai;
     s_pending |= AVX_F_SAI_ERR;
+    fresh = 1;
   }
+  return fresh;
 }
 
 static void update_stats(void)
@@ -162,7 +177,6 @@ static void stats_push(void)
   memset(&m, 0, sizeof m);
   s_st.emg_blocks = emg_adc_blocks_done();
   s_st.aud_blocks = mic_sai_blocks_done();
-  s_st.err = s_adc_err + s_sai_err;
   s_st.rms = acq_isqrt64(s_sq / ((uint64_t)s_nwin * SSI_WIN_AUDIO));
   s_st.epoch = s_epoch;
   m.s = s_st;
@@ -180,15 +194,19 @@ void acq_thread_entry(ULONG arg)
   for (;;) {
     ULONG got = 0u;
     (void)tx_event_flags_get(s_cfg.flags,
-                             CAP_EVT_EMG | CAP_EVT_AUD | CAP_EVT_ERR | ACQ_EVT_RESTART | ACQ_EVT_DIAG,
+                             CAP_EVT_EMG | CAP_EVT_AUD | CAP_EVT_ERR | ACQ_EVT_RESTART | ACQ_EVT_DIAG |
+                                 ACQ_EVT_STALL,
                              TX_OR_CLEAR, &got, TX_TIMER_TICKS_PER_SECOND / 10u);
-    if ((got & ACQ_EVT_RESTART) != 0u) {
+    /* A driver error stops both streams and restarts them together: they share the FS (spec §7). */
+    if (check_errors() != 0 || (got & ACQ_EVT_RESTART) != 0u) {
       start_capture();
     }
     if ((got & ACQ_EVT_DIAG) != 0u) {
       diag_arm(DIAG_MIN_WINDOW);
     }
-    check_errors(); /* error recovery (stop, ERROR state, new epoch) is the link/ctrl's job */
+    if ((got & ACQ_EVT_STALL) != 0u) {
+      tx_thread_sleep(3u); /* 30 ms > 2 windows: the DMA overwrites at least one unread half */
+    }
     for (;;) {
       uint32_t k = 0u;
       uint32_t lost = 0u;

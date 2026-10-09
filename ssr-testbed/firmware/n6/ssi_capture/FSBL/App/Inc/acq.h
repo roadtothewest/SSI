@@ -9,6 +9,7 @@
 /* Requests to acq (any thread), on the same flags group as the CAP_EVT_* driver events. */
 #define ACQ_EVT_RESTART 0x10u /* stop and restart the capture: new epoch, indices from 0 */
 #define ACQ_EVT_DIAG    0x20u /* arm a 1 s diag capture from the first valid-audio window */
+#define ACQ_EVT_STALL   0x40u /* debug: block acq for 30 ms once (tests the loss accounting) */
 
 typedef struct {
   uint32_t windows;    /* blocks queued since boot */
@@ -36,5 +37,6 @@ void acq_configure(const acq_cfg_t *cfg); /* before the thread runs */
 void acq_thread_entry(ULONG arg);
 void acq_request_restart(void);
 void acq_request_diag(void);
+void acq_request_stall(void);
 
 #endif

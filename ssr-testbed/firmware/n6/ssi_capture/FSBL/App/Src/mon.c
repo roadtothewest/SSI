@@ -21,6 +21,7 @@ enum {
   CMD_PULSE_OFF = 4,
   CMD_SCK_OFF = 5,   /* P7: SCK pin (A2) to analog; the SAI and its FS keep running */
   CMD_SCK_ON = 6,
+  CMD_STALL = 7,     /* block acq for 30 ms once: windows must be counted as lost */
 };
 static volatile uint32_t s_mon_dbg_cmd NC_MEM __attribute__((used));
 
@@ -51,6 +52,9 @@ static void run_cmd(uint32_t cmd)
       break;
     case CMD_SCK_ON:
       mic_sai_sck_output(1);
+      break;
+    case CMD_STALL:
+      acq_request_stall();
       break;
     default:
       break;

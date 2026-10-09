@@ -7,6 +7,7 @@ STM32_Programmer_CLI in HOTPLUG mode (no halt, no reset) plus the ELF symbol tab
   swd.py sym NAME        address and size of a symbol
   swd.py cmd N           write the mon debug mailbox and wait until mon has run it
   swd.py sample OUT.bin  last SPI block sampled by sink, CRC-checked
+  swd.py dma-suspend N   suspend GPDMA1 channel N (fault injection: 0 = SAI, 1 = ADC)
 """
 import argparse
 import os
@@ -82,12 +83,27 @@ def sample(retries=3):
     raise RuntimeError("no valid block in s_sink_sample")
 
 
+GPDMA1_CCR0 = 0x50021064  # GPDMA1_BASE_S + 0x64: channel 0 CCR; channels are 0x80 apart
+DMA_CCR_SUSP = 1 << 2
+
+
+def dma_suspend(channel):
+    """Fault injection. The effect is checked on the VCP log: the firmware may already have
+    aborted and restarted the channel when we could read it back."""
+    addr = GPDMA1_CCR0 + 0x80 * channel
+    try:
+        write32(addr, read32(addr) | DMA_CCR_SUSP)
+    except RuntimeError:
+        pass  # the CLI verifies by reading back, and the DMA changes the register
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="op", required=True)
     sub.add_parser("sym").add_argument("name")
     sub.add_parser("cmd").add_argument("n", type=int)
     sub.add_parser("sample").add_argument("out")
+    sub.add_parser("dma-suspend").add_argument("channel", type=int)
     a = ap.parse_args()
     if a.op == "sym":
         addr, size = symbol(a.name)
@@ -95,6 +111,9 @@ def main():
     elif a.op == "cmd":
         cmd(a.n)
         print(f"CMD {a.n} OK")
+    elif a.op == "dma-suspend":
+        dma_suspend(a.channel)
+        print(f"GPDMA1 channel {a.channel} suspended")
     else:
         with open(a.out, "wb") as f:
             f.write(sample())

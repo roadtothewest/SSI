@@ -2374,7 +2374,7 @@ Expected: `RESULT: PASS` (A4 a 3,3 V → 1,794 V en el ADC → código ≈ 4082)
 **Files:**
 - Create: `FSBL/App/Inc/{acq.h,diag.h,testpulse.h,sink.h}`, `FSBL/App/Src/{acq.c,diag.c,testpulse.c,sink.c}`
 - Modify: `FSBL/App/Inc/mon.h`, `FSBL/App/Src/mon.c` (final), `FSBL/App/Src/app.c` (final), `FSBL/App/Src/emg_adc.c` (DMA mode on restart)
-- Create: `tools/swd.py`, `tools/diag.py`, `tools/restart_test.sh`; Modify: `tools/avx_block.py` (`--ts-check`), `tools/uart_log.py` (descarta la última línea cortada)
+- Create: `tools/swd.py`, `tools/diag.py`, `tools/inject_test.sh`; Modify: `tools/avx_block.py` (`--ts-check`), `tools/uart_log.py` (descarta la última línea cortada)
 
 **Interfaces:**
 - Consume: Tasks 1–4 (`acq_select`, `acq_isqrt64`, `avx_block_build`, `AVX_*`, `audio_extract_left`, `audio_right_activity`, `avx_crc16`, `capture_*`, `CAP_EVT_*`, `mic_sai_*`, `emg_adc_*`); `tools/avx_block.py` (`parse`, `BLOCK_SIZE`).
@@ -2385,7 +2385,10 @@ Expected: `RESULT: PASS` (A4 a 3,3 V → 1,794 V en el ADC → código ≈ 4082)
   - `sink.h`: `sink_stats_t {rx, crc_err, gap, ovf}`, `sink_cfg_t {in, stats}`, `void sink_configure(const sink_cfg_t *cfg)`, `void sink_thread_entry(ULONG arg)`.
   - `mon.h`: `mon_cfg_t {acq_stats, sink_stats}`, `void mon_configure(const mon_cfg_t *cfg)`, `void mon_thread_entry(ULONG arg)`.
   - Símbolos para el SWD: `s_mon_dbg_cmd` (buzón en NC), `s_diag` (77 312 B), `s_sink_sample` (538 B).
-  - `tools/swd.py sym|cmd|sample`; `tools/diag.py audio|emg|noise|pulse`; `tools/restart_test.sh`.
+  - `tools/swd.py sym|cmd|sample|dma-suspend`; `tools/diag.py audio|emg|noise|pulse`; `tools/inject_test.sh 'ACCIÓN'`.
+  - `ACQ_EVT_STALL 0x40` / `void acq_request_stall(void)` (depuración, comando 7 de `mon`).
+
+**Recuperación (spec §7, agregada en la revisión final):** ante un error nuevo de cualquier driver, `acq` reinicia los dos flujos juntos (comparten la FS). Después toma la cuenta de errores como punto de partida, para no entrar en bucle.
 
 **Política del bloque (spec v0.3 §6–7):**
 - `seq` = `seq_base` + *k*. Una ventana perdida o descartada no se envía, pero consume su `seq`: la Pi ve el salto.
@@ -2695,6 +2698,7 @@ void sink_thread_entry(ULONG arg)
 /* Requests to acq (any thread), on the same flags group as the CAP_EVT_* driver events. */
 #define ACQ_EVT_RESTART 0x10u /* stop and restart the capture: new epoch, indices from 0 */
 #define ACQ_EVT_DIAG    0x20u /* arm a 1 s diag capture from the first valid-audio window */
+#define ACQ_EVT_STALL   0x40u /* debug: block acq for 30 ms once (tests the loss accounting) */
 
 typedef struct {
   uint32_t windows;    /* blocks queued since boot */
@@ -2722,6 +2726,7 @@ void acq_configure(const acq_cfg_t *cfg); /* before the thread runs */
 void acq_thread_entry(ULONG arg);
 void acq_request_restart(void);
 void acq_request_diag(void);
+void acq_request_stall(void);
 
 #endif
 ```
@@ -2782,6 +2787,11 @@ void acq_request_diag(void)
   (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_DIAG, TX_OR);
 }
 
+void acq_request_stall(void)
+{
+  (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_STALL, TX_OR);
+}
+
 static void period_reset(void)
 {
   s_st.peak = 0u;
@@ -2806,23 +2816,33 @@ static void start_capture(void)
     log_printf("ERR capture_start=%d", rc); /* streams stopped: logging costs no data */
   }
   s_started = 1;
+  /* Errors raised by the stop/start itself must not trigger another restart. */
+  s_adc_err = emg_adc_errors();
+  s_sai_err = mic_sai_errors();
   s_epoch = capture_epoch();
   s_next = 0u;
   period_reset();
 }
 
-static void check_errors(void)
+/* Returns 1 when a driver reported a new error since the last check (or restart). */
+static int check_errors(void)
 {
   const uint32_t adc = emg_adc_errors();
   const uint32_t sai = mic_sai_errors();
+  int fresh = 0;
   if (adc != s_adc_err) {
+    s_st.err += adc - s_adc_err;
     s_adc_err = adc;
     s_pending |= AVX_F_ADC_LOST;
+    fresh = 1;
   }
   if (sai != s_sai_err) {
+    s_st.err += sai - s_sai_err;
     s_sai_err = sai;
     s_pending |= AVX_F_SAI_ERR;
+    fresh = 1;
   }
+  return fresh;
 }
 
 static void update_stats(void)
@@ -2893,7 +2913,6 @@ static void stats_push(void)
   memset(&m, 0, sizeof m);
   s_st.emg_blocks = emg_adc_blocks_done();
   s_st.aud_blocks = mic_sai_blocks_done();
-  s_st.err = s_adc_err + s_sai_err;
   s_st.rms = acq_isqrt64(s_sq / ((uint64_t)s_nwin * SSI_WIN_AUDIO));
   s_st.epoch = s_epoch;
   m.s = s_st;
@@ -2911,15 +2930,19 @@ void acq_thread_entry(ULONG arg)
   for (;;) {
     ULONG got = 0u;
     (void)tx_event_flags_get(s_cfg.flags,
-                             CAP_EVT_EMG | CAP_EVT_AUD | CAP_EVT_ERR | ACQ_EVT_RESTART | ACQ_EVT_DIAG,
+                             CAP_EVT_EMG | CAP_EVT_AUD | CAP_EVT_ERR | ACQ_EVT_RESTART | ACQ_EVT_DIAG |
+                                 ACQ_EVT_STALL,
                              TX_OR_CLEAR, &got, TX_TIMER_TICKS_PER_SECOND / 10u);
-    if ((got & ACQ_EVT_RESTART) != 0u) {
+    /* A driver error stops both streams and restarts them together: they share the FS (spec §7). */
+    if (check_errors() != 0 || (got & ACQ_EVT_RESTART) != 0u) {
       start_capture();
     }
     if ((got & ACQ_EVT_DIAG) != 0u) {
       diag_arm(DIAG_MIN_WINDOW);
     }
-    check_errors(); /* error recovery (stop, ERROR state, new epoch) is the link/ctrl's job */
+    if ((got & ACQ_EVT_STALL) != 0u) {
+      tx_thread_sleep(3u); /* 30 ms > 2 windows: the DMA overwrites at least one unread half */
+    }
     for (;;) {
       uint32_t k = 0u;
       uint32_t lost = 0u;
@@ -2990,6 +3013,7 @@ enum {
   CMD_PULSE_OFF = 4,
   CMD_SCK_OFF = 5,   /* P7: SCK pin (A2) to analog; the SAI and its FS keep running */
   CMD_SCK_ON = 6,
+  CMD_STALL = 7,     /* block acq for 30 ms once: windows must be counted as lost */
 };
 static volatile uint32_t s_mon_dbg_cmd NC_MEM __attribute__((used));
 
@@ -3020,6 +3044,9 @@ static void run_cmd(uint32_t cmd)
       break;
     case CMD_SCK_ON:
       mic_sai_sck_output(1);
+      break;
+    case CMD_STALL:
+      acq_request_stall();
       break;
     default:
       break;
@@ -3194,6 +3221,7 @@ STM32_Programmer_CLI in HOTPLUG mode (no halt, no reset) plus the ELF symbol tab
   swd.py sym NAME        address and size of a symbol
   swd.py cmd N           write the mon debug mailbox and wait until mon has run it
   swd.py sample OUT.bin  last SPI block sampled by sink, CRC-checked
+  swd.py dma-suspend N   suspend GPDMA1 channel N (fault injection: 0 = SAI, 1 = ADC)
 """
 import argparse
 import os
@@ -3269,12 +3297,27 @@ def sample(retries=3):
     raise RuntimeError("no valid block in s_sink_sample")
 
 
+GPDMA1_CCR0 = 0x50021064  # GPDMA1_BASE_S + 0x64: channel 0 CCR; channels are 0x80 apart
+DMA_CCR_SUSP = 1 << 2
+
+
+def dma_suspend(channel):
+    """Fault injection. The effect is checked on the VCP log: the firmware may already have
+    aborted and restarted the channel when we could read it back."""
+    addr = GPDMA1_CCR0 + 0x80 * channel
+    try:
+        write32(addr, read32(addr) | DMA_CCR_SUSP)
+    except RuntimeError:
+        pass  # the CLI verifies by reading back, and the DMA changes the register
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="op", required=True)
     sub.add_parser("sym").add_argument("name")
     sub.add_parser("cmd").add_argument("n", type=int)
     sub.add_parser("sample").add_argument("out")
+    sub.add_parser("dma-suspend").add_argument("channel", type=int)
     a = ap.parse_args()
     if a.op == "sym":
         addr, size = symbol(a.name)
@@ -3282,6 +3325,9 @@ def main():
     elif a.op == "cmd":
         cmd(a.n)
         print(f"CMD {a.n} OK")
+    elif a.op == "dma-suspend":
+        dma_suspend(a.channel)
+        print(f"GPDMA1 channel {a.channel} suspended")
     else:
         with open(a.out, "wb") as f:
             f.write(sample())
@@ -3522,22 +3568,27 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-`tools/restart_test.sh`:
+`tools/inject_test.sh` (antes `restart_test.sh`):
 
 ```bash
 #!/usr/bin/env bash
-# Usage: restart_test.sh [uart_log.py args...]
-# Loads the current build, asks mon for a capture restart over SWD ~4 s after boot and checks
-# the VCP log across it (12 s from the boot banner): STAT lines must go on with ep=2.
+# Usage: inject_test.sh 'SWD_ACTION' [uart_log.py args...]
+#   SWD_ACTION: tools/swd.py arguments, e.g. 'cmd 1' (capture restart), 'cmd 7' (stall acq 30 ms),
+#   'dma-suspend 0' (suspend the SAI DMA channel: real overrun error).
+# Loads the current build, runs the action ~4 s after boot and checks the VCP log across it
+# (12 s from the boot banner).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ACTION="$1"
+shift
 ENV_SH="${STM32_ENV:-$HOME/2026-2/SSI/tools/stm32-env.sh}"
 # shellcheck disable=SC1090
 if [ -f "$ENV_SH" ]; then source "$ENV_SH" >/dev/null; fi
 "$HERE/run_test.sh" 12 "$@" &
 TEST=$!
 sleep 10 # run_test.sh: 1.5 s drain + ~4 s load, so this is ~4 s after boot
-python3 "$HERE/swd.py" cmd 1 >/dev/null
+# shellcheck disable=SC2086
+python3 "$HERE/swd.py" $ACTION >/dev/null
 wait "$TEST"
 ```
 
@@ -3554,7 +3605,9 @@ wait "$TEST"
    ```
    Resultado: `RESULT: PASS`, con los primeros bytes `AA 55 04 01` y `seq` en little-endian (PROTOCOLO §7.3).
 3. Captura de diagnóstico: `python3 tools/diag.py emg --out out/emg_bench` da `RESULT: PASS` (2000 × 3 muestras, en 4,5 s).
-4. Reinicio: `tools/restart_test.sh --skip 0 --expect ' ep=2 ' --check 'STAT:lost==0 and drop==0 and err==0 and crc==0'` da `RESULT: PASS`, con `gap=1` y `ovf=1` después del reinicio.
+4. Reinicio: `tools/inject_test.sh 'cmd 1' --skip 0 --expect ' ep=2 ' --check 'STAT:lost==0 and drop==0 and err==0 and crc==0'` da `RESULT: PASS`, con `gap=1` y `ovf=1` después del reinicio.
+   - `acq` atrasado (Review Focus 1): `tools/inject_test.sh 'cmd 7' --skip 0 --expect 'lost=[1-9]' --check 'STAT:crc==0 and drop==0 and err==0'` da `RESULT: PASS`. Detenerlo 30 ms da `lost=2`, `gap=1` y `ovf=1`, y el flujo sigue.
+   - Recuperación ante errores (spec §7): `tools/inject_test.sh 'dma-suspend 0' --skip 0 --expect ' ep=2 .* err=[1-9]' --check 'STAT:crc==0 and drop==0'` da `RESULT: PASS`. Lo mismo con `'dma-suspend 1'`: suspender por SWD el DMA del SAI o del ADC provoca un overrun real, y `acq` reinicia la captura.
 5. Build por defecto (ETR) sin puente: `tools/fw.sh build && tools/run_test.sh 5 --expect 'INIT cap=0 step=0 sync=0' --expect 'IDLE ms=' --reject 'ERR '` da `RESULT: PASS`.
 
 - [ ] **Step 11 (pendiente, necesita micrófono y cables)**
