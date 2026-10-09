@@ -692,19 +692,20 @@ Expected: `RESULT: PASS`, con líneas `TICK t=1 ...` a `TICK t=4 ...` y el LED v
 
 ---
 
-### Task 2: Lógica pura con pruebas en el PC (CRC, paquetes, audio, emparejamiento)
+### Task 2: Lógica pura con pruebas en el PC (bloque SPI del protocolo, audio, emparejamiento)
+
+**Revisión del 2026-10-09:** esta tarea arma el bloque de `ssr-testbed/firmware/PROTOCOLO_SPI.md` (Vicente), que es lo que decodifica `auravoxd` en la RPi5 (spec v0.3 §6). Reemplaza al paquete de 1024 B con CRC-32 de la versión anterior del plan.
 
 **Files:**
-- Create: `FSBL/App/Inc/{crc32.h,packet.h,audio_decode.h,acq_logic.h}`, `FSBL/App/Src/{crc32.c,packet.c,audio_decode.c,acq_logic.c}`
-- Create: `ssi_capture/tests/host/{CMakeLists.txt,test_util.h,test_crc32.c,test_packet.c,test_audio_decode.c,test_acq_logic.c}`
-- Create: `tools/ssi_packet.py`
+- Create: `FSBL/App/Inc/{avx_block.h,audio_decode.h,acq_logic.h}`, `FSBL/App/Src/{avx_block.c,audio_decode.c,acq_logic.c}`
+- Create: `ssi_capture/tests/host/{CMakeLists.txt,test_util.h,test_avx_block.c,test_audio_decode.c,test_acq_logic.c}`
+- Create: `tools/avx_block.py`
 
 **Interfaces:**
-- Produce: `uint32_t crc32_update(uint32_t crc, const void *data, size_t len)`;
-  `pkt_header_t`, `void pkt_build_data(uint8_t *buf, pkt_header_t *h, const uint16_t *emg, const int32_t *audio)`, `void pkt_write_header(...)`, `void pkt_finalize(uint8_t *buf, size_t used)`, constantes `PKT_*`;
+- Produce: `uint16_t avx_crc16(const void *data, size_t len)`; `void avx_block_build(uint8_t *blk, uint32_t seq, uint32_t t0_us, uint16_t flags, const uint16_t *emg, const int32_t *audio)`; constantes `AVX_*` (`AVX_BLOCK_SIZE` = 538, `AVX_TUPLES` = 20, `AVX_F_ADC_LOST`, `AVX_F_SAI_ERR`, …);
   `int32_t audio_sign_extend24(uint32_t)`, `void audio_extract_left(const uint32_t *stereo, int32_t *out, size_t frames)`, `uint32_t audio_right_activity(const uint32_t *stereo, size_t frames)`;
-  `acq_step_t acq_select(uint32_t *next, uint32_t emg_done, uint32_t aud_done, uint32_t *lost, uint32_t *k)`;
-  `tools/ssi_packet.py`: `parse(bytes) -> dict` y la orden `check FILE --expect k=v ...`.
+  `acq_step_t acq_select(uint32_t *next, uint32_t emg_done, uint32_t aud_done, uint32_t *lost, uint32_t *k)`, `uint32_t acq_isqrt64(uint64_t v)`;
+  `tools/avx_block.py`: `parse(bytes) -> dict` y la orden `check FILE --expect k=v ...` (claves `tsI`, `adcI_C`, `vozI_K` además de los campos de la cabecera).
 
 - [ ] **Step 1: Infraestructura de pruebas en el host**
 
@@ -759,52 +760,29 @@ add_compile_options(-Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined)
 add_link_options(-fsanitize=address,undefined)
 include_directories(${APP}/Inc)
 
-add_executable(test_crc32 test_crc32.c ${APP}/Src/crc32.c)
-add_executable(test_packet test_packet.c ${APP}/Src/packet.c ${APP}/Src/crc32.c)
+add_executable(test_avx_block test_avx_block.c ${APP}/Src/avx_block.c)
 add_executable(test_audio_decode test_audio_decode.c ${APP}/Src/audio_decode.c)
 add_executable(test_acq_logic test_acq_logic.c ${APP}/Src/acq_logic.c)
 
-add_test(NAME crc32 COMMAND test_crc32)
-add_test(NAME packet COMMAND test_packet ${CMAKE_CURRENT_BINARY_DIR}/pkt_sample.bin)
-add_test(NAME packet_py COMMAND python3 -I ${TOOLS}/ssi_packet.py check
-         ${CMAKE_CURRENT_BINARY_DIR}/pkt_sample.bin --expect type=1 seq=7 emg_index=280
-         audio_index=1120 n_emg=40 n_audio=160 n_ch=3 epoch=2 flags=1 dropped=0
-         payload_len=880 emg0=100 emg119=2480 audio0=-8388608 audio159=8388607)
-set_tests_properties(packet_py PROPERTIES DEPENDS packet)
+add_test(NAME avx_block COMMAND test_avx_block ${CMAKE_CURRENT_BINARY_DIR}/avx_sample.bin)
+add_test(NAME avx_block_py COMMAND python3 -I ${TOOLS}/avx_block.py check
+         ${CMAKE_CURRENT_BINARY_DIR}/avx_sample.bin --expect type=4 version=1 seq=7
+         t0_us=140000 n=20 flags=2 ts0=140000 ts19=149500 adc0_0=100 adc19_2=3994
+         voz0_0=-32768 voz0_1=32767 voz0_2=-1 voz0_3=0 voz0_4=-2 voz19_7=308)
+set_tests_properties(avx_block_py PROPERTIES DEPENDS avx_block)
 add_test(NAME audio_decode COMMAND test_audio_decode)
 add_test(NAME acq_logic COMMAND test_acq_logic)
 ```
 
 - [ ] **Step 2: Escribir las pruebas (fallan: los módulos no existen)**
 
-`tests/host/test_crc32.c`:
-
-```c
-#include <string.h>
-
-#include "crc32.h"
-#include "test_util.h"
-
-int main(void)
-{
-  const char *v = "123456789";
-  CHECK_EQ(crc32_update(0, v, strlen(v)), 0xCBF43926u); /* CRC-32/ISO-HDLC check value */
-  CHECK_EQ(crc32_update(0, "", 0), 0u);
-  uint32_t c = crc32_update(0, v, 4);
-  c = crc32_update(c, v + 4, 5);
-  CHECK_EQ(c, 0xCBF43926u); /* incremental == one-shot */
-  TEST_END();
-}
-```
-
-`tests/host/test_packet.c`:
+`tests/host/test_avx_block.c`:
 
 ```c
 #include <stdio.h>
 #include <string.h>
 
-#include "crc32.h"
-#include "packet.h"
+#include "avx_block.h"
 #include "test_util.h"
 
 static uint32_t rd32(const uint8_t *p)
@@ -813,84 +791,62 @@ static uint32_t rd32(const uint8_t *p)
 }
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
-static pkt_header_t base_header(void)
-{
-  pkt_header_t h = {0};
-  h.flags = PKT_F_AUDIO_VALID;
-  h.seq = 7;
-  h.emg_index = 280;
-  h.audio_index = 1120;
-  h.n_emg = 40;
-  h.n_audio = 160;
-  h.n_ch = 3;
-  h.epoch = 2;
-  return h;
-}
-
-static int sat_flag(uint16_t code)
-{
-  uint8_t pkt[PKT_SIZE];
-  uint16_t emg[120];
-  int32_t audio[160] = {0};
-  for (int i = 0; i < 120; i++) emg[i] = 2048;
-  emg[57] = code;
-  pkt_header_t h = base_header();
-  pkt_build_data(pkt, &h, emg, audio);
-  return (h.flags & PKT_F_EMG_SAT) != 0 && (rd16(pkt + 6) & PKT_F_EMG_SAT) != 0;
-}
-
 int main(int argc, char **argv)
 {
-  uint8_t pkt[PKT_SIZE];
-  uint16_t emg[120];
-  int32_t audio[160];
-  memset(pkt, 0xEE, sizeof pkt);
-  for (int i = 0; i < 120; i++) emg[i] = (uint16_t)(100 + 20 * i);
+  uint8_t blk[AVX_BLOCK_SIZE];
+  uint16_t emg[AVX_TUPLES * AVX_ADC_CH];
+  int32_t audio[AVX_TUPLES * AVX_VOZ_PER_TUPLE];
+
+  /* CRC-16/CCITT-FALSE check value (PROTOCOLO_SPI.md §2) */
+  CHECK_EQ(avx_crc16("123456789", 9), 0x29B1);
+  CHECK_EQ(avx_crc16("", 0), 0xFFFF);
+  CHECK_EQ(AVX_HDR_SIZE + AVX_TUPLES * AVX_TUPLE_SIZE + 2u, AVX_BLOCK_SIZE);
+
+  for (int i = 0; i < 60; i++) emg[i] = (uint16_t)(100 + 66 * i); /* 100 .. 3994 */
   for (int i = 0; i < 160; i++) audio[i] = (i - 80) * 1000;
-  audio[0] = -8388608;
-  audio[159] = 8388607;
+  audio[0] = -8388608; /* full scale: -32768 */
+  audio[1] = 8388607;  /* 32767 */
+  audio[2] = -1;       /* arithmetic shift: -1 */
+  audio[3] = 255;      /* 0 */
+  audio[4] = -257;     /* -2 */
+  memset(blk, 0xEE, sizeof blk);
+  avx_block_build(blk, 7u, 140000u, AVX_F_SAI_ERR, emg, audio);
 
-  pkt_header_t h = base_header();
-  pkt_build_data(pkt, &h, emg, audio);
+  CHECK_EQ(blk[0], 0xAA);
+  CHECK_EQ(blk[1], 0x55);
+  CHECK_EQ(blk[2], 0x04);
+  CHECK_EQ(blk[3], 1);
+  CHECK_EQ(rd32(blk + 4), 7);
+  CHECK_EQ(rd32(blk + 8), 140000);
+  CHECK_EQ(rd16(blk + 12), 20);
+  CHECK_EQ(rd16(blk + 14), AVX_F_SAI_ERR);
+  for (int i = 0; i < 20; i++) {
+    const uint8_t *t = blk + AVX_HDR_SIZE + AVX_TUPLE_SIZE * i;
+    CHECK_EQ(rd32(t), 140000 + 500 * i);
+    for (int c = 0; c < 3; c++) CHECK_EQ(rd16(t + 4 + 2 * c), emg[3 * i + c]);
+    for (int k = 0; k < 8; k++) CHECK_EQ((int16_t)rd16(t + 10 + 2 * k), audio[8 * i + k] / 256 - (audio[8 * i + k] % 256 < 0));
+  }
+  const uint8_t *t0 = blk + AVX_HDR_SIZE;
+  CHECK_EQ((int16_t)rd16(t0 + 10), -32768);
+  CHECK_EQ((int16_t)rd16(t0 + 12), 32767);
+  CHECK_EQ((int16_t)rd16(t0 + 14), -1);
+  CHECK_EQ((int16_t)rd16(t0 + 16), 0);
+  CHECK_EQ((int16_t)rd16(t0 + 18), -2);
+  CHECK_EQ(rd16(blk + AVX_CRC_OFFSET), avx_crc16(blk, AVX_CRC_OFFSET));
 
-  CHECK(memcmp(pkt, "SSI1", 4) == 0);
-  CHECK_EQ(pkt[4], PKT_VERSION);
-  CHECK_EQ(pkt[5], PKT_DATA);
-  CHECK_EQ(rd16(pkt + 6), PKT_F_AUDIO_VALID);
-  CHECK_EQ(rd32(pkt + 8), 7);
-  CHECK_EQ(rd32(pkt + 12), 280);
-  CHECK_EQ(rd32(pkt + 16), 1120);
-  CHECK_EQ(rd16(pkt + 20), 40);
-  CHECK_EQ(rd16(pkt + 22), 160);
-  CHECK_EQ(rd32(pkt + 24), 0);
-  CHECK_EQ(rd16(pkt + 28), 880);
-  CHECK_EQ(pkt[30], 3);
-  CHECK_EQ(pkt[31], 2);
-  CHECK_EQ(rd16(pkt + PKT_EMG_OFFSET), 100);
-  CHECK_EQ(rd16(pkt + PKT_EMG_OFFSET + 2 * 119), 2480);
-  CHECK_EQ((int32_t)rd32(pkt + PKT_AUDIO_OFFSET), -8388608);
-  CHECK_EQ((int32_t)rd32(pkt + PKT_AUDIO_OFFSET + 4 * 159), 8388607);
-  for (int i = 912; i < 1020; i++) CHECK_EQ(pkt[i], 0);
-  CHECK_EQ(rd32(pkt + PKT_CRC_OFFSET), crc32_update(0, pkt, PKT_CRC_OFFSET));
-
-  if (argc > 1) { /* sample for the Python cross-check (CTest packet_py) */
+  if (argc > 1) { /* sample for the Python cross-check (CTest avx_block_py) */
     FILE *f = fopen(argv[1], "wb");
     CHECK(f != NULL);
     if (f) {
-      CHECK_EQ(fwrite(pkt, 1, PKT_SIZE, f), PKT_SIZE);
+      CHECK_EQ(fwrite(blk, 1, AVX_BLOCK_SIZE, f), AVX_BLOCK_SIZE);
       fclose(f);
     }
   }
-
-  CHECK(sat_flag(4095));
-  CHECK(sat_flag(PKT_EMG_SAT_HI));
-  CHECK(sat_flag(PKT_EMG_SAT_LO));
-  CHECK(sat_flag(0));
-  CHECK(!sat_flag(PKT_EMG_SAT_HI - 1));
-  CHECK(!sat_flag(PKT_EMG_SAT_LO + 1));
   TEST_END();
 }
 ```
+
+La voz esperada se calcula como división con piso (`x / 256` menos 1 si el resto es negativo) y no con `>> 8`: así la prueba no repite la fórmula de la implementación.
 
 `tests/host/test_audio_decode.c`:
 
@@ -975,71 +931,83 @@ int main(void)
   CHECK_EQ(step(&next, 2, 1, &lost, &k), ACQ_SKIP);
   CHECK_EQ(lost, 1);
   CHECK_EQ(next, 1);
+
+  /* integer square root for the audio RMS */
+  CHECK_EQ(acq_isqrt64(0u), 0);
+  CHECK_EQ(acq_isqrt64(15u), 3);
+  CHECK_EQ(acq_isqrt64(16u), 4);
+  CHECK_EQ(acq_isqrt64(8388607ull * 8388607ull), 8388607);
+  CHECK_EQ(acq_isqrt64(UINT64_MAX), 4294967295ll);
   TEST_END();
 }
 ```
 
-- [ ] **Step 3: Escribir `tools/ssi_packet.py`**
+- [ ] **Step 3: Escribir `tools/avx_block.py`**
 
 ```python
 #!/usr/bin/env python3
-"""SSI packet format (spec v0.2 §6): parse and validate 1024-byte packets.
+"""SPI block of ssr-testbed/firmware/PROTOCOLO_SPI.md v1: parse and check 538-byte blocks.
 
-Shared by the host tests, the SWD checks and (Plan 2) the RPi5 reader.
+Mirrors what auravoxd (RPi5) decodes; used by the host tests and the SWD checks.
 """
 import argparse
 import struct
 import sys
-import zlib
-from array import array
 
-PKT_SIZE = 1024
-CRC_OFFSET = 1020
-MAGIC = b"SSI1"
-HEADER = struct.Struct("<4sBBHIIIHHIHBB")  # 32 bytes, spec §6
-FIELDS = ("magic", "version", "type", "flags", "seq", "emg_index", "audio_index", "n_emg",
-          "n_audio", "dropped", "payload_len", "n_ch", "epoch")
-EMG_OFFSET = 32
-AUDIO_OFFSET = 272
-TYPES = {1: "DATA", 2: "INFO", 3: "STATUS"}
+BLOCK_SIZE = 538
+CRC_OFFSET = 536
+HEADER = struct.Struct("<BBBBIIHH")  # sync0 sync1 type version seq t0_us n flags: 16 bytes
+TUPLE = struct.Struct("<I3H8h")      # ts_us adc[3] voz[8]: 26 bytes
+N_TUPLES = 20
+FIELDS = ("type", "version", "seq", "t0_us", "n", "flags")
+
+
+def crc16(data):
+    """CRC-16/CCITT-FALSE: poly 0x1021, init 0xFFFF, no reflection, no final XOR."""
+    crc = 0xFFFF
+    for b in data:
+        crc ^= b << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc
 
 
 def parse(buf: bytes) -> dict:
-    if len(buf) != PKT_SIZE:
-        raise ValueError(f"packet size {len(buf)} != {PKT_SIZE}")
-    p = dict(zip(FIELDS, HEADER.unpack_from(buf, 0)))
-    p["magic_ok"] = p["magic"] == MAGIC
-    p["crc_ok"] = zlib.crc32(buf[:CRC_OFFSET]) == struct.unpack_from("<I", buf, CRC_OFFSET)[0]
-    if p["type"] == 1:
-        emg = array("H", buf[EMG_OFFSET:EMG_OFFSET + 2 * p["n_emg"] * p["n_ch"]])
-        audio = array("i", buf[AUDIO_OFFSET:AUDIO_OFFSET + 4 * p["n_audio"]])
-        if sys.byteorder != "little":
-            emg.byteswap()
-            audio.byteswap()
-        p["emg"] = emg
-        p["audio"] = audio
-    return p
+    if len(buf) != BLOCK_SIZE:
+        raise ValueError(f"block size {len(buf)} != {BLOCK_SIZE}")
+    s0, s1, typ, ver, seq, t0, n, flags = HEADER.unpack_from(buf, 0)
+    return {
+        "sync_ok": (s0, s1) == (0xAA, 0x55),
+        "type": typ, "version": ver, "seq": seq, "t0_us": t0, "n": n, "flags": flags,
+        "crc_ok": crc16(buf[:CRC_OFFSET]) == struct.unpack_from("<H", buf, CRC_OFFSET)[0],
+        "tuples": [TUPLE.unpack_from(buf, HEADER.size + TUPLE.size * i) for i in range(N_TUPLES)],
+    }
 
 
 def value(p, key):
-    for name in ("emg", "audio"):
-        if key.startswith(name) and key[len(name):].isdigit():
-            return p[name][int(key[len(name):])]
+    """Header field, or tsI / adcI_C / vozI_K for tuple I."""
+    for prefix, base, width in (("ts", 0, 1), ("adc", 1, 3), ("voz", 4, 8)):
+        if key.startswith(prefix) and key[len(prefix):].replace("_", "").isdigit():
+            parts = key[len(prefix):].split("_")
+            i = int(parts[0])
+            j = int(parts[1]) if len(parts) > 1 else 0
+            if j >= width:
+                raise KeyError(key)
+            return p["tuples"][i][base + j]
     return p[key]
 
 
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("check", help="validate a packet file")
+    c = sub.add_parser("check", help="validate a block file")
     c.add_argument("file")
     c.add_argument("--expect", nargs="*", default=[], help="key=value (int, 0x.. allowed)")
     a = ap.parse_args()
     with open(a.file, "rb") as f:
         p = parse(f.read())
-    ok = p["magic_ok"] and p["crc_ok"]
-    print(" ".join(f"{k}={p[k]}" for k in FIELDS if k != "magic"),
-          f"magic_ok={p['magic_ok']} crc_ok={p['crc_ok']}")
+    ok = p["sync_ok"] and p["crc_ok"]
+    print(" ".join(f"{k}={p[k]}" for k in FIELDS), f"sync_ok={p['sync_ok']} crc_ok={p['crc_ok']}")
     for item in a.expect:
         key, want = item.split("=", 1)
         got = value(p, key)
@@ -1061,123 +1029,61 @@ Run:
 cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6/ssi_capture/tests/host
 cmake -S . -B build -G Ninja >/dev/null && cmake --build build 2>&1 | tail -3
 ```
-Expected: error de compilación (`crc32.h: No such file or directory`).
+Expected: error de compilación (`avx_block.h: No such file or directory`).
 
-- [ ] **Step 5: Implementar `crc32`**
+- [ ] **Step 5: Implementar `avx_block`**
 
-`FSBL/App/Inc/crc32.h`:
+`FSBL/App/Inc/avx_block.h`:
 
 ```c
-#ifndef CRC32_H
-#define CRC32_H
+#ifndef AVX_BLOCK_H
+#define AVX_BLOCK_H
 
 #include <stddef.h>
 #include <stdint.h>
 
-/* CRC-32/ISO-HDLC, identical to zlib.crc32: crc = crc32_update(0, buf, len).
-   Software (not the CRC peripheral): ~100 kB/s needs no hardware and the same code
-   runs in the host tests. */
-uint32_t crc32_update(uint32_t crc, const void *data, size_t len);
+/* SPI block of ssr-testbed/firmware/PROTOCOLO_SPI.md v1 (decoded by auravoxd on the RPi5):
+   538 bytes, little-endian = 16-byte header + 20 tuples of 26 bytes + CRC-16 at 536. */
+#define AVX_SYNC0         0xAAu
+#define AVX_SYNC1         0x55u
+#define AVX_TYPE          0x04u
+#define AVX_VERSION       1u
+#define AVX_TUPLES        20u
+#define AVX_ADC_CH        3u
+#define AVX_VOZ_PER_TUPLE 8u
+#define AVX_HDR_SIZE      16u
+#define AVX_TUPLE_SIZE    26u
+#define AVX_CRC_OFFSET    536u
+#define AVX_BLOCK_SIZE    538u
+#define AVX_TUPLE_US      500u /* 2 kHz EMG */
+
+#define AVX_F_ADC_LOST    0x0001u /* bit0: ADC data lost (overrun or window overwritten) */
+#define AVX_F_SAI_ERR     0x0002u /* bit1: SAI overrun or error */
+
+/* CRC-16/CCITT-FALSE: poly 0x1021, init 0xFFFF, no reflection, no final XOR. */
+uint16_t avx_crc16(const void *data, size_t len);
+
+/* One 10 ms window -> one sealed block. emg: AVX_TUPLES x AVX_ADC_CH codes (CH1..CH3 per
+   tuple); audio: AVX_TUPLES x AVX_VOZ_PER_TUPLE sign-extended 24-bit samples, sent as
+   sample >> 8. Tuple i gets ts_us = t0_us + 500 * i. */
+void avx_block_build(uint8_t *blk, uint32_t seq, uint32_t t0_us, uint16_t flags,
+                     const uint16_t *emg, const int32_t *audio);
 
 #endif
 ```
 
-`FSBL/App/Src/crc32.c`:
+`FSBL/App/Src/avx_block.c`:
 
 ```c
-#include "crc32.h"
+#include "avx_block.h"
 
-/* Reflected polynomial 0xEDB88320, one nibble per step. */
-static const uint32_t k_nibble[16] = {
-    0x00000000u, 0x1DB71064u, 0x3B6E20C8u, 0x26D930ACu, 0x76DC4190u, 0x6B6B51F4u,
-    0x4DB26158u, 0x5005713Cu, 0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu,
-    0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu,
-};
-
-uint32_t crc32_update(uint32_t crc, const void *data, size_t len)
-{
-  const uint8_t *p = (const uint8_t *)data;
-  crc = ~crc;
-  while (len--) {
-    crc ^= *p++;
-    crc = (crc >> 4) ^ k_nibble[crc & 0x0Fu];
-    crc = (crc >> 4) ^ k_nibble[crc & 0x0Fu];
-  }
-  return ~crc;
-}
-```
-
-- [ ] **Step 6: Implementar `packet`**
-
-`FSBL/App/Inc/packet.h`:
-
-```c
-#ifndef PACKET_H
-#define PACKET_H
-
-#include <stddef.h>
-#include <stdint.h>
-
-/* Wire format of spec v0.2 §6 (little-endian, 1024-byte packets). */
-#define PKT_SIZE          1024u
-#define PKT_HDR_SIZE      32u
-#define PKT_CRC_OFFSET    1020u
-#define PKT_MAGIC         0x31495353u /* bytes "SSI1" */
-#define PKT_VERSION       1u
-#define PKT_EMG_OFFSET    32u
-#define PKT_AUDIO_OFFSET  272u
-
-enum { PKT_DATA = 1, PKT_INFO = 2, PKT_STATUS = 3 };
-
-#define PKT_F_AUDIO_VALID 0x0001u
-#define PKT_F_EMG_SAT     0x0002u
-#define PKT_F_DROPPED     0x0004u
-#define PKT_F_DMA_ERR     0x0008u
-
-/* EMG codes at or beyond these limits flag saturation (b1). */
-#define PKT_EMG_SAT_LO    5u
-#define PKT_EMG_SAT_HI    4090u
-
-typedef struct {
-  uint8_t type;
-  uint16_t flags;
-  uint32_t seq;
-  uint32_t emg_index;
-  uint32_t audio_index;
-  uint16_t n_emg;
-  uint16_t n_audio;
-  uint32_t dropped;
-  uint16_t payload_len;
-  uint8_t n_ch;
-  uint8_t epoch;
-} pkt_header_t;
-
-void pkt_write_header(uint8_t *buf, const pkt_header_t *h);
-/* Zero-fills [used, 1020) and stores the CRC-32 of bytes 0..1019 at 1020. */
-void pkt_finalize(uint8_t *buf, size_t used);
-/* DATA: emg = u16[n_emg][n_ch] interleaved, audio = i32[n_audio]. Fills h->type and
-   h->payload_len and ORs PKT_F_EMG_SAT into h->flags when a code is saturated. */
-void pkt_build_data(uint8_t *buf, pkt_header_t *h, const uint16_t *emg, const int32_t *audio);
-
-#endif
-```
-
-`FSBL/App/Src/packet.c`:
-
-```c
-#include "packet.h"
-
-#include <string.h>
-
-#include "crc32.h"
-
-static void put_u16(uint8_t *p, uint16_t v)
+static void put16(uint8_t *p, uint16_t v)
 {
   p[0] = (uint8_t)v;
   p[1] = (uint8_t)(v >> 8);
 }
 
-static void put_u32(uint8_t *p, uint32_t v)
+static void put32(uint8_t *p, uint32_t v)
 {
   p[0] = (uint8_t)v;
   p[1] = (uint8_t)(v >> 8);
@@ -1185,53 +1091,46 @@ static void put_u32(uint8_t *p, uint32_t v)
   p[3] = (uint8_t)(v >> 24);
 }
 
-void pkt_write_header(uint8_t *buf, const pkt_header_t *h)
+uint16_t avx_crc16(const void *data, size_t len)
 {
-  put_u32(buf + 0, PKT_MAGIC);
-  buf[4] = PKT_VERSION;
-  buf[5] = h->type;
-  put_u16(buf + 6, h->flags);
-  put_u32(buf + 8, h->seq);
-  put_u32(buf + 12, h->emg_index);
-  put_u32(buf + 16, h->audio_index);
-  put_u16(buf + 20, h->n_emg);
-  put_u16(buf + 22, h->n_audio);
-  put_u32(buf + 24, h->dropped);
-  put_u16(buf + 28, h->payload_len);
-  buf[30] = h->n_ch;
-  buf[31] = h->epoch;
-}
-
-void pkt_finalize(uint8_t *buf, size_t used)
-{
-  if (used < PKT_CRC_OFFSET) {
-    memset(buf + used, 0, PKT_CRC_OFFSET - used);
-  }
-  put_u32(buf + PKT_CRC_OFFSET, crc32_update(0, buf, PKT_CRC_OFFSET));
-}
-
-void pkt_build_data(uint8_t *buf, pkt_header_t *h, const uint16_t *emg, const int32_t *audio)
-{
-  const size_t n_codes = (size_t)h->n_emg * h->n_ch;
-  uint8_t *p = buf + PKT_EMG_OFFSET;
-  for (size_t i = 0; i < n_codes; i++, p += 2) {
-    if (emg[i] <= PKT_EMG_SAT_LO || emg[i] >= PKT_EMG_SAT_HI) {
-      h->flags |= PKT_F_EMG_SAT;
+  const uint8_t *p = (const uint8_t *)data;
+  uint16_t crc = 0xFFFFu;
+  while (len--) {
+    crc ^= (uint16_t)(*p++ << 8);
+    for (int b = 0; b < 8; b++) {
+      crc = (crc & 0x8000u) ? (uint16_t)((crc << 1) ^ 0x1021u) : (uint16_t)(crc << 1);
     }
-    put_u16(p, emg[i]);
   }
-  p = buf + PKT_AUDIO_OFFSET;
-  for (size_t i = 0; i < h->n_audio; i++, p += 4) {
-    put_u32(p, (uint32_t)audio[i]);
+  return crc;
+}
+
+void avx_block_build(uint8_t *blk, uint32_t seq, uint32_t t0_us, uint16_t flags,
+                     const uint16_t *emg, const int32_t *audio)
+{
+  blk[0] = AVX_SYNC0;
+  blk[1] = AVX_SYNC1;
+  blk[2] = AVX_TYPE;
+  blk[3] = AVX_VERSION;
+  put32(blk + 4, seq);
+  put32(blk + 8, t0_us);
+  put16(blk + 12, AVX_TUPLES);
+  put16(blk + 14, flags);
+  uint8_t *t = blk + AVX_HDR_SIZE;
+  for (uint32_t i = 0; i < AVX_TUPLES; i++, t += AVX_TUPLE_SIZE) {
+    put32(t, t0_us + AVX_TUPLE_US * i);
+    for (uint32_t c = 0; c < AVX_ADC_CH; c++) {
+      put16(t + 4u + 2u * c, emg[AVX_ADC_CH * i + c]);
+    }
+    for (uint32_t k = 0; k < AVX_VOZ_PER_TUPLE; k++) {
+      /* GCC: >> on a negative int is arithmetic, i.e. floor(sample / 256) */
+      put16(t + 10u + 2u * k, (uint16_t)(int16_t)(audio[AVX_VOZ_PER_TUPLE * i + k] >> 8));
+    }
   }
-  h->type = PKT_DATA;
-  h->payload_len = (uint16_t)(n_codes * 2u + (size_t)h->n_audio * 4u);
-  pkt_write_header(buf, h);
-  pkt_finalize(buf, PKT_AUDIO_OFFSET + (size_t)h->n_audio * 4u);
+  put16(blk + AVX_CRC_OFFSET, avx_crc16(blk, AVX_CRC_OFFSET));
 }
 ```
 
-- [ ] **Step 7: Implementar `audio_decode`**
+- [ ] **Step 6: Implementar `audio_decode`**
 
 `FSBL/App/Inc/audio_decode.h`:
 
@@ -1281,7 +1180,7 @@ uint32_t audio_right_activity(const uint32_t *stereo, size_t frames)
 }
 ```
 
-- [ ] **Step 8: Implementar `acq_logic`**
+- [ ] **Step 7: Implementar `acq_logic`**
 
 `FSBL/App/Inc/acq_logic.h`:
 
@@ -1300,6 +1199,9 @@ typedef enum { ACQ_NONE = 0, ACQ_BUILD, ACQ_SKIP } acq_step_t;
    ACQ_NONE:  window *next is not complete in both streams yet. */
 acq_step_t acq_select(uint32_t *next, uint32_t emg_done, uint32_t aud_done, uint32_t *lost,
                       uint32_t *k);
+
+/* floor(sqrt(v)): audio RMS in acq's statistics. */
+uint32_t acq_isqrt64(uint64_t v);
 
 #endif
 ```
@@ -1329,23 +1231,42 @@ acq_step_t acq_select(uint32_t *next, uint32_t emg_done, uint32_t aud_done, uint
   *next = newest + 1u;
   return ACQ_BUILD;
 }
+
+uint32_t acq_isqrt64(uint64_t v)
+{
+  uint64_t r = 0u;
+  uint64_t bit = 1ull << 62;
+  while (bit > v) {
+    bit >>= 2;
+  }
+  while (bit != 0u) {
+    if (v >= r + bit) {
+      v -= r + bit;
+      r = (r >> 1) + bit;
+    } else {
+      r >>= 1;
+    }
+    bit >>= 2;
+  }
+  return (uint32_t)r;
+}
 ```
 
-- [ ] **Step 9: Correr las pruebas del host**
+- [ ] **Step 8: Correr las pruebas del host**
 
 Run:
 ```bash
 cd ~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6/ssi_capture/tests/host
 cmake --build build && ctest --test-dir build --output-on-failure
 ```
-Expected: `100% tests passed, 0 tests failed out of 6`. La prueba `packet_py` imprime `RESULT: PASS` (CRC de Python = CRC del firmware).
+Expected: `100% tests passed, 0 tests failed out of 4`. La prueba `avx_block_py` imprime `RESULT: PASS`: el parser en Python lee el bloque armado en C con el mismo CRC y los mismos offsets.
 
-- [ ] **Step 10: Compilar el firmware con los módulos nuevos**
+- [ ] **Step 9: Compilar el firmware con los módulos nuevos**
 
-Run: `~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6/tools/fw.sh build 2>&1 | tail -4`
-Expected: compila sin warnings en `App/` (los módulos puros aún no se llaman).
+Run: `~/2026-2/SSI/SSI-repo/ssr-testbed/firmware/n6/tools/fw.sh build 2>&1 | grep -E 'warning|error|ROM:|RAM:'`
+Expected: sin warnings en `App/` (los módulos puros aún no se llaman).
 
-- [ ] **Step 11: `MEMORY.md` y commit (si Matías lo autoriza):** `feat: pure packet, CRC, audio and window-pairing logic with host tests`.
+- [ ] **Step 10: `MEMORY.md` y commit:** `feat(n6): PROTOCOLO_SPI block builder, audio decode and window pairing with host tests`.
 
 ---
 
