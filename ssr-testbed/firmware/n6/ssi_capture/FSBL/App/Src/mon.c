@@ -7,7 +7,7 @@
 #include "log.h"
 #include "mic_sai.h"
 #include "nc_mem.h"
-#include "sink.h"
+#include "link.h"
 #include "stm32n6xx_hal.h"
 #include "testpulse.h"
 
@@ -22,6 +22,7 @@ enum {
   CMD_SCK_OFF = 5,   /* P7: SCK pin (A2) to analog; the SAI and its FS keep running */
   CMD_SCK_ON = 6,
   CMD_STALL = 7,     /* block acq for 30 ms once: windows must be counted as lost */
+  CMD_NSS_PULSE = 9, /* bench: CS low ~20 ms then high on the unwired NSS (link drop/abort paths) */
 };
 static volatile uint32_t s_mon_dbg_cmd NC_MEM __attribute__((used));
 
@@ -56,21 +57,25 @@ static void run_cmd(uint32_t cmd)
     case CMD_STALL:
       acq_request_stall();
       break;
+    case CMD_NSS_PULSE:
+      link_debug_nss_pulse();
+      break;
     default:
       break;
   }
   log_printf("CMD n=%lu", (unsigned long)cmd);
 }
 
-static void print_stats(uint32_t t, const acq_stats_t *a, const sink_stats_t *k)
+static void print_stats(uint32_t t, const acq_stats_t *a, const link_stats_t *k)
 {
   log_printf("STAT t=%lu ms=%lu ep=%lu win=%lu emgblk=%lu audblk=%lu lost=%lu drop=%lu err=%lu "
-             "rx=%lu crc=%lu gap=%lu ovf=%lu",
+             "arm=%lu sent=%lu repl=%lu ldrop=%lu abrt=%lu lerr=%lu",
              (unsigned long)t, (unsigned long)HAL_GetTick(), (unsigned long)a->epoch,
              (unsigned long)a->windows, (unsigned long)a->emg_blocks,
              (unsigned long)a->aud_blocks, (unsigned long)a->lost, (unsigned long)a->drop,
-             (unsigned long)a->err, (unsigned long)k->rx, (unsigned long)k->crc_err,
-             (unsigned long)k->gap, (unsigned long)k->ovf);
+             (unsigned long)a->err, (unsigned long)k->armed, (unsigned long)k->sent,
+             (unsigned long)k->replaced, (unsigned long)k->dropped, (unsigned long)k->aborted,
+             (unsigned long)k->errors);
   log_printf("SIG t=%lu peak=%lu rms=%lu rslot=%lu e0lo=%u e0hi=%u e1lo=%u e1hi=%u e2lo=%u e2hi=%u",
              (unsigned long)t, (unsigned long)a->peak, (unsigned long)a->rms,
              (unsigned long)a->rslot, (unsigned)a->emg_min[0], (unsigned)a->emg_max[0],
@@ -85,8 +90,8 @@ void mon_thread_entry(ULONG arg)
     ULONG raw[16];
   } a;
   union {
-    sink_stats_t s;
-    ULONG raw[4];
+    link_stats_t s;
+    ULONG raw[8];
   } k;
   uint32_t t = 0u;
   uint32_t idle = 0u;
@@ -95,12 +100,12 @@ void mon_thread_entry(ULONG arg)
   s_mon_dbg_cmd = CMD_NONE;
   for (;;) {
     if (tx_queue_receive(s_cfg.acq_stats, a.raw, TX_TIMER_TICKS_PER_SECOND / 10u) == TX_SUCCESS) {
-      while (tx_queue_receive(s_cfg.sink_stats, k.raw, TX_NO_WAIT) == TX_SUCCESS) {
+      while (tx_queue_receive(s_cfg.link_stats, k.raw, TX_NO_WAIT) == TX_SUCCESS) {
         /* keep the newest */
       }
       print_stats(++t, &a.s, &k.s);
       led_toggle(LED_GREEN); /* blinking green = capturing (spec §5) */
-      led_set(LED_RED, (a.s.err != 0u) || (k.s.crc_err != 0u));
+      led_set(LED_RED, (a.s.err != 0u) || (k.s.errors != 0u));
       idle = 0u;
     } else if (++idle == 20u) { /* 2 s without data */
       log_printf("IDLE ms=%lu", (unsigned long)HAL_GetTick());

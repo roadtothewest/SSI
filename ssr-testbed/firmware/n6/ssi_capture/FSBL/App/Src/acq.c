@@ -165,6 +165,9 @@ static void build_window(uint32_t k)
     s_st.drop++;
     return;
   }
+  if (s_cfg.out_flags != TX_NULL) {
+    (void)tx_event_flags_set(s_cfg.out_flags, s_cfg.out_flag, TX_OR);
+  }
   s_st.windows++;
 }
 

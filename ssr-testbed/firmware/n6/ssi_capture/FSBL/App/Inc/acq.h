@@ -31,6 +31,8 @@ typedef struct {
   TX_BLOCK_POOL *pool;         /* PKT_SIZE blocks */
   TX_QUEUE *out;               /* packet pointers, TX_1_ULONG */
   TX_QUEUE *stats;             /* acq_stats_t every 100 windows, TX_16_ULONG */
+  TX_EVENT_FLAGS_GROUP *out_flags; /* consumer to wake after each queued block (or TX_NULL) */
+  ULONG out_flag;
 } acq_cfg_t;
 
 void acq_configure(const acq_cfg_t *cfg); /* before the thread runs */

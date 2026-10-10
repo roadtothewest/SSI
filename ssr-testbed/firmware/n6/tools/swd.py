@@ -6,7 +6,7 @@ STM32_Programmer_CLI in HOTPLUG mode (no halt, no reset) plus the ELF symbol tab
 
   swd.py sym NAME        address and size of a symbol
   swd.py cmd N           write the mon debug mailbox and wait until mon has run it
-  swd.py sample OUT.bin  last SPI block sampled by sink, CRC-checked
+  swd.py sample OUT.bin  a recent SPI block (link keeps every 100th armed), CRC-checked
   swd.py dma-suspend N   suspend GPDMA1 channel N (fault injection: 0 = SAI, 1 = ADC)
 """
 import argparse
@@ -73,7 +73,7 @@ def cmd(n, timeout=6.0):
 
 
 def sample(retries=3):
-    addr, _ = symbol("s_sink_sample")
+    addr, _ = symbol("s_link_sample")
     for _ in range(retries):
         buf = read(addr, avx_block.BLOCK_SIZE + 2)[: avx_block.BLOCK_SIZE]  # word-sized read
         p = avx_block.parse(buf)
