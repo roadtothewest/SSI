@@ -207,6 +207,9 @@ static void run(uint32_t a, uint8_t *blk)
   if ((a & LINK_A_RELEASE_NEW) != 0u) {
     (void)tx_block_release(blk);
   }
+  if ((a & LINK_A_HOLD_NEW) != 0u) {
+    s_cur = blk; /* armed later, when CS rises */
+  }
   if ((a & LINK_A_ARM_NEW) != 0u) {
     s_cur = blk;
     arm(s_cur);

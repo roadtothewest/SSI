@@ -50,6 +50,25 @@ int main(void)
   CHECK_EQ(r.sent, 100);
   CHECK_EQ(r.replaced + r.dropped + r.aborted, 0);
 
+  /* polling Pi without DRDY (PROTOCOLO §4, -drdy -1): a block that arrives while the Pi clocks
+     zeros out of an idle link is held, never armed mid-transfer, and armed when CS rises */
+  link_logic_t h = {0};
+  CHECK_EQ(link_on_block(&h, 1), LINK_A_HOLD_NEW);
+  CHECK_EQ(h.state, LINK_HELD);
+  CHECK_EQ(h.armed, 0);
+  CHECK_EQ(link_on_tx_done(&h), 0);
+  CHECK_EQ(link_on_block(&h, 1), LINK_A_RELEASE_CUR | LINK_A_HOLD_NEW); /* newer one held instead */
+  CHECK_EQ(h.dropped, 1);
+  CHECK_EQ(link_on_nss_rise(&h, 0), LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
+  CHECK_EQ(h.state, LINK_ARMED);
+  CHECK_EQ(h.armed, 1);
+  /* a block found held with CS already high (its CS event not processed yet): arm the newest */
+  link_logic_t g = {0};
+  link_on_block(&g, 1);
+  CHECK_EQ(link_on_block(&g, 0), LINK_A_RELEASE_CUR | LINK_A_ARM_NEW | LINK_A_DRDY_HIGH);
+  CHECK_EQ(g.state, LINK_ARMED);
+  CHECK_EQ(g.dropped, 1);
+
   /* no Pi at all: every block replaces the previous one, the pool never fills */
   link_logic_t n = {0};
   for (int i = 0; i < 100; i++) {

@@ -692,3 +692,15 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
   - build de banco;
   - estado y pendientes.
 - [x] **Step 2:** spec §5 actualizada (`link_logic`, `link`, watchdog en `mon`, LED de IDLE) y commit `docs(n6): README for the capture firmware and protocol notes for the RPi side`.
+
+---
+
+### Task 11: Bloque retenido con el enlace libre y CS bajo (hecha; hallazgo de la autorrevisión)
+
+**Motivo:** PROTOCOLO §4 define un modo de puesta en marcha sin DRDY (`auravoxd -drdy -1`), en el que la Pi lee cada 10 ms. Si una de esas lecturas encuentra el enlace libre (MISO en ceros) y en ese momento llega un bloque, armarlo a mitad de la transferencia corrompe esa lectura: ≈ 11 % de las lecturas a 4 MHz.
+
+**Cambio:** `link_logic` gana el estado `LINK_HELD` y la acción `LINK_A_HOLD_NEW`. Con el enlace libre y CS bajo, el bloque se retiene sin armarlo. Al subir CS se arma (`ARM_CUR` + `DRDY_HIGH`). Un bloque más nuevo reemplaza al retenido, que se cuenta en `dropped`. Si CS ya está alto cuando llega el siguiente bloque, se arma el más nuevo.
+
+- [x] **Step 1 (RED):** casos nuevos en `test_link_logic.c`. No compilaba: `LINK_A_HOLD_NEW` no existía.
+- [x] **Step 2 (GREEN):** `link_logic` + `link.c` (`HOLD_NEW`: `s_cur = blk` sin armar). Host 5/5; `inject_test.sh 'cmd 9'` sigue en PASS.
+- [ ] **Pendiente con la RPi5:** `auravoxd -src spi -drdy -1` durante 1 min sin errores de CRC.

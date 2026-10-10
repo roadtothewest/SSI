@@ -5,7 +5,7 @@
 
 /* SPI-slave link state machine of ssr-testbed/firmware/PROTOCOLO_SPI.md §4, without HAL.
    Each event returns a set of actions; the driver runs them in this order:
-   DRDY_LOW, ABORT, RELEASE_CUR, RELEASE_NEW, ARM_NEW or ARM_CUR, DRDY_HIGH
+   DRDY_LOW, ABORT, RELEASE_CUR, RELEASE_NEW, HOLD_NEW, ARM_NEW or ARM_CUR, DRDY_HIGH
    (keeping DRDY low >= 10 us when both DRDY_LOW and DRDY_HIGH are set). */
 #define LINK_A_DRDY_LOW    0x01u /* DRDY down */
 #define LINK_A_ABORT       0x02u /* stop the armed SPI/DMA transfer (CS is high) */
@@ -14,15 +14,18 @@
 #define LINK_A_ARM_NEW     0x10u /* arm the DMA with the offered block, which becomes current */
 #define LINK_A_ARM_CUR     0x20u /* re-arm the current block from byte 0 */
 #define LINK_A_DRDY_HIGH   0x40u /* DRDY up: the Pi reads on this rising edge */
+#define LINK_A_HOLD_NEW    0x80u /* keep the offered block as current without arming it */
 
-typedef enum { LINK_IDLE = 0, LINK_ARMED } link_state_t;
+/* HELD: a block is waiting for CS to rise, because the Pi was clocking an idle link (polling
+   without DRDY, PROTOCOLO §4): arming it mid-transfer would corrupt that read. */
+typedef enum { LINK_IDLE = 0, LINK_ARMED, LINK_HELD } link_state_t;
 
 typedef struct {
   link_state_t state;
   uint32_t armed;    /* blocks offered to the Pi (DRDY rising edges) */
   uint32_t sent;     /* complete 538-byte transfers */
   uint32_t replaced; /* armed blocks replaced by a newer one before the Pi read them */
-  uint32_t dropped;  /* newer blocks discarded because a transfer was in progress */
+  uint32_t dropped;  /* blocks discarded without being offered (transfer in progress) */
   uint32_t aborted;  /* transfers cut short (CS rose early) and re-armed */
 } link_logic_t;
 
