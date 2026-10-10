@@ -24,5 +24,6 @@ add_test(NAME rpi_spi_check COMMAND python3 -I ${TOOLS}/test_rpi_spi_check.py
          ${CMAKE_CURRENT_BINARY_DIR}/avx_sample.bin)
 set_tests_properties(rpi_spi_check PROPERTIES DEPENDS avx_block)
 add_test(NAME audio_decode COMMAND test_audio_decode)
+add_test(NAME diag_py COMMAND python3 -I ${TOOLS}/test_diag.py)
 add_test(NAME acq_logic COMMAND test_acq_logic)
 add_test(NAME link_logic COMMAND test_link_logic)

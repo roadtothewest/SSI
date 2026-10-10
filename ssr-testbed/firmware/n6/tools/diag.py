@@ -24,6 +24,7 @@ import swd  # noqa: E402
 
 FS_AUDIO, FS_EMG, CH = 16000, 2000, 3
 EMG_DIV = FS_AUDIO // FS_EMG  # 8 audio frames per EMG sample
+AUDIO_FMIN = 50.0  # Hz: the INMP441 passband starts at 60 Hz; below it, drift outweighs the tone
 SIZE, OFF_RAW, OFF_AUDIO, OFF_EMG = 77312, 32, 1312, 65312
 CMD_RESTART, CMD_DIAG, CMD_PULSE_ON, CMD_PULSE_OFF, CMD_SCK_OFF, CMD_SCK_ON = 1, 2, 3, 4, 5, 6
 SSI_SYNC_C = 0       # keep equal to ssi_config.h
@@ -81,14 +82,15 @@ def fft(x):
     return a
 
 
-def dominant(x, fs):
-    """Strongest tone in Hz: Hann window, FFT, parabolic interpolation on the log magnitude."""
+def dominant(x, fs, fmin=0.0):
+    """Strongest tone in Hz at or above fmin: Hann window, FFT, parabolic interpolation on the log
+    magnitude."""
     m = len(x)
     n = 1 << (m - 1).bit_length()
     mean = sum(x) / m
     win = [(v - mean) * (0.5 - 0.5 * math.cos(2 * math.pi * i / (m - 1))) for i, v in enumerate(x)]
     mag = [abs(c) for c in fft(win + [0.0] * (n - m))[: n // 2]]
-    k = max(range(2, n // 2 - 1), key=mag.__getitem__)
+    k = max(range(max(2, math.ceil(fmin * n / fs)), n // 2 - 1), key=mag.__getitem__)
     a, b, c = (math.log(mag[k + d] + 1e-12) for d in (-1, 0, 1))
     den = a - 2 * b + c
     return (k + (0.5 * (a - c) / den if den else 0.0)) * fs / n
@@ -111,7 +113,7 @@ def write_wav(path, audio):
 def cmd_audio(a):
     d = capture()
     au = d["audio"]
-    f0 = dominant(au, FS_AUDIO)
+    f0 = dominant(au, FS_AUDIO, AUDIO_FMIN)
     rms = math.sqrt(sum(s * s for s in au) / len(au))
     peak = max(abs(s) for s in au)
     print(f"AUDIO epoch={d['epoch']} first={d['first']} f0={f0:.2f} rms={rms:.0f} peak={peak} "
