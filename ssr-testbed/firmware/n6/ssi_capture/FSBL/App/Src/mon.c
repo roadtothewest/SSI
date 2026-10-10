@@ -142,6 +142,7 @@ void mon_thread_entry(ULONG arg)
       idle = 0u;
     } else if (++idle == 20u) { /* 2 s without data */
       log_printf("IDLE ms=%lu", (unsigned long)HAL_GetTick());
+      led_set(LED_GREEN, 1); /* steady green = idle: no data, e.g. no D6->D2 bridge (spec §5) */
       idle = 0u;
     }
     watchdog();

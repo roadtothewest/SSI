@@ -636,15 +636,46 @@ En `app_early_init`:
 
 ---
 
-### Task 9: Grabación en la flash externa (`tools/flash.sh`)
+### Task 9: Grabación en la flash externa (`tools/flash.sh`) y LED de IDLE (hecha, falta el arranque)
 
-**Files:** Create `tools/flash.sh`.
+**Files:** Create `tools/flash.sh`; Modify `FSBL/App/Src/mon.c` (verde fijo en IDLE, spec §5: sin esto, el build ETR sin puente arranca desde flash sin ninguna señal visible).
 
-**Diseño:** compilar el build por defecto (ETR) → `objcopy -O binary` → `STM32_SigningTool_CLI -s -bin X.bin -nk -of 0x80000000 -t fsbl -o X-trusted.bin -hv 2.3 -align` → `STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d X-trusted.bin 0x70000000 -v`. Son los comandos verificados con `n6_smoke` el 2026-10-08 (ver `MEMORY.md`).
+- [x] **Step 1: Prueba del LED en IDLE (falló: GPIOO ODR = 0)** — build ETR sin puente, `run_test.sh 4 --expect 'IDLE ms='`, y luego tres lecturas de GPIOO ODR (`python3 tools/swd.py read32 0x56023814`) separadas 0,4 s: el bit 1 tiene que estar siempre en 1.
+- [x] **Step 2:** en la rama `IDLE` de `mon`: `led_set(LED_GREEN, 1); /* steady green = idle: no data, e.g. no D6->D2 bridge (spec §5) */`. La prueba pasa (ODR = 0x2 en las tres lecturas).
+- [x] **Step 3: `tools/flash.sh`**
 
-- [ ] **Step 1:** `tools/flash.sh` (con `set -e`; usa el loader de `stm32-env.sh`).
-- [ ] **Step 2:** grabar y verificar. Expected: `Download verified successfully`.
-- [ ] **Step 3 (pendiente: Matías mueve los switches):** BOOT0 = L, BOOT1 = L y reset. Expected: el LED verde parpadea a 0,5 Hz y el VCP muestra el banner y `STAT` (o `IDLE` sin el puente D6 → D2). Para volver a desarrollar: BOOT1 = H y reset.
+```bash
+#!/usr/bin/env bash
+# Builds the firmware (default: ETR sync, the demo build), signs it as an FSBL and writes it to
+# the DK's external flash at 0x70000000, then verifies it. The DK must be in development mode
+# (BOOT1 = H). To boot from flash: BOOT0 = L, BOOT1 = L, reset; back to development: BOOT1 = H.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ENV_SH="${STM32_ENV:-$HOME/2026-2/SSI/tools/stm32-env.sh}"
+# shellcheck disable=SC1090
+if [ -f "$ENV_SH" ]; then source "$ENV_SH" >/dev/null; fi
+: "${STM32_DK_EXTLOADER:?set STM32_DK_EXTLOADER to MX66UW1G45G_STM32N6570-DK.stldr}"
+
+SSI_SYNC_LPTIM="${SSI_SYNC_LPTIM:-OFF}" "$HERE/fw.sh" build >/dev/null
+ELF="$HERE/../ssi_capture/FSBL/build/Debug/ssi_capture_FSBL.elf"
+OUT="$HERE/../out/flash"
+mkdir -p "$OUT"
+BIN="$OUT/ssi_capture_FSBL.bin"
+SIGNED="$OUT/ssi_capture_FSBL-trusted.bin"
+arm-none-eabi-objcopy -O binary "$ELF" "$BIN"
+# Same commands as the n6_smoke flash test (2026-10-08); -align is required with CubeProgrammer >= 2.21.
+STM32_SigningTool_CLI -s -bin "$BIN" -nk -of 0x80000000 -t fsbl -o "$SIGNED" -hv 2.3 -align \
+  -dump "$SIGNED" >/dev/null
+echo "image: $(stat -c %s "$BIN") B, signed: $(stat -c %s "$SIGNED") B"
+STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED" 0x70000000 -v \
+  | sed 's/\x1b\[[0-9;]*m//g' | grep -E 'Erasing|Download|verified|Error|error' || true
+```
+
+- [x] **Step 4 (2026-10-09):** `tools/flash.sh` → `image: 115332 B, signed: 116384 B`, `Erasing external memory sectors [0 1]`, `Download verified successfully`.
+- [ ] **Step 5 (pendiente: Matías mueve los switches):** BOOT0 = L, BOOT1 = L y reset.
+  - Sin cables: LED verde fijo y, por el VCP, `SSI capture fw 0.1.0 …`, `INIT … sync=0`, `INIT link=0` e `IDLE …` cada 2 s.
+  - Con el puente D6 → D2: verde parpadeando y `STAT` cada segundo.
+  - Para volver a desarrollar: BOOT1 = H y reset.
 
 ---
 
