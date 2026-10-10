@@ -677,7 +677,7 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
   - Con el puente D6 → D2: verde parpadeando y `STAT` cada segundo.
   - Para volver a desarrollar: BOOT1 = H y reset.
   - Resultado: arranca solo. Tras un reset por NRST (`-hardRst` del ST-LINK): `RST rsr=4194304` (solo `PINRSTF`, bit 22), `iwdg=0`, `INIT … sync=0 hse=1 sai_ck=49152000 adc_ck=50000000`, `INIT link=0`, `WDG on=1` e `IDLE` cada 2 s. Por SWD: el código en `0x34180400` es idéntico a `out/flash/ssi_capture_FSBL.bin` (115 460 B), `acq` y `link` dan vueltas, GPIOO ODR = 0x2 (verde fijo) y GPIOG ODR = 0x400 (rojo apagado).
-  - El SWD en `HOTPLUG` sigue disponible al arrancar desde flash (el chip no está provisionado y el FSBL no cierra el debug), así que conectar no distingue el modo de arranque.
+  - SWD al arrancar desde flash: tras ese reset por pin (viniendo del modo desarrollo) siguió abierto, pero tras encender en frío queda cerrado (`No STM32 target found`). Para usar `swd.py` o `diag.py`: BOOT1 = H. Si hiciera falta SWD en la demo, el FSBL puede abrirlo con `HAL_BSEC_ConfigDebug` (como `OEMuROT_Boot` de ST).
 
 ---
 
