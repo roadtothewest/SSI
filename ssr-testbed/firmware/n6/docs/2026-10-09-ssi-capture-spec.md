@@ -87,19 +87,22 @@ Proyecto único **FSBL + ThreadX (API nativa)** generado con CubeMX (CMake/GCC) 
 | `capture` | Orden de arranque y parada que fija *c* |
 | `avx_block` | Formato del bloque de PROTOCOLO_SPI.md: tuplas, CRC-16, sellado |
 | `acq` | Hilo que empareja ventanas de 10 ms y arma los bloques |
-| `spi_link` | SPI5 esclavo + DMA TX, DRDY, re-armado según PROTOCOLO §4 (Plan 2) |
-| `app` | Creación de hilos, LED, watchdog |
-| `mon`, `diag` | Depuración: estadísticas por el VCP, captura de 1 s por SWD |
+| `link_logic` | Máquina de estados del enlace (PROTOCOLO §4), lógica pura probada en el PC |
+| `link` | SPI5 esclavo solo TX + DMA, NSS por hardware con flanco por EXTI3, DRDY en PH5 |
+| `app` | Objetos de ThreadX e hilos; causa del reset al arrancar |
+| `mon` | Estadísticas por el VCP, LED, watchdog (IWDG ~1 s, refrescado solo si `acq` y `link` siguen vivos) y comandos de depuración por SWD |
+| `diag`, `testpulse` | Depuración: captura de 1 s por SWD; pulsos en D7 para P4 |
 
 | Hilo | Prioridad | Función |
 |---|---|---|
 | `acq` | Alta | Espera *event flags* de los DMA, decodifica el audio y arma el bloque de cada ventana de 10 ms (EMG del bloque *n* + audio del bloque *n*) |
-| `link` | Media | Toma bloques de la cola, arma el DMA del SPI y maneja DRDY |
-| `mon` | Baja | Estadísticas, LED y depuración |
+| `link` | Media (5) | Toma bloques de la cola, arma el DMA del SPI y maneja DRDY |
+| `testpulse` | Baja (9) | Solo en la prueba P4 |
+| `mon` | Baja (10) | Estadísticas, LED, watchdog y depuración |
 
 - **ISR mínimas:** solo contadores y `tx_event_flags_set`. Sin lógica dentro de los callbacks de la HAL.
 - **Memoria:** buffers DMA y bloques en una región **no cacheable** (MPU), alineados a 32 B. *Block pool* de 16 bloques.
-- **LED:** verde parpadeando = capturando; rojo = error.
+- **LED:** verde parpadeando = capturando; verde fijo = sin datos (IDLE); rojo = error.
 
 ## 6. Protocolo SPI
 

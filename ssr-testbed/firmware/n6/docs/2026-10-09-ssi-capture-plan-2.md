@@ -679,11 +679,11 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
 
 ---
 
-### Task 10: Documentación para Vicente y estado
+### Task 10: Documentación para Vicente y estado (hecha)
 
 **Files:** Create `README.md` (en `ssr-testbed/firmware/n6/`); Modify `docs/2026-10-09-ssi-capture-spec.md` (§5: `link` en lugar de `sink`, estado), `~/2026-2/SSI/.claude/MEMORY.md`.
 
-- [ ] **Step 1:** el README cubre:
+- [x] **Step 1:** el README cubre:
   - qué hace el firmware;
   - pines (diferencia A1/A4/A5 con PROTOCOLO_SPI.md);
   - convenciones de `seq`, `ts` y `flags`;
@@ -691,4 +691,4 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
   - cómo compilar, cargar, probar y grabar;
   - build de banco;
   - estado y pendientes.
-- [ ] **Step 2:** commit `docs(n6): README for the capture firmware and protocol notes for the RPi side`.
+- [x] **Step 2:** spec §5 actualizada (`link_logic`, `link`, watchdog en `mon`, LED de IDLE) y commit `docs(n6): README for the capture firmware and protocol notes for the RPi side`.
