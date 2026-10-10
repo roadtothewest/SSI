@@ -35,6 +35,7 @@ static uint8_t s_epoch;
 static acq_stats_t s_st;
 static uint64_t s_sq;   /* audio sum of squares in the stats period */
 static uint32_t s_nwin; /* windows in the stats period */
+static volatile uint32_t s_loops;
 
 void acq_configure(const acq_cfg_t *cfg)
 {
@@ -54,6 +55,16 @@ void acq_request_diag(void)
 void acq_request_stall(void)
 {
   (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_STALL, TX_OR);
+}
+
+void acq_request_hang(void)
+{
+  (void)tx_event_flags_set(s_cfg.flags, ACQ_EVT_HANG, TX_OR);
+}
+
+uint32_t acq_loops(void)
+{
+  return s_loops;
 }
 
 static void period_reset(void)
@@ -198,7 +209,7 @@ void acq_thread_entry(ULONG arg)
     ULONG got = 0u;
     (void)tx_event_flags_get(s_cfg.flags,
                              CAP_EVT_EMG | CAP_EVT_AUD | CAP_EVT_ERR | ACQ_EVT_RESTART | ACQ_EVT_DIAG |
-                                 ACQ_EVT_STALL,
+                                 ACQ_EVT_STALL | ACQ_EVT_HANG,
                              TX_OR_CLEAR, &got, TX_TIMER_TICKS_PER_SECOND / 10u);
     /* A driver error stops both streams and restarts them together: they share the FS (spec §7). */
     if (check_errors() != 0 || (got & ACQ_EVT_RESTART) != 0u) {
@@ -207,8 +218,12 @@ void acq_thread_entry(ULONG arg)
     if ((got & ACQ_EVT_DIAG) != 0u) {
       diag_arm(DIAG_MIN_WINDOW);
     }
+    s_loops++;
     if ((got & ACQ_EVT_STALL) != 0u) {
       tx_thread_sleep(3u); /* 30 ms > 2 windows: the DMA overwrites at least one unread half */
+    }
+    if ((got & ACQ_EVT_HANG) != 0u) {
+      tx_thread_sleep(2u * TX_TIMER_TICKS_PER_SECOND); /* longer than the 1 s IWDG timeout */
     }
     for (;;) {
       uint32_t k = 0u;

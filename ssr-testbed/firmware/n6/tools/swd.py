@@ -8,6 +8,7 @@ STM32_Programmer_CLI in HOTPLUG mode (no halt, no reset) plus the ELF symbol tab
   swd.py cmd N           write the mon debug mailbox and wait until mon has run it
   swd.py sample OUT.bin  a recent SPI block (link keeps every 100th armed), CRC-checked
   swd.py dma-suspend N   suspend GPDMA1 channel N (fault injection: 0 = SAI, 1 = ADC)
+  swd.py read32 ADDR     one 32-bit word (hex or decimal address)
 """
 import argparse
 import os
@@ -104,6 +105,7 @@ def main():
     sub.add_parser("cmd").add_argument("n", type=int)
     sub.add_parser("sample").add_argument("out")
     sub.add_parser("dma-suspend").add_argument("channel", type=int)
+    sub.add_parser("read32").add_argument("addr", type=lambda s: int(s, 0))
     a = ap.parse_args()
     if a.op == "sym":
         addr, size = symbol(a.name)
@@ -111,6 +113,8 @@ def main():
     elif a.op == "cmd":
         cmd(a.n)
         print(f"CMD {a.n} OK")
+    elif a.op == "read32":
+        print(f"{a.addr:#010x} = {read32(a.addr):#010x}")
     elif a.op == "dma-suspend":
         dma_suspend(a.channel)
         print(f"GPDMA1 channel {a.channel} suspended")

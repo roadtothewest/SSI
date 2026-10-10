@@ -586,16 +586,53 @@ void link_thread_entry(ULONG arg)
 
 ---
 
-### Task 8: Watchdog (IWDG) supervisado por `mon`
+### Task 8: Watchdog (IWDG) supervisado por `mon` (hecha)
 
-**Files:** Modify `FSBL/CMakeLists.txt` (`HAL_IWDG_MODULE_ENABLED`, `stm32n6xx_hal_iwdg.c`), `acq.h`/`acq.c` (`acq_loops()`, `ACQ_EVT_HANG`), `mon.c` (IWDG, `CMD_HANG = 8`).
+**Files:** Modify `FSBL/CMakeLists.txt` (`HAL_IWDG_MODULE_ENABLED`, `stm32n6xx_hal_iwdg.c`), `acq.h`/`acq.c` (`acq_loops()`, `ACQ_EVT_HANG`, `acq_request_hang()`), `mon.c` (IWDG, `CMD_HANG = 8`), `app.c` (línea `RST rsr=… iwdg=…` al arrancar; después limpia los flags con `RMVF`), `tools/swd.py` (`read32`).
 
 **Diseño:** IWDG con LSI ≈ 32 kHz, prescaler 64 y recarga 500 → ≈ 1 s. `mon` lo arranca cuando `acq_loops()` y `link_loops()` avanzaron al menos una vez. Después lo refresca, como mucho cada 100 ms, solo si los dos contadores avanzaron desde la última vez. Los dos hilos dan una vuelta al menos cada 100 ms (timeout de sus event flags). Si `mon` se cuelga, tampoco refresca. En modo desarrollo, un reset deja el firmware en la ROM (no se recarga solo); la prueba lo detecta por `RCC->RSR.IWDGRSTF` (0x56028034, bit 26).
 
-- [ ] **Step 1: Prueba de reinicio (falla: no hay watchdog)**: `tools/inject_test.sh 'cmd 8' --skip 0 --expect 'CMD n=8' --reject 'STAT t=8 '` y después `python3 tools/swd.py read32 0x56028034` debe tener el bit 26 en 1.
-- [ ] **Step 2:** implementar `acq_loops()` (contador en el bucle de `acq`), `ACQ_EVT_HANG` (`acq` se bloquea 2 s) y el IWDG en `mon`.
-- [ ] **Step 3:** la prueba del Step 1 pasa, y la de 65 s del Plan 1 sigue pasando (sin reinicios: `--expect 'STAT t=60 '`).
-- [ ] **Step 4:** `MEMORY.md` y commit `feat(n6): IWDG supervised by mon (acq and link liveness)`.
+- [x] **Step 1: Prueba de reinicio (falló: `FORBIDDEN: STAT t=8`)**: `tools/inject_test.sh 'cmd 8' --skip 0 --expect 'CMD n=8' --expect 'WDG on=1' --reject 'STAT t=8 '` y después `python3 tools/swd.py read32 0x56028034` debe tener el bit 26 en 1.
+- [x] **Step 2:** `acq_loops()` cuenta las vueltas del bucle de `acq`; `ACQ_EVT_HANG` lo bloquea 2 s. En `mon`, `watchdog()` corre en cada vuelta, como mucho cada 100 ms:
+
+```c
+static void watchdog(void)
+{
+  const uint32_t a = acq_loops();
+  const uint32_t l = link_loops();
+  if (a == s_acq_seen || l == s_link_seen) {
+    return; /* a thread has not looped since the last check */
+  }
+  s_acq_seen = a;
+  s_link_seen = l;
+  if (s_wdg_on) {
+    (void)HAL_IWDG_Refresh(&s_iwdg);
+    return;
+  }
+  s_iwdg.Instance = IWDG;
+  s_iwdg.Init.Prescaler = IWDG_PRESCALER_64;
+  s_iwdg.Init.Reload = 500u;
+  s_iwdg.Init.Window = IWDG_WINDOW_DISABLE;
+  s_iwdg.Init.EWI = 0u;
+  s_wdg_on = (HAL_IWDG_Init(&s_iwdg) == HAL_OK);
+  log_printf("WDG on=%d", s_wdg_on);
+}
+```
+
+En `app_early_init`:
+
+```c
+  /* Reset cause of this boot (RM0486 RCC_RSR), then clear the flags for the next one. */
+  const uint32_t rsr = RCC->RSR;
+  log_printf("RST rsr=%lu iwdg=%lu", (unsigned long)rsr, (unsigned long)((rsr & RCC_RSR_IWDGRSTF) != 0u));
+  RCC->RSR = RCC_RSR_RMVF;
+```
+
+- [x] **Step 3 (medido el 2026-10-09):**
+  - El Step 1 da `RESULT: PASS`: después de `CMD n=8` no aparece ninguna `STAT` más, y `RSR` = `0x04400000` (bit 26 = IWDGRSTF).
+  - 65 s con el watchdog: 64 `STAT` sin reinicios y sin pérdidas.
+  - El siguiente arranque informa `RST … iwdg=0`. El arranque inmediatamente posterior al cuelgue informa `iwdg=1`: el flag queda puesto mientras la placa espera en la ROM y lo limpia el firmware al arrancar.
+- [x] **Step 4:** `MEMORY.md` y commit `feat(n6): IWDG supervised by mon (acq and link liveness)`.
 
 ---
 

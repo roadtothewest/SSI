@@ -50,6 +50,10 @@ void app_early_init(UART_HandleTypeDef *huart)
              (unsigned long)((SSI_FW_VERSION >> 8) & 0xFFu), (unsigned long)(SSI_FW_VERSION & 0xFFu),
              __DATE__, __TIME__);
   log_printf("CLK cpu=%lu", (unsigned long)SystemCoreClock);
+  /* Reset cause of this boot (RM0486 RCC_RSR), then clear the flags for the next one. */
+  const uint32_t rsr = RCC->RSR;
+  log_printf("RST rsr=%lu iwdg=%lu", (unsigned long)rsr, (unsigned long)((rsr & RCC_RSR_IWDGRSTF) != 0u));
+  RCC->RSR = RCC_RSR_RMVF;
   log_printf("NC 0x%08lx..0x%08lx %s", (unsigned long)s, (unsigned long)e,
              (s >= NC_BASE && e <= NC_END) ? "OK" : "FAIL");
 }

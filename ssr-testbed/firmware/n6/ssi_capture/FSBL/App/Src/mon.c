@@ -22,11 +22,41 @@ enum {
   CMD_SCK_OFF = 5,   /* P7: SCK pin (A2) to analog; the SAI and its FS keep running */
   CMD_SCK_ON = 6,
   CMD_STALL = 7,     /* block acq for 30 ms once: windows must be counted as lost */
+  CMD_HANG = 8,      /* block acq for 2 s: the IWDG must reset the MCU */
   CMD_NSS_PULSE = 9, /* bench: CS low ~20 ms then high on the unwired NSS (link drop/abort paths) */
 };
 static volatile uint32_t s_mon_dbg_cmd NC_MEM __attribute__((used));
 
 static mon_cfg_t s_cfg;
+
+/* IWDG (LSI 32 kHz / 64, reload 500: ~1 s), started once acq and link run their loops and
+   refreshed only while both keep looping; if mon itself hangs nothing refreshes it either. */
+static IWDG_HandleTypeDef s_iwdg;
+static int s_wdg_on;
+static uint32_t s_acq_seen;
+static uint32_t s_link_seen;
+
+static void watchdog(void)
+{
+  const uint32_t a = acq_loops();
+  const uint32_t l = link_loops();
+  if (a == s_acq_seen || l == s_link_seen) {
+    return; /* a thread has not looped since the last check */
+  }
+  s_acq_seen = a;
+  s_link_seen = l;
+  if (s_wdg_on) {
+    (void)HAL_IWDG_Refresh(&s_iwdg);
+    return;
+  }
+  s_iwdg.Instance = IWDG;
+  s_iwdg.Init.Prescaler = IWDG_PRESCALER_64;
+  s_iwdg.Init.Reload = 500u;
+  s_iwdg.Init.Window = IWDG_WINDOW_DISABLE;
+  s_iwdg.Init.EWI = 0u;
+  s_wdg_on = (HAL_IWDG_Init(&s_iwdg) == HAL_OK);
+  log_printf("WDG on=%d", s_wdg_on);
+}
 
 void mon_configure(const mon_cfg_t *cfg)
 {
@@ -56,6 +86,9 @@ static void run_cmd(uint32_t cmd)
       break;
     case CMD_STALL:
       acq_request_stall();
+      break;
+    case CMD_HANG:
+      acq_request_hang();
       break;
     case CMD_NSS_PULSE:
       link_debug_nss_pulse();
@@ -111,6 +144,7 @@ void mon_thread_entry(ULONG arg)
       log_printf("IDLE ms=%lu", (unsigned long)HAL_GetTick());
       idle = 0u;
     }
+    watchdog();
     const uint32_t cmd = s_mon_dbg_cmd;
     if (cmd != CMD_NONE) {
       run_cmd(cmd);

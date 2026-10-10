@@ -45,6 +45,7 @@ target_compile_definitions(stm32cubemx INTERFACE
     HAL_SAI_MODULE_ENABLED
     HAL_SPI_MODULE_ENABLED
     HAL_LPTIM_MODULE_ENABLED
+    HAL_IWDG_MODULE_ENABLED
 )
 target_sources(STM32_Drivers PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_adc.c
@@ -54,6 +55,7 @@ target_sources(STM32_Drivers PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_spi_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_lptim.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_iwdg.c
 )
 file(GLOB APP_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/App/Src/*.c)
 set_source_files_properties(${APP_SRC} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
