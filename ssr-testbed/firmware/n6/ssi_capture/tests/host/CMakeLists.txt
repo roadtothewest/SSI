@@ -12,6 +12,7 @@ include_directories(${APP}/Inc)
 add_executable(test_avx_block test_avx_block.c ${APP}/Src/avx_block.c)
 add_executable(test_audio_decode test_audio_decode.c ${APP}/Src/audio_decode.c)
 add_executable(test_acq_logic test_acq_logic.c ${APP}/Src/acq_logic.c)
+add_executable(test_link_logic test_link_logic.c ${APP}/Src/link_logic.c)
 
 add_test(NAME avx_block COMMAND test_avx_block ${CMAKE_CURRENT_BINARY_DIR}/avx_sample.bin)
 add_test(NAME avx_block_py COMMAND python3 -I ${TOOLS}/avx_block.py check
@@ -21,3 +22,4 @@ add_test(NAME avx_block_py COMMAND python3 -I ${TOOLS}/avx_block.py check
 set_tests_properties(avx_block_py PROPERTIES DEPENDS avx_block)
 add_test(NAME audio_decode COMMAND test_audio_decode)
 add_test(NAME acq_logic COMMAND test_acq_logic)
+add_test(NAME link_logic COMMAND test_link_logic)
