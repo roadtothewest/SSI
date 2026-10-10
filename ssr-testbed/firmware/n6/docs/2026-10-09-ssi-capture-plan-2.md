@@ -704,3 +704,7 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
 - [x] **Step 1 (RED):** casos nuevos en `test_link_logic.c`. No compilaba: `LINK_A_HOLD_NEW` no existía.
 - [x] **Step 2 (GREEN):** `link_logic` + `link.c` (`HOLD_NEW`: `s_cur = blk` sin armar). Host 5/5; `inject_test.sh 'cmd 9'` sigue en PASS.
 - [ ] **Pendiente con la RPi5:** `auravoxd -src spi -drdy -1` durante 1 min sin errores de CRC.
+
+### Task 12: Verificador del enlace para la RPi5 (hecha; no estaba en el plan original)
+
+`tools/rpi_spi_check.py` corre en la Pi (`python3-spidev`): lee 538 B cada 4 ms (sin DRDY), clasifica cada lectura con `avx_block.parse` y reporta bloques/s, CRC, saltos de `seq`, duplicados, `flags` y errores de `ts`. Así P5 no depende de `auravoxd`. La clasificación (`BlockStats`) se prueba en el PC con bloques derivados del armado en C (CTest `rpi_spi_check`, host 6/6). Pendiente: correrlo en la Pi cableada.

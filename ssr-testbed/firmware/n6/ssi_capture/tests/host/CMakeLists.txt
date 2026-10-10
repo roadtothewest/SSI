@@ -20,6 +20,9 @@ add_test(NAME avx_block_py COMMAND python3 -I ${TOOLS}/avx_block.py check
          t0_us=140000 n=20 flags=2 ts0=140000 ts19=149500 adc0_0=100 adc19_2=3994
          voz0_0=-32768 voz0_1=32767 voz0_2=-1 voz0_3=0 voz0_4=-2 voz19_7=308)
 set_tests_properties(avx_block_py PROPERTIES DEPENDS avx_block)
+add_test(NAME rpi_spi_check COMMAND python3 -I ${TOOLS}/test_rpi_spi_check.py
+         ${CMAKE_CURRENT_BINARY_DIR}/avx_sample.bin)
+set_tests_properties(rpi_spi_check PROPERTIES DEPENDS avx_block)
 add_test(NAME audio_decode COMMAND test_audio_decode)
 add_test(NAME acq_logic COMMAND test_acq_logic)
 add_test(NAME link_logic COMMAND test_link_logic)

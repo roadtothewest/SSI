@@ -48,6 +48,8 @@ Herramientas por SWD (no detienen la MCU):
 - `tools/inject_test.sh 'acción'`;
 - `tools/avx_block.py check bloque.bin --ts-check`.
 
+En la Raspberry, para probar el enlace sin `auravoxd` (P5): copiar `tools/rpi_spi_check.py` y `tools/avx_block.py` y correr `python3 rpi_spi_check.py --secs 600` (requiere `python3-spidev`; lee por polling, sin DRDY). Aceptación: ~100 bloques/s, `crc=0` y `gaps=0`.
+
 ### Mensajes del VCP
 
 | Línea | Contenido |
