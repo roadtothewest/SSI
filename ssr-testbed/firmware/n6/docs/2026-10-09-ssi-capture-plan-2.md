@@ -636,7 +636,7 @@ En `app_early_init`:
 
 ---
 
-### Task 9: Grabación en la flash externa (`tools/flash.sh`) y LED de IDLE (hecha, falta el arranque)
+### Task 9: Grabación en la flash externa (`tools/flash.sh`) y LED de IDLE (hecha)
 
 **Files:** Create `tools/flash.sh`; Modify `FSBL/App/Src/mon.c` (verde fijo en IDLE, spec §5: sin esto, el build ETR sin puente arranca desde flash sin ninguna señal visible).
 
@@ -672,10 +672,12 @@ STM32_Programmer_CLI -c port=swd -hardRst -el "$STM32_DK_EXTLOADER" -d "$SIGNED"
 ```
 
 - [x] **Step 4 (2026-10-09):** `tools/flash.sh` → `image: 115332 B, signed: 116384 B`, `Erasing external memory sectors [0 1]`, `Download verified successfully`.
-- [ ] **Step 5 (pendiente: Matías mueve los switches):** BOOT0 = L, BOOT1 = L y reset.
+- [x] **Step 5 (2026-10-10, Matías movió los switches):** BOOT0 = L, BOOT1 = L y reset.
   - Sin cables: LED verde fijo y, por el VCP, `SSI capture fw 0.1.0 …`, `INIT … sync=0`, `INIT link=0` e `IDLE …` cada 2 s.
   - Con el puente D6 → D2: verde parpadeando y `STAT` cada segundo.
   - Para volver a desarrollar: BOOT1 = H y reset.
+  - Resultado: arranca solo. Tras un reset por NRST (`-hardRst` del ST-LINK): `RST rsr=4194304` (solo `PINRSTF`, bit 22), `iwdg=0`, `INIT … sync=0 hse=1 sai_ck=49152000 adc_ck=50000000`, `INIT link=0`, `WDG on=1` e `IDLE` cada 2 s. Por SWD: el código en `0x34180400` es idéntico a `out/flash/ssi_capture_FSBL.bin` (115 460 B), `acq` y `link` dan vueltas, GPIOO ODR = 0x2 (verde fijo) y GPIOG ODR = 0x400 (rojo apagado).
+  - El SWD en `HOTPLUG` sigue disponible al arrancar desde flash (el chip no está provisionado y el FSBL no cierra el debug), así que conectar no distingue el modo de arranque.
 
 ---
 

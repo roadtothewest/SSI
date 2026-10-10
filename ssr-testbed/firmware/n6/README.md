@@ -81,10 +81,10 @@ Verificado en el DK, sin micrófono ni cables:
 - reinicio y recuperación ante fallas de DMA;
 - enlace SPI sin maestro (re-armado, NSS);
 - watchdog;
-- flash grabada y verificada.
+- flash grabada y verificada;
+- arranque autónomo desde la flash (BOOT0 = BOOT1 = L, 2026-10-10).
 
 Pendiente:
 - con el INMP441: tono (P3);
 - con el puente y cables: sincronía por pulsos (P4) y ruido del SCK (P7);
-- con la RPi5: transferencias reales (P5);
-- arranque desde flash (mover BOOT0 y BOOT1 a L).
+- con la RPi5: transferencias reales (P5).
