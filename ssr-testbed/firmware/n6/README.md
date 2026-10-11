@@ -46,7 +46,8 @@ Herramientas por SWD (no detienen la MCU):
 - `tools/swd.py` con `sym`, `cmd N`, `sample`, `read32` y `dma-suspend`;
 - `tools/diag.py` con `audio`, `emg`, `noise` y `pulse`;
 - `tools/inject_test.sh 'acción'`;
-- `tools/avx_block.py check bloque.bin --ts-check`.
+- `tools/avx_block.py check bloque.bin --ts-check`;
+- `tools/mic_tone_check.sh`: el PC reproduce 5 tonos (250 Hz a 4 kHz) y verifica que el INMP441 los capte, con el micrófono del PC como referencia (puerto del INMP441 libre, a ~20 cm de los parlantes).
 
 En la Raspberry, para probar el enlace sin `auravoxd` (P5): copiar `tools/rpi_spi_check.py` y `tools/avx_block.py` y correr `python3 rpi_spi_check.py --secs 600` (requiere `python3-spidev`; lee por polling, sin DRDY). Aceptación: ~100 bloques/s, `crc=0` y `gaps=0`.
 
@@ -84,7 +85,9 @@ Verificado en el DK, sin micrófono ni cables:
 - flash grabada y verificada;
 - arranque autónomo desde la flash (BOOT0 = BOOT1 = L, 2026-10-10).
 
+Micrófono (2026-10-10): el primer INMP441 resultó **defectuoso**. Entrega tramas I²S correctas, pero no capta sonido: `tools/mic_tone_check.sh` da FAIL, con la referencia del PC captando los tonos a +18/+63 dB, y lo mismo pasa a 48 kHz. El firmware, el cableado y la alimentación (3,27 V) quedaron verificados. Detalle en `~/2026-2/SSI/notas/2026-10-10-microfono-inmp441.md` (fuera del repo).
+
 Pendiente:
-- con el INMP441: tono (P3);
+- con un INMP441 nuevo: P3 con `tools/mic_tone_check.sh`;
 - con el puente y cables: sincronía por pulsos (P4) y ruido del SCK (P7);
 - con la RPi5: transferencias reales (P5).
