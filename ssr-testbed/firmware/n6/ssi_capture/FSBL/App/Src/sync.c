@@ -1,5 +1,6 @@
 #include "sync.h"
 
+#include "hse.h"
 #include "ssi_config.h"
 #include "stm32n6xx_hal.h"
 
@@ -78,6 +79,9 @@ int sync_init(void)
   RCC_PeriphCLKInitTypeDef clk = {0};
   LPTIM_OC_ConfigTypeDef oc = {0};
 
+  if (hse_start() != 0) {
+    return -4;
+  }
   clk.PeriphClockSelection = RCC_PERIPHCLK_CKPER | RCC_PERIPHCLK_LPTIM1;
   clk.CkperClockSelection = RCC_CLKPCLKSOURCE_HSE;
   clk.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_CLKP;

@@ -21,4 +21,16 @@
 #define SSI_SYNC_SRC       SSI_SYNC_ETR
 #endif
 
+/* Audio source (mic.h). I2S: INMP441 on SAI2, EMG synchronized by SSI_SYNC_SRC. ANALOG: ADMP401
+   breakout on A3 sampled by ADC2 at 64 kHz; needs SSI_SYNC_LPTIM (LPTIM1 for the EMG and LPTIM2
+   for the microphone, both from the HSE, started together). */
+#define SSI_MIC_I2S        0
+#define SSI_MIC_ANALOG     1
+#ifndef SSI_MIC_SRC
+#define SSI_MIC_SRC        SSI_MIC_I2S
+#endif
+#if SSI_MIC_SRC == SSI_MIC_ANALOG && SSI_SYNC_SRC != SSI_SYNC_LPTIM
+#error "the analog microphone needs SSI_SYNC_SRC == SSI_SYNC_LPTIM"
+#endif
+
 #endif

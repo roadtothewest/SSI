@@ -7,7 +7,7 @@
 
 /* Driver events, set from the DMA callbacks into the group given to capture_init(). */
 #define CAP_EVT_EMG 0x01u /* emg_adc finished a window */
-#define CAP_EVT_AUD 0x02u /* mic_sai finished a window */
+#define CAP_EVT_AUD 0x02u /* mic finished a window */
 #define CAP_EVT_ERR 0x04u /* SAI, ADC or DMA error */
 
 /* Owns the start order that fixes c (spec §4). Single caller: acq (Task 5) or mon (Task 4). */

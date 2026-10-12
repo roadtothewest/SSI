@@ -3,13 +3,12 @@
 #include <string.h>
 
 #include "acq_logic.h"
-#include "audio_decode.h"
 #include "avx_block.h"
 #include "capture.h"
 #include "diag.h"
 #include "emg_adc.h"
 #include "log.h"
-#include "mic_sai.h"
+#include "mic.h"
 
 _Static_assert(sizeof(acq_stats_t) <= 16u * sizeof(ULONG), "acq_stats_t must fit TX_16_ULONG");
 _Static_assert(SSI_WIN_EMG == AVX_TUPLES && SSI_WIN_AUDIO == AVX_TUPLES * AVX_VOZ_PER_TUPLE &&
@@ -21,7 +20,6 @@ _Static_assert(SSI_WIN_EMG == AVX_TUPLES && SSI_WIN_AUDIO == AVX_TUPLES * AVX_VO
 #define WINDOW_US       (AVX_TUPLES * AVX_TUPLE_US)         /* 10000 */
 
 static acq_cfg_t s_cfg;
-static uint32_t s_raw[2u * SSI_WIN_AUDIO];
 static int32_t s_audio[SSI_WIN_AUDIO];
 static uint16_t s_emg[SSI_WIN_EMG * SSI_EMG_CH];
 
@@ -29,7 +27,7 @@ static uint32_t s_next;     /* next window to package (current epoch) */
 static uint32_t s_seq_base; /* seq of window 0 of the current epoch: seq = s_seq_base + k */
 static uint16_t s_pending;  /* AVX_F_* events not yet reported in a block */
 static uint32_t s_adc_err;  /* driver error counts already reported */
-static uint32_t s_sai_err;
+static uint32_t s_mic_err;
 static int s_started;
 static uint8_t s_epoch;
 static acq_stats_t s_st;
@@ -93,7 +91,7 @@ static void start_capture(void)
   s_started = 1;
   /* Errors raised by the stop/start itself must not trigger another restart. */
   s_adc_err = emg_adc_errors();
-  s_sai_err = mic_sai_errors();
+  s_mic_err = mic_errors();
   s_epoch = capture_epoch();
   s_next = 0u;
   period_reset();
@@ -103,7 +101,7 @@ static void start_capture(void)
 static int check_errors(void)
 {
   const uint32_t adc = emg_adc_errors();
-  const uint32_t sai = mic_sai_errors();
+  const uint32_t mic = mic_errors();
   int fresh = 0;
   if (adc != s_adc_err) {
     s_st.err += adc - s_adc_err;
@@ -111,9 +109,9 @@ static int check_errors(void)
     s_pending |= AVX_F_ADC_LOST;
     fresh = 1;
   }
-  if (sai != s_sai_err) {
-    s_st.err += sai - s_sai_err;
-    s_sai_err = sai;
+  if (mic != s_mic_err) {
+    s_st.err += mic - s_mic_err;
+    s_mic_err = mic;
     s_pending |= AVX_F_SAI_ERR;
     fresh = 1;
   }
@@ -130,7 +128,7 @@ static void update_stats(void)
     }
     s_sq += (uint64_t)(s * s);
   }
-  s_st.rslot += audio_right_activity(s_raw, SSI_WIN_AUDIO);
+  s_st.rslot += mic_right_activity();
   for (uint32_t i = 0; i < SSI_WIN_EMG * SSI_EMG_CH; i++) {
     const uint32_t c = i % SSI_EMG_CH;
     if (s_emg[i] < s_st.emg_min[c]) {
@@ -145,20 +143,20 @@ static void update_stats(void)
 static void build_window(uint32_t k)
 {
   const uint32_t *ew = emg_adc_window(k);
-  memcpy(s_raw, mic_sai_window(k), sizeof s_raw);
+  mic_copy(k);
   for (uint32_t i = 0; i < SSI_WIN_EMG * SSI_EMG_CH; i++) {
     s_emg[i] = (uint16_t)ew[i];
   }
   /* Copy first, then check: a stream past k + 1 may have started rewriting window k's half
      during the copy. The window is lost; its seq is never sent, so the RPi5 sees a jump. */
-  if (mic_sai_blocks_done() > k + 1u || emg_adc_blocks_done() > k + 1u) {
+  if (mic_blocks_done() > k + 1u || emg_adc_blocks_done() > k + 1u) {
     s_st.lost++;
     s_pending |= AVX_F_ADC_LOST;
     return;
   }
-  audio_extract_left(s_raw, s_audio, SSI_WIN_AUDIO);
+  mic_decode(s_audio);
   update_stats();
-  diag_feed(k, s_epoch, s_raw, s_audio, s_emg);
+  diag_feed(k, s_epoch, mic_diag_raw(), s_audio, s_emg);
 
   VOID *blk;
   if (tx_block_allocate(s_cfg.pool, &blk, TX_NO_WAIT) != TX_SUCCESS) {
@@ -190,7 +188,7 @@ static void stats_push(void)
   } m;
   memset(&m, 0, sizeof m);
   s_st.emg_blocks = emg_adc_blocks_done();
-  s_st.aud_blocks = mic_sai_blocks_done();
+  s_st.aud_blocks = mic_blocks_done();
   s_st.rms = acq_isqrt64(s_sq / ((uint64_t)s_nwin * SSI_WIN_AUDIO));
   s_st.epoch = s_epoch;
   m.s = s_st;
@@ -229,7 +227,7 @@ void acq_thread_entry(ULONG arg)
       uint32_t k = 0u;
       uint32_t lost = 0u;
       const acq_step_t step =
-          acq_select(&s_next, emg_adc_blocks_done(), mic_sai_blocks_done(), &lost, &k);
+          acq_select(&s_next, emg_adc_blocks_done(), mic_blocks_done(), &lost, &k);
       if (lost != 0u) {
         s_st.lost += lost;
         s_pending |= AVX_F_ADC_LOST;

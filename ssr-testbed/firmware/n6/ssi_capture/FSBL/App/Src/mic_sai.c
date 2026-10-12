@@ -1,7 +1,14 @@
-#include "mic_sai.h"
+#include "mic.h"
 
-#include "nc_mem.h"
 #include "ssi_config.h"
+
+#if SSI_MIC_SRC == SSI_MIC_I2S
+
+#include <string.h>
+
+#include "audio_decode.h"
+#include "hse.h"
+#include "nc_mem.h"
 #include "stm32n6xx_hal.h"
 
 #define MIC_WORDS (2u * 2u * SSI_WIN_AUDIO) /* two windows x two slots per frame */
@@ -11,36 +18,14 @@ static DMA_HandleTypeDef s_dma;
 static DMA_QListTypeDef s_list;
 static DMA_NodeTypeDef s_node NC_MEM; /* the DMA reloads it after every block */
 static uint32_t s_buf[MIC_WORDS] NC_MEM;
+static uint32_t s_copy[MIC_WORDS / 2u]; /* window being decoded by acq */
+static uint32_t s_ractive;
 
 static TX_EVENT_FLAGS_GROUP *s_flags;
 static ULONG s_flag_block;
 static ULONG s_flag_error;
 static volatile uint32_t s_blocks;
 static volatile uint32_t s_errors;
-static uint32_t s_hse_mode;
-
-/* MB1939 board config says crystal; several DK examples use the digital bypass. Keep the
-   mode that reaches HSERDY (a wrong mode only times out). */
-static int hse_start(void)
-{
-  static const uint32_t k_modes[2] = {RCC_HSE_ON, RCC_HSE_BYPASS_DIGITAL};
-  RCC_OscInitTypeDef osc = {0};
-  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  osc.PLL1.PLLState = RCC_PLL_NONE;
-  osc.PLL2.PLLState = RCC_PLL_NONE;
-  osc.PLL3.PLLState = RCC_PLL_NONE;
-  osc.PLL4.PLLState = RCC_PLL_NONE;
-  for (uint32_t i = 0; i < 2u; i++) {
-    osc.HSEState = k_modes[i];
-    if (HAL_RCC_OscConfig(&osc) == HAL_OK) {
-      s_hse_mode = i + 1u;
-      return 0;
-    }
-    osc.HSEState = RCC_HSE_OFF;
-    (void)HAL_RCC_OscConfig(&osc);
-  }
-  return -1;
-}
 
 /* HSE 48 MHz -> PLL4 1179.648 MHz -> IC7 /24 = 49.152 MHz. PLL1 (CPU) stays as CubeMX set it. */
 static int audio_clock_init(void)
@@ -168,7 +153,7 @@ static int dma_init(void)
   return 0;
 }
 
-int mic_sai_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error)
+int mic_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error)
 {
   int rc;
   s_flags = flags;
@@ -184,43 +169,54 @@ int mic_sai_init(TX_EVENT_FLAGS_GROUP *flags, ULONG flag_block, ULONG flag_error
   return dma_init();
 }
 
-int mic_sai_start(void)
+int mic_start(void)
 {
   s_blocks = 0u;
   return (HAL_SAI_Receive_DMA(&s_sai, (uint8_t *)s_buf, (uint16_t)MIC_WORDS) == HAL_OK) ? 0 : -1;
 }
 
-void mic_sai_stop(void)
+void mic_stop(void)
 {
   (void)HAL_SAI_DMAStop(&s_sai);
 }
 
-uint32_t mic_sai_blocks_done(void)
+uint32_t mic_blocks_done(void)
 {
   return s_blocks;
 }
 
-const uint32_t *mic_sai_window(uint32_t k)
+void mic_copy(uint32_t k)
 {
-  return &s_buf[(k & 1u) * (MIC_WORDS / 2u)];
+  memcpy(s_copy, &s_buf[(k & 1u) * (MIC_WORDS / 2u)], sizeof s_copy);
 }
 
-uint32_t mic_sai_errors(void)
+void mic_decode(int32_t *audio)
+{
+  audio_extract_left(s_copy, audio, SSI_WIN_AUDIO);
+  s_ractive = audio_right_activity(s_copy, SSI_WIN_AUDIO);
+}
+
+const uint32_t *mic_diag_raw(void)
+{
+  return s_copy;
+}
+
+uint32_t mic_right_activity(void)
+{
+  return s_ractive;
+}
+
+uint32_t mic_errors(void)
 {
   return s_errors;
 }
 
-uint32_t mic_sai_clock_hz(void)
+uint32_t mic_clock_hz(void)
 {
   return HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SAI2);
 }
 
-uint32_t mic_sai_hse_mode(void)
-{
-  return s_hse_mode;
-}
-
-void mic_sai_sck_output(int on)
+void mic_sck_output(int on)
 {
   GPIO_InitTypeDef g = {0};
   g.Pin = GPIO_PIN_12;
@@ -272,3 +268,5 @@ void SAI2_B_IRQHandler(void)
 {
   HAL_SAI_IRQHandler(&s_sai);
 }
+
+#endif /* SSI_MIC_SRC == SSI_MIC_I2S */

@@ -5,7 +5,7 @@
 #include "acq.h"
 #include "led.h"
 #include "log.h"
-#include "mic_sai.h"
+#include "mic.h"
 #include "nc_mem.h"
 #include "link.h"
 #include "stm32n6xx_hal.h"
@@ -79,10 +79,10 @@ static void run_cmd(uint32_t cmd)
       testpulse_set(0);
       break;
     case CMD_SCK_OFF:
-      mic_sai_sck_output(0);
+      mic_sck_output(0);
       break;
     case CMD_SCK_ON:
-      mic_sai_sck_output(1);
+      mic_sck_output(1);
       break;
     case CMD_STALL:
       acq_request_stall();
