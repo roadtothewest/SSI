@@ -7,7 +7,7 @@ u32 raw[320] at 32, i32 audio[16000] at 1312, u16 emg[2000][3] at 65312; 77312 b
   diag.py audio [--tone HZ] [--out DIR]          P3: dominant tone, rms, peak, WAV
   diag.py emg [--ch N --tone HZ] [--out DIR]     P2: EMG statistics, CSV, generator tone
   diag.py noise                                  P7: EMG noise with the SCK pin on vs off
-  diag.py pulse [--restarts N]                   P4: c from the D7 pulse seen on A1 and SD
+  diag.py pulse [--restarts N] [--analog]        P4: c from the D7 pulse on A1 and SD (or A3)
 """
 import argparse
 import cmath
@@ -29,6 +29,8 @@ SIZE, OFF_RAW, OFF_AUDIO, OFF_EMG = 77312, 32, 1312, 65312
 CMD_RESTART, CMD_DIAG, CMD_PULSE_ON, CMD_PULSE_OFF, CMD_SCK_OFF, CMD_SCK_ON = 1, 2, 3, 4, 5, 6
 SSI_SYNC_C = 0       # keep equal to ssi_config.h
 EMG_THRESHOLD = 2048  # pulse test: A1 driven to 0 / 3.3 V
+AUDIO_PER_CODE = 4096  # analog microphone: one ADC code in the 24-bit audio scale (audio_fir)
+AFIR_DELAY = 12        # analog microphone: decimation filter latency in audio frames (audio_fir.h)
 
 
 def capture(timeout=8.0):
@@ -163,13 +165,21 @@ def cmd_noise(a):
     return ok
 
 
-def pulse_offsets(d):
-    """d = j - 8m per pulse: j = first non-zero audio frame, m = first EMG ch0 sample over the
-    threshold. With EMG sample i taken at frame 8i + c, d spans {c-7 .. c+1}; c = min(d) + 7."""
+def pulse_offsets(d, analog=False):
+    """d = j - 8m per pulse: j = audio frame of the pulse edge, m = first EMG ch0 sample over the
+    threshold. With EMG sample i taken at frame 8i + c, d spans {c-7 .. c+1}; c = min(d) + 7.
+    I2S (D7 -> D8): j = first non-zero frame. Analog (D7 -> A3, plan 3): j = first frame at
+    the middle of the step, from the level just before it; the step size comes from A1 (same
+    divider and buffer). The FIR is symmetric, so its middle is its latency: c = AFIR_DELAY."""
     au, ch0 = d["audio"], d["emg"][0::CH]
+    half = (max(ch0) - min(ch0)) * AUDIO_PER_CODE // 2 if analog and ch0 else 0
     out = []
-    for j in range(1, len(au)):
-        if au[j] == 0 or au[j - 1] != 0:
+    for j in range(8, len(au)):
+        if analog:
+            level = sum(au[j - 8:j - 4]) // 4
+            if not au[j - 1] < level + half <= au[j]:
+                continue
+        elif au[j] == 0 or au[j - 1] != 0:
             continue
         for m in range(max(1, j // EMG_DIV - 4), min(len(ch0), j // EMG_DIV + 4)):
             if ch0[m] > EMG_THRESHOLD >= ch0[m - 1]:
@@ -186,9 +196,10 @@ def cmd_pulse(a):
         for r in range(1, a.restarts + 1):
             swd.cmd(CMD_RESTART)
             d = capture()
-            ds = pulse_offsets(d) + pulse_offsets(capture())  # 2 s: min bin is ~10 % of pulses
+            ds = pulse_offsets(d, a.analog) + pulse_offsets(capture(), a.analog)  # 2 s: min bin ~10 %
             if len(ds) < 60:
-                print(f"PULSE r={r} epoch={d['epoch']} n={len(ds)}: too few pulses (D7 -> A1 and D8?)")
+                wire = "A3" if a.analog else "D8"
+                print(f"PULSE r={r} epoch={d['epoch']} n={len(ds)}: too few pulses (D7 -> A1 and {wire}?)")
                 return False
             c = min(ds) + EMG_DIV - 1
             cs.append(c)
@@ -197,9 +208,11 @@ def cmd_pulse(a):
     finally:
         swd.cmd(CMD_PULSE_OFF)
     ok = ok and len(set(cs)) == 1 and abs(cs[0]) < 16  # constant (R3); |c| * 62.5 us < 1 ms (R4)
-    print(f"SYNC c={cs[0]} frames = {cs[0] * 62.5:.1f} us; SSI_SYNC_C={SSI_SYNC_C}")
-    if cs[0] != SSI_SYNC_C:
-        print("NOTE: set SSI_SYNC_C to the measured c in ssi_config.h and in this tool")
+    expect = SSI_SYNC_C + (AFIR_DELAY if a.analog else 0)
+    print(f"SYNC c={cs[0]} frames = {cs[0] * 62.5:.1f} us; expected {expect}"
+          + (f" (sync {SSI_SYNC_C} + FIR {AFIR_DELAY})" if a.analog else ""))
+    if cs[0] != expect:
+        print("NOTE: c differs from the design: check the wiring, then SSI_SYNC_C in ssi_config.h")
     return ok
 
 
@@ -216,6 +229,7 @@ def main():
     sub.add_parser("noise")
     p = sub.add_parser("pulse")
     p.add_argument("--restarts", type=int, default=10)
+    p.add_argument("--analog", action="store_true", help="ADMP401 build: pulse on A1 and A3")
     a = ap.parse_args()
     ok = {"audio": cmd_audio, "emg": cmd_emg, "noise": cmd_noise, "pulse": cmd_pulse}[a.op](a)
     print("RESULT:", "PASS" if ok else "FAIL")
