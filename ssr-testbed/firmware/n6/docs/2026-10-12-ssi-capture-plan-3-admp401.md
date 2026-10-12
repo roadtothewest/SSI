@@ -8,8 +8,8 @@
 
 | ADMP401 | DK | Pin N6 | Uso |
 |---|---|---|---|
-| VCC | IOREF (CN8-2), 3,3 V | — | Cable propio, separado del AFE (CN8-4) |
-| GND | GND (CN8-7) | — | Segundo GND, separado del AFE (CN8-6) |
+| VCC | 3V3 (CN8-4) | — | Con el AFE conectado: ambos desde el 3V3 (riel de protoboard) o el micrófono en IOREF (CN8-2, misma red VDD3V3 según MB1939 hoja 9) |
+| GND | GND (CN8-6) | — | |
 | AUD | A3 (CN7-4) | PA12 = ADC12_INP13 | Divisor ×0,5437 + buffer U7 → ADC2 |
 
 - Salida de la placa: OPA344 ×67, en reposo VCC/2 (≈ 1,65 V → código ≈ 2041), ~200 mVpp a un brazo, 100 Hz a 15 kHz.

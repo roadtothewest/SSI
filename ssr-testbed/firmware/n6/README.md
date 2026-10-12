@@ -9,7 +9,7 @@ Documentos: [spec v0.3](docs/2026-10-09-ssi-capture-spec.md), [plan 1](docs/2026
 | Señal | DK (conector Arduino) | Pin N6 | Nota |
 |---|---|---|---|
 | EMG CH1 / CH2 / CH3 | **A1 / A4 / A5** | PA9 / PF3 / PB10 | 0–3,3 V. La placa divide por 560/1030 antes del ADC (1,8 V) |
-| ADMP401: AUD | **A3** (CN7-4) | PA12 (ADC2, canal 13) | VCC a IOREF (CN8-2) y GND a CN8-7: cables propios, separados del AFE (3V3 en CN8-4, GND en CN8-6) |
+| ADMP401: AUD | **A3** (CN7-4) | PA12 (ADC2, canal 13) | VCC a 3V3 (CN8-4) y GND a GND (CN8-6). Con el AFE conectado, ambos desde el 3V3 (riel de protoboard o IOREF, CN8-2, que es la misma red VDD3V3) |
 | SPI hacia la Pi: CS / MOSI / MISO / SCK | D10 / D11 / D12 / D13 | PA3 / PG2 / PH8 / PE15 | GPIO8 / 10 / 9 / 11 de la Pi (pines 24 / 19 / 21 / 23) |
 | DRDY | D4 | PH5 | GPIO25 de la Pi (pin 22) |
 | GND | GND | — | Común con la Pi. La isla (persona + AFE + DK + Pi) no se conecta a la tierra de protección |
