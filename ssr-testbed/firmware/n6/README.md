@@ -90,9 +90,8 @@ Verificado en el DK, sin micrófono ni cables:
 
 Micrófono (2026-10-10): el primer INMP441 resultó **defectuoso**. Entrega tramas I²S correctas, pero no capta sonido: `tools/mic_tone_check.sh` da FAIL, con la referencia del PC captando los tonos a +18/+63 dB, y lo mismo pasa a 48 kHz. El firmware, el cableado y la alimentación (3,27 V) quedaron verificados. Detalle en `~/2026-2/SSI/notas/2026-10-10-microfono-inmp441.md` (fuera del repo).
 
-Micrófono ADMP401 (2026-10-12, plan 3), probado en el DK: `INIT … sync=1 mic=1`, 115 s de flujo sin pérdidas ni errores (EMG y audio iguales ventana a ventana) y **P3 PASS** con `tools/mic_tone_check.sh` (tonos de 250 Hz a 4 kHz entre +37 y +62 dB sobre el ruido; 1 kHz medido en 999,98 Hz). Reposo: código ≈ 2027 en A3.
+Micrófono ADMP401 (2026-10-12, plan 3), probado en el DK: `INIT … sync=1 mic=1`, 115 s de flujo sin pérdidas ni errores (EMG y audio iguales ventana a ventana) y **P3 PASS** con `tools/mic_tone_check.sh` (tonos de 250 Hz a 4 kHz entre +37 y +62 dB sobre el ruido; 1 kHz medido en 999,98 Hz). Reposo: código ≈ 2027 en A3. **P4 PASS** con `diag.py pulse --analog`: *c* = 12 (750 µs = sincronía 0 + filtro 12) en 10 de 10 reinicios, ~100 pulsos cada uno. La Pi resta 750 µs al audio.
 
 Pendiente:
-- con la ADMP401: P4 con `diag.py pulse --analog` (D7 a A1 y A3, AUD desconectado);
 - con el INMP441 (si se usa uno nuevo): P3, P4 con el puente y ruido del SCK (P7);
 - con la RPi5: transferencias reales (P5).
