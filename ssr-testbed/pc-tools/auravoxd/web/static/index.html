@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AuraVox</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16h4l3-8 4 16 4-12 3 6 2-2h6" /></svg>
+    <span>AuraVox</span>
+  </div>
+  <nav id="tabs">
+    <button data-tab="sig" class="on">Señales</button>
+    <button data-tab="cwt">Espectro</button>
+    <button data-tab="cau">Causalidad</button>
+    <button data-tab="ses">Sesión</button>
+  </nav>
+  <div class="status">
+    <span id="rec" class="pill rec" hidden><i></i><b>REC</b> <span id="recs"></span></span>
+    <span id="cond" class="pill"></span>
+    <span id="link" class="pill"><i></i><span>Conectando</span></span>
+  </div>
+</header>
+
+<main>
+<!-- Señales -->
+<section id="sig" class="tab on">
+  <div class="bar">
+    <span id="speak" class="state"><i></i><span>Silencio</span></span>
+    <div class="seg" id="scale">
+      <button data-v="0" class="on">Auto</button><button data-v="10">10 µV</button><button data-v="50">50 µV</button><button data-v="200">200 µV</button>
+    </div>
+  </div>
+  <div class="lane" id="L0"><div class="info"><div class="name"><i></i>CH1</div><div class="site">Submentoniano</div>
+    <div class="val" id="r0">—</div><div class="sub" id="h0"></div></div><canvas id="w0" class="wave"></canvas></div>
+  <div class="lane" id="L1"><div class="info"><div class="name"><i></i>CH2</div><div class="site">Labio inferior</div>
+    <div class="val" id="r1">—</div><div class="sub" id="h1"></div></div><canvas id="w1" class="wave"></canvas></div>
+  <div class="lane" id="L2"><div class="info"><div class="name"><i></i>CH3</div><div class="site">Cuello</div>
+    <div class="val" id="r2">—</div><div class="sub" id="h2"></div></div><canvas id="w2" class="wave"></canvas></div>
+  <div class="lane voz" id="L3"><div class="info"><div class="name"><i></i>Voz</div><div class="site">Micrófono</div>
+    <div class="val" id="r3">—</div><div class="sub" id="h3"></div></div><canvas id="wv" class="wave"></canvas></div>
+</section>
+
+<!-- Espectro (CWT) -->
+<section id="cwt" class="tab">
+  <div class="bar">
+    <div class="seg" id="cmode"><button data-v="mag" class="on">Magnitud</button><button data-v="phase">Fase</button></div>
+    <div class="seg" id="hop"><button data-v="5">5 ms</button><button data-v="10" class="on">10 ms</button><button data-v="20">20 ms</button></div>
+    <div class="delay">
+      <span>Retardo</span>
+      <input type="range" id="delay" min="0" max="300" step="5" value="60">
+      <b id="delayv">60 ms</b>
+      <button id="delayauto" class="chip on">Auto</button>
+    </div>
+  </div>
+  <div class="hmrow"><span class="tag c0">CH1</span><canvas id="c0" class="hm"></canvas></div>
+  <div class="hmrow"><span class="tag c1">CH2</span><canvas id="c1" class="hm"></canvas></div>
+  <div class="hmrow"><span class="tag c2">CH3</span><canvas id="c2" class="hm"></canvas></div>
+  <div class="hmrow"><span class="tag c3">Voz</span><canvas id="c3" class="hm"></canvas></div>
+  <div class="legend"><span>20 – 500 Hz</span><span class="ramp" id="ramp"></span><span id="rampl">baja → alta energía</span></div>
+</section>
+
+<!-- Causalidad -->
+<section id="cau" class="tab">
+  <div class="hero">
+    <div>
+      <div class="kicker">Anticipación muscular</div>
+      <div class="big" id="lead">—</div>
+      <div class="muted" id="leadsub">Habla para comenzar la medición</div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Correlación sEMG → voz</h2><div class="keys" id="keys"></div></div>
+    <div class="plot"><canvas id="xc" class="xc"></canvas><div id="tip" class="tip" hidden></div></div>
+    <div class="axisnote"><span>← la voz primero</span><span>el músculo primero →</span></div>
+  </div>
+  <div class="grid3" id="xwgrid">
+    <div class="card"><div class="card-h"><h3><i class="c0"></i>CH1 × voz</h3><span class="muted" id="xn0"></span></div><canvas id="m0" class="xw"></canvas></div>
+    <div class="card"><div class="card-h"><h3><i class="c1"></i>CH2 × voz</h3><span class="muted" id="xn1"></span></div><canvas id="m1" class="xw"></canvas></div>
+    <div class="card"><div class="card-h"><h3><i class="c2"></i>CH3 × voz</h3><span class="muted" id="xn2"></span></div><canvas id="m2" class="xw"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Últimas frases</h2><span id="conf"></span></div>
+    <div class="tablewrap"><table id="uttab"></table></div>
+  </div>
+</section>
+
+<!-- Sesión -->
+<section id="ses" class="tab">
+  <div class="sesgrid">
+    <div class="card">
+      <h2>Condición</h2>
+      <div class="conds" id="condbtns"></div>
+      <div class="actions">
+        <button id="recbtn" class="btn rec"><i></i><span>Grabar</span></button>
+        <button id="resetbtn" class="btn ghost">Reiniciar estadísticas</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Enlace</h2>
+      <div class="tiles small" id="linktiles"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Nivel por condición</h2><span class="muted">RMS en µV</span></div>
+    <div class="tablewrap"><table id="condtab"></table></div>
+    <div class="snr" id="snr"></div>
+  </div>
+  <div class="card">
+    <h2>Grabaciones</h2>
+    <ul id="files" class="files"></ul>
+  </div>
+</section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

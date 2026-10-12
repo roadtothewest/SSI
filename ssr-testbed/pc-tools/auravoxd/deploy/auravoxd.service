@@ -1,0 +1,15 @@
+[Unit]
+Description=AuraVox: ingesta SPI del STM32N6570-DK + HMI web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=aura
+SupplementaryGroups=spi gpio
+WorkingDirectory=/home/aura
+ExecStart=/usr/local/bin/auravoxd -src spi -addr :8080 -data /home/aura/auravox -drdy 25 -gpiochip gpiochip0
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
