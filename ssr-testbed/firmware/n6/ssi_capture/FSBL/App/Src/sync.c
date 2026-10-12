@@ -74,6 +74,18 @@ uint32_t sync_adc_trigger(void)
 
 static LPTIM_HandleTypeDef s_lptim;
 
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+#include "audio_fir.h"
+#define MIC_RAW_HZ (SSI_AUDIO_FS_HZ * AFIR_DECIM) /* 64 kHz */
+/* Both LPTIMs compare at the same count and start together: the EMG edges (every 24000 counts)
+   fall on every 32nd microphone edge (every 750 counts), so EMG sample i and ADC2 sample 32i
+   (audio sample 8i after the decimation) are taken together: c = 0 (spec §4, plan 3). */
+#define SYNC_EDGE 375u
+static LPTIM_HandleTypeDef s_lptim_mic;
+
+static int lptim_pwm_init(LPTIM_HandleTypeDef *h, LPTIM_TypeDef *inst, uint32_t hz, uint32_t pulse);
+#endif
+
 int sync_init(void)
 {
   RCC_PeriphCLKInitTypeDef clk = {0};
@@ -85,12 +97,24 @@ int sync_init(void)
   clk.PeriphClockSelection = RCC_PERIPHCLK_CKPER | RCC_PERIPHCLK_LPTIM1;
   clk.CkperClockSelection = RCC_CLKPCLKSOURCE_HSE;
   clk.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_CLKP;
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+  clk.PeriphClockSelection |= RCC_PERIPHCLK_LPTIM2;
+  clk.Lptim2ClockSelection = RCC_LPTIM2CLKSOURCE_CLKP;
+#endif
   if (HAL_RCCEx_PeriphCLKConfig(&clk) != HAL_OK) {
     return -1;
   }
   __HAL_RCC_LPTIM1_CLK_ENABLE();
   HAL_RIF_RISC_SetSlaveSecureAttributes(RIF_RISC_PERIPH_INDEX_LPTIM1,
                                         RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_NPRIV);
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+  __HAL_RCC_LPTIM2_CLK_ENABLE();
+  HAL_RIF_RISC_SetSlaveSecureAttributes(RIF_RISC_PERIPH_INDEX_LPTIM2,
+                                        RIF_ATTRIBUTE_SEC | RIF_ATTRIBUTE_NPRIV);
+  if (lptim_pwm_init(&s_lptim_mic, LPTIM2, MIC_RAW_HZ, SYNC_EDGE) != 0) {
+    return -5;
+  }
+#endif
   s_lptim.Instance = LPTIM1;
   s_lptim.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC; /* count the kernel clock */
   s_lptim.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
@@ -104,7 +128,11 @@ int sync_init(void)
   if (HAL_LPTIM_Init(&s_lptim) != HAL_OK) {
     return -2;
   }
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+  oc.Pulse = SYNC_EDGE;
+#else
   oc.Pulse = (s_lptim.Init.Period + 1u) / 2u;
+#endif
   oc.OCPolarity = LPTIM_OCPOLARITY_HIGH;
   if (HAL_LPTIM_OC_ConfigChannel(&s_lptim, &oc, LPTIM_CHANNEL_1) != HAL_OK) {
     return -3;
@@ -114,18 +142,59 @@ int sync_init(void)
 
 void sync_start(void)
 {
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+  /* HAL_LPTIM_PWM_Start only writes registers (no waits): masking interrupts keeps the two
+     starts a few bus cycles apart, far below one microphone sample (15.6 us). */
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  (void)HAL_LPTIM_PWM_Start(&s_lptim_mic, LPTIM_CHANNEL_1);
   (void)HAL_LPTIM_PWM_Start(&s_lptim, LPTIM_CHANNEL_1);
+  __set_PRIMASK(primask);
+#else
+  (void)HAL_LPTIM_PWM_Start(&s_lptim, LPTIM_CHANNEL_1);
+#endif
 }
 
 void sync_stop(void)
 {
   (void)HAL_LPTIM_PWM_Stop(&s_lptim, LPTIM_CHANNEL_1);
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+  (void)HAL_LPTIM_PWM_Stop(&s_lptim_mic, LPTIM_CHANNEL_1);
+#endif
 }
 
 uint32_t sync_adc_trigger(void)
 {
   return ADC_EXTERNALTRIG_LPTIM1_CH1;
 }
+
+#if SSI_MIC_SRC == SSI_MIC_ANALOG
+uint32_t sync_mic_trigger(void)
+{
+  return ADC_EXTERNALTRIG_LPTIM2_CH1;
+}
+
+static int lptim_pwm_init(LPTIM_HandleTypeDef *h, LPTIM_TypeDef *inst, uint32_t hz, uint32_t pulse)
+{
+  LPTIM_OC_ConfigTypeDef oc = {0};
+  h->Instance = inst;
+  h->Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
+  h->Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  h->Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
+  h->Init.Period = LPTIM_KERNEL_HZ / hz - 1u;
+  h->Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
+  h->Init.CounterSource = LPTIM_COUNTERSOURCE_INTERNAL;
+  h->Init.Input1Source = LPTIM_INPUT1SOURCE_GPIO;
+  h->Init.Input2Source = LPTIM_INPUT2SOURCE_GPIO;
+  h->Init.RepetitionCounter = 0;
+  if (HAL_LPTIM_Init(h) != HAL_OK) {
+    return -1;
+  }
+  oc.Pulse = pulse;
+  oc.OCPolarity = LPTIM_OCPOLARITY_HIGH;
+  return (HAL_LPTIM_OC_ConfigChannel(h, &oc, LPTIM_CHANNEL_1) == HAL_OK) ? 0 : -2;
+}
+#endif
 
 #endif
 

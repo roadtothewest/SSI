@@ -12,8 +12,9 @@ if [ -f "$ENV_SH" ]; then source "$ENV_SH" >/dev/null; fi
 case "${1:-}" in
   build)
     cd "$FSBL"
-    # SSI_SYNC_LPTIM=ON: bench build without the D6->D2 bridge (see ssi_config.h)
-    cmake --preset Debug -DSSI_SYNC_LPTIM="${SSI_SYNC_LPTIM:-OFF}" >/dev/null
+    # SSI_MIC_ANALOG=OFF: INMP441 on SAI2 instead of the ADMP401 on A3 (plan 3).
+    # SSI_SYNC_LPTIM=ON (INMP441 only): bench build without the D6->D2 bridge (see ssi_config.h).
+    cmake --preset Debug -DSSI_MIC_ANALOG="${SSI_MIC_ANALOG:-ON}" -DSSI_SYNC_LPTIM="${SSI_SYNC_LPTIM:-OFF}" >/dev/null
     cmake --build --preset Debug
     ;;
   ram)

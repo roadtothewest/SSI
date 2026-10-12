@@ -60,8 +60,12 @@ target_sources(STM32_Drivers PRIVATE
 file(GLOB APP_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/App/Src/*.c)
 set_source_files_properties(${APP_SRC} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 option(SSI_SYNC_LPTIM "Bench build: ADC triggered by LPTIM1 (HSE) instead of the D6->D2 bridge" OFF)
-if(SSI_SYNC_LPTIM)
+option(SSI_MIC_ANALOG "ADMP401 analog microphone on A3 (ADC2 at 64 kHz, plan 3); OFF = INMP441 on SAI2" ON)
+if(SSI_SYNC_LPTIM OR SSI_MIC_ANALOG) # the analog microphone needs the LPTIM sync
     set_property(SOURCE ${APP_SRC} APPEND PROPERTY COMPILE_DEFINITIONS SSI_SYNC_SRC=1)
+endif()
+if(SSI_MIC_ANALOG)
+    set_property(SOURCE ${APP_SRC} APPEND PROPERTY COMPILE_DEFINITIONS SSI_MIC_SRC=1)
 endif()
 
 
