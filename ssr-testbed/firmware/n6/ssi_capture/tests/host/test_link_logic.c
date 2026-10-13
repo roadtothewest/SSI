@@ -14,7 +14,7 @@ int main(void)
   CHECK_EQ(link_on_tx_done(&l), LINK_A_RELEASE_CUR | LINK_A_DRDY_LOW);
   CHECK_EQ(l.state, LINK_IDLE);
   CHECK_EQ(l.sent, 1);
-  CHECK_EQ(link_on_nss_rise(&l, 1), 0); /* CS release after a full transfer: nothing to do */
+  CHECK_EQ(link_on_nss_rise(&l), 0); /* CS release after a full transfer: nothing to do */
   CHECK_EQ(link_on_tx_done(&l), 0);     /* spurious completion while idle */
 
   /* unread block and a newer one ready, CS high: replace it with a fresh DRDY edge (§4) */
@@ -30,15 +30,15 @@ int main(void)
   CHECK_EQ(l.dropped, 1);
   CHECK_EQ(l.state, LINK_ARMED);
 
-  /* CS rises before 538 bytes: abort and re-arm the same block from byte 0 */
-  CHECK_EQ(link_on_nss_rise(&l, 0), LINK_A_DRDY_LOW | LINK_A_ABORT | LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
-  CHECK_EQ(l.aborted, 1);
+  /* CS rises in the middle of a transfer (the Pi 5 releases CS between bytes and when its FIFO
+     runs dry): not an end, the 538-byte count ends the transfer (P5, 2026-10-12) */
+  CHECK_EQ(link_on_nss_rise(&l), 0);
+  CHECK_EQ(l.aborted, 0);
   CHECK_EQ(l.state, LINK_ARMED);
-  CHECK_EQ(link_on_nss_rise(&l, 1), 0); /* completion already in hardware: tx_done will follow */
 
   /* idle CS edges are ignored */
   CHECK_EQ(link_on_tx_done(&l), LINK_A_RELEASE_CUR | LINK_A_DRDY_LOW);
-  CHECK_EQ(link_on_nss_rise(&l, 0), 0);
+  CHECK_EQ(link_on_nss_rise(&l), 0);
 
   /* a Pi that reads every block: armed == sent, nothing replaced */
   link_logic_t r = {0};
@@ -59,7 +59,7 @@ int main(void)
   CHECK_EQ(link_on_tx_done(&h), 0);
   CHECK_EQ(link_on_block(&h, 1), LINK_A_RELEASE_CUR | LINK_A_HOLD_NEW); /* newer one held instead */
   CHECK_EQ(h.dropped, 1);
-  CHECK_EQ(link_on_nss_rise(&h, 0), LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
+  CHECK_EQ(link_on_nss_rise(&h), LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
   CHECK_EQ(h.state, LINK_ARMED);
   CHECK_EQ(h.armed, 1);
   /* a block found held with CS already high (its CS event not processed yet): arm the newest */
@@ -68,6 +68,20 @@ int main(void)
   CHECK_EQ(link_on_block(&g, 0), LINK_A_RELEASE_CUR | LINK_A_ARM_NEW | LINK_A_DRDY_HIGH);
   CHECK_EQ(g.state, LINK_ARMED);
   CHECK_EQ(g.dropped, 1);
+
+  /* SPI error (underrun) on an armed block: restart it from byte 0, but never under the Pi's
+     clock: with CS high re-arm now, with CS low hold it until CS rises */
+  link_logic_t e = {0};
+  CHECK_EQ(link_on_error(&e, 0), 0); /* idle: nothing armed */
+  link_on_block(&e, 0);
+  CHECK_EQ(link_on_error(&e, 0), LINK_A_DRDY_LOW | LINK_A_ABORT | LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
+  CHECK_EQ(e.aborted, 1);
+  CHECK_EQ(e.state, LINK_ARMED);
+  CHECK_EQ(link_on_error(&e, 1), LINK_A_DRDY_LOW | LINK_A_ABORT);
+  CHECK_EQ(e.aborted, 2);
+  CHECK_EQ(e.state, LINK_HELD);
+  CHECK_EQ(link_on_nss_rise(&e), LINK_A_ARM_CUR | LINK_A_DRDY_HIGH);
+  CHECK_EQ(e.state, LINK_ARMED);
 
   /* no Pi at all: every block replaces the previous one, the pool never fills */
   link_logic_t n = {0};

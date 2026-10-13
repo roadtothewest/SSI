@@ -11,6 +11,7 @@ _Static_assert(sizeof(link_stats_t) <= 8u * sizeof(ULONG), "link_stats_t must fi
 
 #define STATS_EVERY    100u  /* blocks armed between stats messages (1 s) */
 #define DRDY_LOW_SPINS 4000u /* >= 10 us of DRDY low before a new rising edge (PROTOCOLO §4) */
+#define NSS_HIGH_READS 1000u /* CS must read high this many times in a row (~10 us) to arm a held block */
 
 static link_cfg_t s_cfg;
 static SPI_HandleTypeDef s_spi;
@@ -20,6 +21,13 @@ static link_logic_t s_lk;
 static uint8_t *s_cur;
 static volatile uint32_t s_loops;
 static volatile uint32_t s_errors;
+static volatile uint32_t s_nss_ignored;  /* CS rises that did not arm a held block (Pi 5 CS gaps) */
+static volatile uint32_t s_stalls;       /* partial transfers abandoned by the Pi (no progress in 10 ms) */
+static uint32_t s_left_last = AVX_BLOCK_SIZE; /* CTSIZE at the previous block */
+static int s_nss_irq_on;
+static volatile uint32_t s_err_arm;      /* HAL_SPI_Transmit_DMA refused to arm */
+static volatile uint32_t s_err_cb;       /* SPI/DMA errors reported by the HAL */
+static volatile uint32_t s_err_codes;    /* OR of HAL_SPI_ERROR_* seen in the callback */
 /* Copy of every 100th armed block for tools/swd.py sample, cleaned to SRAM after the copy. */
 static uint8_t s_link_sample[AVX_BLOCK_SIZE] __attribute__((aligned(32), used));
 
@@ -164,8 +172,7 @@ static int nss_irq_init(void)
     return -5;
   }
   /* Lower priority than SPI5: a complete transfer's EOT is handled before its CS edge. */
-  HAL_NVIC_SetPriority(EXTI3_IRQn, 7, 0);
-  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 7, 0); /* enabled only while a block is held */
   return 0;
 }
 
@@ -174,9 +181,54 @@ static int nss_low(void)
   return HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_RESET;
 }
 
-static int tx_complete(void)
+/* The Pi 5 SPI (RP1, DesignWare) releases CS between bytes in mode 0 and whenever its TX FIFO runs
+   dry (P5, 2026-10-12): a CS rise is not the end of a read. Only a CS that stays high lets a held
+   block be armed. */
+static int nss_high_stable(void)
 {
-  return __HAL_SPI_GET_FLAG(&s_spi, SPI_FLAG_EOT) != 0u;
+  for (uint32_t i = 0; i < NSS_HIGH_READS; i++) {
+    if (nss_low()) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+/* Bytes of the armed block not yet clocked out (AVX_BLOCK_SIZE until the Pi starts reading). */
+static uint32_t tx_left(void)
+{
+  return (s_spi.Instance->SR & SPI_SR_CTSIZE_Msk) >> SPI_SR_CTSIZE_Pos;
+}
+
+/* A read is in progress when CS is low or when bytes went out since the previous block (CS may be
+   high between bytes). A partial read that did not move in 10 ms was abandoned: not busy. */
+static int link_busy(void)
+{
+  const uint32_t left = (s_lk.state == LINK_ARMED) ? tx_left() : AVX_BLOCK_SIZE;
+  const int partial = left != 0u && left < AVX_BLOCK_SIZE;
+  const int moving = partial && left != s_left_last;
+  if (partial && !moving) {
+    s_stalls++;
+  }
+  s_left_last = left;
+  return nss_low() || moving;
+}
+
+/* EXTI3 only matters while a block is held: elsewhere the Pi 5's CS gaps would flood the thread. */
+static void nss_irq_update(void)
+{
+  if (s_lk.state == LINK_HELD && !s_nss_irq_on) {
+    HAL_EXTI_ClearPending(&s_exti, EXTI_TRIGGER_RISING);
+    HAL_NVIC_ClearPendingIRQ(EXTI3_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+    s_nss_irq_on = 1;
+    if (!nss_low()) {
+      notify(LINK_EVT_NSS); /* CS rose before the IRQ was on */
+    }
+  } else if (s_lk.state != LINK_HELD && s_nss_irq_on) {
+    HAL_NVIC_DisableIRQ(EXTI3_IRQn);
+    s_nss_irq_on = 0;
+  }
 }
 
 static void drdy(int high)
@@ -188,6 +240,7 @@ static void arm(uint8_t *blk)
 {
   if (HAL_SPI_Transmit_DMA(&s_spi, blk, (uint16_t)AVX_BLOCK_SIZE) != HAL_OK) {
     s_errors++;
+    s_err_arm++;
   }
 }
 
@@ -224,6 +277,7 @@ static void run(uint32_t a, uint8_t *blk)
     }
     drdy(1);
   }
+  nss_irq_update();
 }
 
 static void stats_push(void)
@@ -279,6 +333,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
   if (hspi == &s_spi) {
     s_errors++;
+    s_err_cb++;
+    s_err_codes |= hspi->ErrorCode;
     notify(LINK_EVT_ERROR);
   }
 }
@@ -301,18 +357,24 @@ void link_thread_entry(ULONG arg)
                              LINK_EVT_BLOCK | LINK_EVT_TX_DONE | LINK_EVT_NSS | LINK_EVT_ERROR,
                              TX_OR_CLEAR, &got, TX_TIMER_TICKS_PER_SECOND / 10u);
     s_loops++;
-    /* Completion first: a full transfer's CS edge must not look like an early one. */
+    /* A read ends by its byte count (EOT): completion first, then errors, then a held block. */
     if ((got & LINK_EVT_TX_DONE) != 0u) {
       run(link_on_tx_done(&s_lk), NULL);
     }
-    if ((got & (LINK_EVT_NSS | LINK_EVT_ERROR)) != 0u) {
-      const int complete = ((got & LINK_EVT_ERROR) == 0u) && tx_complete();
-      run(link_on_nss_rise(&s_lk, complete), NULL);
+    if ((got & LINK_EVT_ERROR) != 0u) {
+      run(link_on_error(&s_lk, nss_low()), NULL);
+    }
+    if ((got & LINK_EVT_NSS) != 0u) {
+      if (s_lk.state == LINK_HELD && nss_high_stable()) {
+        run(link_on_nss_rise(&s_lk), NULL);
+      } else {
+        s_nss_ignored++;
+      }
     }
     ULONG msg;
     while (tx_queue_receive(s_cfg.in, &msg, TX_NO_WAIT) == TX_SUCCESS) {
       const uint32_t armed = s_lk.armed;
-      run(link_on_block(&s_lk, nss_low()), (uint8_t *)(uintptr_t)msg);
+      run(link_on_block(&s_lk, link_busy()), (uint8_t *)(uintptr_t)msg);
       if (s_lk.armed != armed && s_lk.armed % STATS_EVERY == 0u) {
         stats_push();
       }

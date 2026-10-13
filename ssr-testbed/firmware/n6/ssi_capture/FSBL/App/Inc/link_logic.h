@@ -26,14 +26,20 @@ typedef struct {
   uint32_t sent;     /* complete 538-byte transfers */
   uint32_t replaced; /* armed blocks replaced by a newer one before the Pi read them */
   uint32_t dropped;  /* blocks discarded without being offered (transfer in progress) */
-  uint32_t aborted;  /* transfers cut short (CS rose early) and re-armed */
+  uint32_t aborted;  /* armed blocks restarted from byte 0 after an SPI error */
 } link_logic_t;
 
-/* A new block is ready (always the newest). nss_low: a transfer is in progress. */
-uint32_t link_on_block(link_logic_t *l, int nss_low);
+/* A new block is ready (always the newest). busy: the Pi is in the middle of a read (CS low, or
+   bytes went out since the previous block). */
+uint32_t link_on_block(link_logic_t *l, int busy);
 /* The SPI finished sending the armed block. */
 uint32_t link_on_tx_done(link_logic_t *l);
-/* CS rose. tx_complete: the hardware already sent every byte of the armed block. */
-uint32_t link_on_nss_rise(link_logic_t *l, int tx_complete);
+/* CS rose while a block is held (it arrived during a read of an idle link): arm it now. CS edges
+   in any other state mean nothing: the Pi 5 releases CS between bytes and when its FIFO runs dry,
+   so a transfer ends by its byte count (tx_done), never by CS (P5, 2026-10-12). */
+uint32_t link_on_nss_rise(link_logic_t *l);
+/* SPI/DMA error (e.g. underrun) on the armed block: restart it from byte 0, at once when CS is
+   high, or held until CS rises when the Pi is in the middle of a read. */
+uint32_t link_on_error(link_logic_t *l, int nss_low);
 
 #endif
