@@ -7,7 +7,7 @@
 //	recorder → graba la sesión en disco cuando se pide
 //	cwt      → escalogramas CWT (magnitud y fase), una columna por hop
 //	stats    → correlación cruzada sEMG→voz, cross-wavelet, enunciados, estadísticas
-//	web      → HMI en http://<pi>:8080 (SSE, sin internet)
+//	web      → HMI en http://auravox.lan (servicio en el puerto 80; -addr), SSE, sin internet
 package main
 
 import (
