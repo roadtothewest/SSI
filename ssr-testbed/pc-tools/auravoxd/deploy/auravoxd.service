@@ -5,9 +5,11 @@ Wants=network-online.target
 
 [Service]
 User=aura
+# Puerto 80 sin root: la HMI queda en http://auravox.lan
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 SupplementaryGroups=spi gpio
 WorkingDirectory=/home/aura
-ExecStart=/usr/local/bin/auravoxd -src spi -addr :8080 -data /home/aura/auravox -drdy 25 -gpiochip gpiochip0
+ExecStart=/usr/local/bin/auravoxd -src spi -addr :80 -data /home/aura/auravox -drdy 25 -gpiochip gpiochip0
 Restart=always
 RestartSec=2
 

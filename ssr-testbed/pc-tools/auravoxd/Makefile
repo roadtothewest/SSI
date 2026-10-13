@@ -1,4 +1,5 @@
-PI ?= aura@192.168.0.103
+# Desde la red AuraVox; en otra red: make deploy PI=aura@<IP>
+PI ?= aura@auravox.lan
 
 # Binario para esta máquina (pruebas con -src sim).
 build:
@@ -8,7 +9,7 @@ build:
 ARCH ?= arm64
 build-pi:
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) GOARM=7 go build -trimpath -ldflags "-s -w" -o dist/auravoxd .
-	cp deploy/auravoxd.service deploy/install.sh dist/
+	cp deploy/auravoxd.service deploy/install.sh deploy/auravox-dns.conf dist/
 
 # Copia a la Pi e instala el servicio.
 deploy: build-pi

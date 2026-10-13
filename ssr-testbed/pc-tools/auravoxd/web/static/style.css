@@ -35,6 +35,9 @@ nav button.on { background: var(--raised); color: var(--text); box-shadow: 0 1px
 #link.ok i { background: var(--good); box-shadow: 0 0 0 3px rgba(12,163,12,.18); }
 #link.bad { color: #fff; background: rgba(208,59,59,.18); } #link.bad i { background: var(--bad); }
 .pill.rec { color: #fff; background: rgba(208,59,59,.18); } .pill.rec i { background: var(--bad); animation: pulse 1.2s infinite; }
+.pill.play { color: var(--text); background: rgba(57,135,229,.16); padding-right: 4px; } .pill.play i { background: var(--c0); }
+#plays { display: inline-block; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.pill.play button { border: 0; border-radius: 999px; padding: 3px 10px; background: var(--c0); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
 @keyframes pulse { 50% { opacity: .25; } }
 
 main { max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; }
@@ -154,6 +157,11 @@ td.lead { color: #5fd35f; } td.lag { color: var(--warn); }
 .files li:last-child { border-bottom: 0; }
 .files a { color: var(--text); text-decoration: none; padding: 5px 12px; border-radius: 8px; background: var(--raised); font-size: 13px; }
 .files a:hover { background: var(--axis); }
+.files .acts { display: flex; gap: 8px; flex: none; }
+.files button { border: 0; color: var(--text); padding: 5px 12px; border-radius: 8px; background: var(--raised); font: inherit; font-size: 13px; cursor: pointer; }
+.files button:hover { background: var(--axis); }
+.files button.on { background: var(--c0); color: #fff; cursor: default; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
 
 @media (max-width: 760px) {
   header { padding: 10px 16px; gap: 10px; } main { padding: 16px; }

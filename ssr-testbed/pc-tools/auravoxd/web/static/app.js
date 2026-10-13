@@ -16,7 +16,7 @@ const DPR = () => window.devicePixelRatio || 1;
 
 let I = null, R = null, tab = 'sig';
 let NB = 0, waves = [], wpos = 0, cols = [], hop = 10;
-let autoScale = [20, 20, 20, 0.5], fixedScale = 0, cmode = 'mag', delayAuto = true, lastRec = null;
+let autoScale = [20, 20, 20, 0.5], fixedScale = 0, cmode = 'mag', delayAuto = true, lastRec = null, lastSrc = null;
 
 // ------------------------------------------------------------ controles
 const post = (url, body) => fetch(url, { method: 'POST', body: JSON.stringify(body) });
@@ -43,6 +43,11 @@ $('delayauto').onclick = () => setAuto(!delayAuto);
 function setAuto(on) { delayAuto = on; $('delayauto').classList.toggle('on', on); }
 $('recbtn').onclick = () => post('/api/record', { on: !(lastRec && lastRec.active) });
 $('resetbtn').onclick = () => post('/api/reset', {});
+$('livebtn').onclick = () => post('/api/source', { file: '' }).then(loadFiles);
+$('files').onclick = e => {
+  const b = e.target.closest('button[data-play]');
+  if (b && !b.classList.contains('on')) post('/api/source', { file: b.dataset.play }).then(loadFiles);
+};
 
 // ------------------------------------------------------------ stream SSE
 const es = new EventSource('/api/stream');
@@ -54,7 +59,7 @@ es.onmessage = e => {
   if (m.c) for (const c of m.c) cols.push(b64(c));
   const maxCols = I.showSecs * 1000 / hop + 400;
   if (cols.length > maxCols) cols.splice(0, cols.length - maxCols);
-  if (m.r) onResult(m.r, m.link, m.rec);
+  if (m.r) onResult(m.r, m.link, m.rec, m.src);
 };
 es.onerror = () => setLink('bad', 'Sin conexión');
 
@@ -89,13 +94,17 @@ function pushWaves(m) {
 // ------------------------------------------------------------ resultados
 function setLink(cls, text) { $('link').className = 'pill ' + cls; $('link').lastChild.textContent = text; }
 
-function onResult(r, link, rec) {
-  R = r; lastRec = rec;
+function onResult(r, link, rec, src) {
+  R = r; lastRec = rec; lastSrc = src || lastSrc;
+  const replay = !!lastSrc && lastSrc.mode === 'file';
   if (r.hop !== hop) { hop = r.hop; cols = []; setSeg('hop', hop); }
 
   // cabecera
   if (link.nodata) setLink('bad', 'Sin señal');
-  else setLink('ok', I.source === 'sim' ? 'Simulación' : I.source === 'file' ? 'Reproducción' : 'En vivo');
+  else setLink('ok', replay || I.source === 'file' ? 'Reproducción' : I.source === 'sim' ? 'Simulación' : 'En vivo');
+  $('play').hidden = !replay;
+  $('plays').textContent = replay ? lastSrc.file.replace(/\.avx$/, '') : '';
+  $('recbtn').disabled = replay;
   $('cond').textContent = (COND[r.cond] || [r.cond])[0];
   $('rec').hidden = !rec.active;
   $('recs').textContent = rec.active ? clock(rec.secs) : '';
@@ -358,10 +367,18 @@ function drawSession(r, link) {
 }
 
 let filesT = 0;
+const esc = s => s.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 function loadFiles() {
   fetch('/api/files').then(r => r.json()).then(fs => {
-    $('files').innerHTML = (fs || []).map(f => `<li><span>${f.name}<span class="muted"> · ${(f.size / 1e6).toFixed(1)} MB</span></span>` +
-      `<a href="/files/${f.name}" download>Descargar</a></li>`).join('') || '<li class="muted">Aún no hay grabaciones</li>';
+    const playing = lastSrc && lastSrc.mode === 'file' ? lastSrc.file : '';
+    $('files').innerHTML = (fs || []).map(f => {
+      const n = esc(f.name);
+      const play = !f.name.endsWith('.avx') ? ''
+        : f.name === playing ? '<button class="on" disabled>Reproduciendo</button>'
+        : `<button data-play="${n}">Reproducir</button>`;
+      return `<li><span>${n}<span class="muted"> · ${(f.size / 1e6).toFixed(1)} MB</span></span>` +
+        `<span class="acts">${play}<a href="/files/${encodeURIComponent(f.name)}" download>Descargar</a></span></li>`;
+    }).join('') || '<li class="muted">Aún no hay grabaciones</li>';
   });
 }
 

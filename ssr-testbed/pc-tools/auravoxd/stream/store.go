@@ -168,6 +168,24 @@ func (s *Store) Ingest(raw []byte) bool {
 	return true
 }
 
+// ResetLink pone en cero los contadores del enlace al cambiar de fuente (en vivo ↔ sesión
+// grabada): cada fuente trae su propio seq, y el salto entre ellas no es un bloque perdido.
+func (s *Store) ResetLink() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.link = Link{}
+	s.haveSeq = false
+	s.rateT0, s.rateN = time.Time{}, 0
+}
+
+// ResetSeq olvida el último seq sin tocar los contadores: una sesión que vuelve a su
+// inicio retrocede su seq, y eso no es un bloque perdido.
+func (s *Store) ResetSeq() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.haveSeq = false
+}
+
 func (s *Store) Link() Link {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

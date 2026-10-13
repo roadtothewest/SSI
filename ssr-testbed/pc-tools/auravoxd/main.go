@@ -7,7 +7,7 @@
 //	recorder → graba la sesión en disco cuando se pide
 //	cwt      → escalogramas CWT (magnitud y fase), una columna por hop
 //	stats    → correlación cruzada sEMG→voz, cross-wavelet, enunciados, estadísticas
-//	web      → HMI en http://<pi>:8080 (SSE, sin internet)
+//	web      → HMI en http://auravox.lan (servicio en el puerto 80; -addr), SSE, sin internet
 package main
 
 import (
@@ -28,10 +28,6 @@ import (
 	"auravoxd/web"
 )
 
-type Source interface {
-	Run(ctx context.Context, out chan<- []byte)
-}
-
 func main() {
 	src := flag.String("src", "spi", "fuente: spi | sim | file")
 	file := flag.String("file", "", "sesión .avx para -src file")
@@ -51,7 +47,7 @@ func main() {
 	flag.Float64Var(&conv.Gain, "gain", 2500, "ganancia total del AFE")
 	flag.Parse()
 
-	var s Source
+	var s source.Source
 	switch *src {
 	case "spi":
 		s = &source.SPI{Dev: *dev, Hz: uint32(*hz), Chip: *chip, DRDY: *drdy}
@@ -76,7 +72,8 @@ func main() {
 	an.OnUtterance = rec.AddUtterance
 
 	raw := make(chan []byte, 256)
-	go s.Run(ctx, raw)
+	mux := source.NewMux(s, *data) // la HMI cambia en caliente a una sesión grabada y de vuelta
+	go mux.Run(ctx, raw)
 	go func() { // decoder
 		for {
 			select {
@@ -95,7 +92,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:        *addr,
-		Handler:     (&web.Server{St: st, An: an, Rec: rec, Conv: conv, Source: *src, DataDir: *data}).Handler(),
+		Handler:     (&web.Server{St: st, An: an, Rec: rec, Src: mux, Conv: conv, Source: *src, DataDir: *data}).Handler(),
 		BaseContext: func(net.Listener) context.Context { return ctx }, // cierra los SSE al apagar
 	}
 	go func() {
