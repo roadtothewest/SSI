@@ -25,7 +25,7 @@ const (
 // Conv pasa el código del ADC a µV referidos a la entrada del AFE.
 type Conv struct {
 	VrefADC float64 // tensión de referencia del ADC del DK [V]
-	GDK     float64 // ganancia del pin Arduino al ADC (supuesto 0.545)
+	GDK     float64 // ganancia del pin Arduino al ADC (0.5437, divisor 560/1030 del DK)
 	VMid    float64 // VREF del AFE [V]
 	Gain    float64 // ganancia total del AFE (2500)
 }

@@ -7,8 +7,9 @@
  *   lo deja en el buffer TX del DMA y sube DRDY. La Pi lee 538 bytes con CS bajo.
  *   Al terminar el DMA (o al subir NSS), el DK baja DRDY.
  * - seq sube en 1 por bloque: la Pi detecta bloques perdidos.
- * - adc[]: código crudo de 12 bits (0..4095) de A1, A2, A3.
- * - voz[]: INMP441 de 24 bits desplazado >> 8 (int16), 8 muestras por tupla.
+ * - adc[]: código crudo de 12 bits (0..4095) de CH1, CH2, CH3 = Arduino A1, A4, A5.
+ * - voz[]: micrófono en escala de 24 bits desplazado >> 8 (int16), 8 muestras por tupla
+ *   (ADMP401 analógico en A3 por defecto; INMP441 por I2S como opción).
  */
 #ifndef AURAVOX_FRAME_H
 #define AURAVOX_FRAME_H

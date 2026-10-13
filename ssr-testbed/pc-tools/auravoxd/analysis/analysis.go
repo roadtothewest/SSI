@@ -34,6 +34,10 @@ type Analyzer struct {
 	st          *stream.Store
 	hop         atomic.Int32 // ms
 	OnUtterance func(Utterance)
+	// VozDelayMS es el retardo fijo con que llega la voz respecto del sEMG
+	// (filtro de decimación del firmware: 0,75 ms con la ADMP401). Se resta de
+	// todos los lags, para que τ > 0 siga significando que el sEMG se adelanta.
+	VozDelayMS float64
 
 	bankE, bankV, bankX *dsp.Bank
 
@@ -47,6 +51,9 @@ type Analyzer struct {
 
 	res atomic.Pointer[Result]
 }
+
+// lagMS pasa un lag medido (sEMG respecto de la voz recibida) a ms, sin el retardo de la voz.
+func (a *Analyzer) lagMS(ms int) F { return F(float64(ms) - a.VozDelayMS) }
 
 func New(st *stream.Store, hopMS int) *Analyzer {
 	a := &Analyzer{
@@ -377,7 +384,7 @@ func (a *Analyzer) analyzeUtterance(s *stats, p pending) (Utterance, bool) {
 		}
 		r := dsp.XCorr(x, y, maxLag)
 		i, rv := dsp.Peak(r)
-		u.Tau[ch], u.R[ch], u.R0[ch] = F((i-maxLag)*envMS), F(rv), F(r[maxLag])
+		u.Tau[ch], u.R[ch], u.R0[ch] = a.lagMS((i-maxLag)*envMS), F(rv), F(r[maxLag])
 		// Onset del sEMG entre −500 ms y +200 ms del onset de la voz (índice 100 de x).
 		// Se exige que el sEMG parta bajo el umbral, si no el onset no es medible.
 		win := x[:min(len(x), 140)]
@@ -389,7 +396,7 @@ func (a *Analyzer) analyzeUtterance(s *stats, p pending) (Utterance, bool) {
 			continue
 		}
 		if o := dsp.Onset(win[k:], s.eOn[ch], 6); o >= 0 {
-			u.Lead[ch] = F((100 - (k + o)) * envMS)
+			u.Lead[ch] = a.lagMS((100 - (k + o)) * envMS)
 		}
 	}
 	return u, true
@@ -420,7 +427,7 @@ func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 			r.XC[ch] = dsp.XCorr(x, y, maxLag)
 			if r.Voiced {
 				i, v := dsp.Peak(r.XC[ch])
-				r.TauLive[ch], r.RLive[ch] = F((i-maxLag)*envMS), F(v)
+				r.TauLive[ch], r.RLive[ch] = a.lagMS((i-maxLag)*envMS), F(v)
 			}
 		}
 	}
@@ -508,6 +515,8 @@ func (a *Analyzer) crossWavelet(r *Result, s *stats, nEnv int64) {
 		}
 		if math.IsNaN(ref) {
 			ref = 0
+		} else {
+			ref += a.VozDelayMS // la fase medida trae el retardo de la voz
 		}
 		xw := XWT{Mag: make([]byte, nf*cols), Phase: make([]byte, nf*cols), Coh: make([]F, nf), Lag: make([]F, nf)}
 		mag := make([]float64, nf*cols)
@@ -542,7 +551,7 @@ func (a *Analyzer) crossWavelet(r *Result, s *stats, nEnv int64) {
 				xw.Coh[f] = F(am * am / (sxx[f] * syy[f]))
 				cyc := cmplx.Phase(sxy[f]) / (2 * math.Pi)
 				k := math.Round(ref/1000*fr - cyc) // desenrollar cerca de τ*
-				xw.Lag[f] = F((cyc + k) / fr * 1000)
+				xw.Lag[f] = F((cyc+k)/fr*1000 - a.VozDelayMS)
 			}
 		}
 		r.XWT[ch] = xw

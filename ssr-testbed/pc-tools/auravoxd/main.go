@@ -43,9 +43,10 @@ func main() {
 	drdy := flag.Int("drdy", 25, "GPIO de DRDY (-1 = sin DRDY, lee cada 10 ms)")
 	hop := flag.Int("hop", 10, "hop de la CWT [ms]: 5, 10 o 20")
 	lag := flag.Float64("sim-lag", 60, "adelanto del sEMG en la simulación [ms]")
+	vozDelay := flag.Float64("voz-delay", 0.75, "retardo fijo de la voz respecto del sEMG [ms] (filtro del firmware: ADMP401 0.75, INMP441 1.078)")
 	conv := stream.Conv{}
 	flag.Float64Var(&conv.VrefADC, "vref-adc", 1.8, "referencia del ADC del DK [V]")
-	flag.Float64Var(&conv.GDK, "gdk", 0.545, "ganancia del pin Arduino al ADC (supuesto: medir)")
+	flag.Float64Var(&conv.GDK, "gdk", 0.5437, "ganancia del pin Arduino al ADC (divisor 560/1030 del DK, MB1939)")
 	flag.Float64Var(&conv.VMid, "vmid", 1.65, "VREF del AFE [V]")
 	flag.Float64Var(&conv.Gain, "gain", 2500, "ganancia total del AFE")
 	flag.Parse()
@@ -67,6 +68,10 @@ func main() {
 
 	st := stream.NewStore(conv)
 	an := analysis.New(st, *hop)
+	an.VozDelayMS = *vozDelay
+	if *src == "sim" && !flagSet("voz-delay") {
+		an.VozDelayMS = 0 // la simulación no pasa la voz por el filtro del firmware
+	}
 	rec := record.New(*data)
 	an.OnUtterance = rec.AddUtterance
 
@@ -104,4 +109,9 @@ func main() {
 		log.Fatal(err)
 	}
 	rec.Stop()
+}
+
+func flagSet(name string) (set bool) {
+	flag.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return
 }

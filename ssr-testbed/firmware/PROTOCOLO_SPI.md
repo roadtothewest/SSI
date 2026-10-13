@@ -13,15 +13,25 @@ La referencia de verdad es el código:
 - `pc-tools/auravoxd/source/spi.go`: el maestro SPI y la espera de DRDY;
 - `pc-tools/auravoxd/stream/store.go`: la validación de `seq`, los flags y la conversión a µV.
 
+El firmware que lo implementa está en `ssr-testbed/firmware/n6/` (rama `feat/n6-capture-fw`); su README tiene las conexiones, cómo compilar y las pruebas.
+
 ## 1. Qué captura el DK
 | Señal | Fuente en el DK | Tasa | Formato en la tupla |
 |---|---|---|---|
 | CH1 submentoniano | ADC, pin Arduino **A1** | **2 kHz** | `adc[0]`: código crudo de 12 bits, 0..4095, alineado a la derecha |
-| CH2 labio inferior | ADC, pin Arduino **A2** | 2 kHz | `adc[1]` |
-| CH3 cuello/laringe | ADC, pin Arduino **A3** | 2 kHz | `adc[2]` |
-| Voz | INMP441 por SAI en modo I2S | **16 kHz** | `voz[0..7]`: int16 = muestra de 24 bits con signo `>> 8` |
+| CH2 labio inferior | ADC, pin Arduino **A4** | 2 kHz | `adc[1]` |
+| CH3 cuello/laringe | ADC, pin Arduino **A5** | 2 kHz | `adc[2]` |
+| Voz | Micrófono analógico ADMP401 en **A3** (ADC2 a 64 kHz, FIR y decimación ÷4 en el firmware) | **16 kHz** | `voz[0..7]`: int16 = muestra en escala de 24 bits `>> 8` |
 
-- **Las 3 muestras de ADC de una tupla se toman en el mismo instante** (o con unos µs de diferencia por el scan). El orden es fijo: A1, A2, A3.
+| AFE / micrófono | Pin Arduino del DK | Pin del N6 |
+|---|---|---|
+| CH1 | A1 | PA9 (ADC1_INP10) |
+| CH2 | A4 | PF3 (ADC1_INP16) |
+| CH3 | A5 | PB10 (ADC1_INP8) |
+| ADMP401 AUD | A3 | PA12 (ADC2_INP13) |
+
+- **El EMG no puede ir en A2 y A3:** A3 lleva el micrófono, y A2 comparte con A3 el op-amp doble U7 de la placa.
+- **Las 3 muestras de ADC de una tupla se toman en el mismo instante** (o con unos µs de diferencia por el scan). El orden de `adc[]` es fijo: CH1, CH2, CH3.
 - **Muestras de voz:** 16 kHz / 2 kHz = **8 por tupla**. `voz[k]` corresponde al instante `ts_us + k·62,5 µs`.
 - **Si el ADC se configura con otra resolución** (10, 14 o 16 bits), hay que escalar a 12 bits antes de escribir `adc[]`. La Pi asume siempre 0..4095.
 
@@ -29,15 +39,19 @@ La referencia de verdad es el código:
 ```
 µV = (código · VrefADC / 4095 / GDK − VMid) / Gain · 1e6
 ```
-- Valores por defecto (flags de `auravoxd`): `VrefADC = 1.8` V, `GDK = 0.545`, `VMid = 1.65` V, `Gain = 2500`.
-- **`GDK` es un supuesto:** sería la atenuación entre el pin Arduino y el ADC del N6.
-  - Mídela: pon un DC conocido en A1, lee el código y calcula `GDK = código·1.8/4095 / V_pin`.
-  - Luego ajusta `-gdk` en `auravoxd`.
-- Con la salida del AFE en reposo (1,65 V), el código esperado es ≈ 1,65·0,545/1,8·4095 ≈ **2046**.
-- Excursión útil del AFE: 0,25–3,05 V en el pin. Con GDK = 0,545 son 0,14–1,66 V en el ADC, dentro del rango de 1,8 V.
+- Valores por defecto (flags de `auravoxd`): `VrefADC = 1.8` V, `GDK = 0.5437`, `VMid = 1.65` V, `Gain = 2500`.
+- **`GDK` = 560/1030 = 0,5437:** la placa pasa cada pin analógico del Arduino por un divisor 470k/560k y un buffer TSZ122 antes del ADC de 1,8 V (esquemático MB1939, hoja 9). La entrada es de alta impedancia, así que no carga al AFE.
+  - Para confirmarlo en el banco: pon un DC conocido en A1, lee el código y calcula `GDK = código·1.8/4095 / V_pin`. Si difiere, ajusta `-gdk` en `auravoxd`.
+- Con la salida del AFE en reposo (1,65 V), el código esperado es ≈ 1,65·0,5437/1,8·4095 ≈ **2041**.
+- Excursión útil del AFE: 0,25–3,05 V en el pin. Con GDK = 0,5437 son 0,14–1,66 V en el ADC, dentro del rango de 1,8 V.
 
 ### Voz
-- **INMP441 (I2S Philips):**
+- **ADMP401 (por defecto):**
+  - el breakout de SparkFun (OPA344 ×67) da VCC/2 en reposo; se alimenta desde el 3V3 del DK (CN8-4);
+  - el firmware lo muestrea a 64 kHz con el ADC2, aplica un FIR de 97 coeficientes, decima ÷4 y quita la continua;
+  - el fondo de escala del ADC (0–3,3 V en A3) equivale a ±32768 en `voz`;
+  - **el FIR retrasa la voz 0,75 ms fijos (12 muestras).** `auravoxd` los resta de todos los lags con `-voz-delay 0.75` (valor por defecto).
+- **INMP441 (opción de compilación, `SSI_MIC_ANALOG=OFF`; el primero que se compró salió defectuoso):**
   - el pin L/R va a GND, así que el micrófono transmite en el slot izquierdo;
   - el slot derecho se descarta;
   - slots de 32 bits con 24 bits útiles;
@@ -45,6 +59,7 @@ La referencia de verdad es el código:
 - **Conversión a `voz`:**
   - si el SAI entrega la palabra de 32 bits con los 24 bits arriba (alineados a la izquierda): `voz = (int16_t)((int32_t)palabra >> 16)`;
   - si el SAI está en 24 bits alineados a la derecha: extiende el signo de 24 a 32 bits y haz `>> 8`.
+  - su filtro de decimación interno retrasa la voz 1,078 ms: usar `auravoxd -voz-delay 1.078`.
 - La Pi normaliza con `voz / 32768`, lo que da un rango de [−1, 1] (dBFS).
 - Rangos de la HMI: el escalograma de la voz va de −80 a −10 dBFS. La detección de frases usa umbrales adaptativos, sin nivel absoluto.
 
@@ -69,7 +84,7 @@ Cada bloque trae **20 tuplas**, o sea 20 × 500 µs = 10 ms → **100 bloques/s*
 | Offset en la tupla | Tamaño | Campo |
 |---|---|---|
 | 0 | 4 | `ts_us` u32: µs del instante de muestreo del ADC |
-| 4 | 2 × 3 | `adc[3]` u16: A1, A2, A3 |
+| 4 | 2 × 3 | `adc[3]` u16: CH1 (A1), CH2 (A4), CH3 (A5) |
 | 10 | 2 × 8 | `voz[8]` i16 |
 
 - **CRC-16/CCITT-FALSE:** polinomio 0x1021, valor inicial 0xFFFF, sin reflexión ni XOR final. Prueba: `"123456789"` → `0x29B1`. Está implementado en `avx_crc16()`.
@@ -87,7 +102,7 @@ Cada bloque trae **20 tuplas**, o sea 20 × 500 µs = 10 ms → **100 bloques/s*
 2. **La voz y el ADC de una tupla son del mismo intervalo de 500 µs.**
    - Esto es lo más delicado. La HMI mide el retardo sEMG → voz (τ\*, del orden de +50 ms).
    - Cualquier desfase fijo entre el ADC y la voz en el firmware **se suma directamente a τ\***. Por ejemplo, tomar la voz de una mitad de buffer DMA anterior agrega 10 ms de error.
-   - Objetivo: desfase < 1 ms, y documentar cualquier latencia fija conocida, como la del filtro de decimación del INMP441.
+   - Objetivo: desfase < 1 ms, y documentar cualquier latencia fija conocida, como la del filtro del micrófono (0,75 ms con la ADMP401, que `auravoxd` resta con `-voz-delay`).
 3. **Tasas exactas.**
    - El ADC lo dispara un timer a 2 kHz y el SAI corre a 16 kHz con su propio PLL. Si los dos relojes no son exactamente 1:8, la cola de voz crece o se vacía con el tiempo.
    - En ese caso, el firmware **duplica o descarta una muestra de voz** para mantener 8 por tupla y **marca el bit1 de `flags`**.
@@ -96,22 +111,22 @@ Cada bloque trae **20 tuplas**, o sea 20 × 500 µs = 10 ms → **100 bloques/s*
 
 ## 4. Protocolo físico SPI + DRDY
 - **La Pi es maestro** SPI0, en modo **0** (CPOL = 0, CPHA = 0), con palabras de 8 bits, MSB primero, a **4 MHz**: 538 B tardan ≈ 1,1 ms.
-- **El DK es esclavo** con DMA de TX y NSS por hardware.
+- **El DK es esclavo** (SPI5) con DMA de TX y **NSS por software**: una lectura termina al completar los 538 B, nunca por CS. Con NSS por hardware, los flancos espurios de la línea CS deseleccionaban el SPI a mitad de byte y corrían los bits. El firmware lee CS como GPIO solo para decidir cuándo armar un bloque.
 - Lo que la Pi envía por MOSI son ceros y se ignora.
 - Cada lectura es **una sola transferencia de 538 B con CS bajo todo el tiempo**.
 
 ### Pines
 | Señal | Raspberry Pi (pin físico) | DK (Arduino) |
 |---|---|---|
-| SCLK | GPIO11 (23) | D13 |
-| MISO (DK → Pi) | GPIO9 (21) | D12 |
-| MOSI (Pi → DK) | GPIO10 (19) | D11 |
-| CS | GPIO8 / CE0 (24) | D10 (NSS) |
-| **DRDY** (DK → Pi) | **GPIO25 (22)** | D libre (a elegir en CubeMX; salida push-pull) |
+| SCLK | GPIO11 (23) | D13 (PE15) |
+| MISO (DK → Pi) | GPIO9 (21) | D12 (PH8) |
+| MOSI (Pi → DK) | GPIO10 (19) | D11 (PG2) |
+| CS | GPIO8 / CE0 (24) | D10 (PA3) |
+| **DRDY** (DK → Pi) | **GPIO25 (22)** | **D4 (PH5)**, salida push-pull |
 | GND | 25 (u otro GND) | GND |
 
-- **Instancia SPI del DK:** el comentario de `auravox_frame.h` dice SPI5. **Hay que verificar en el manual del DK (UM3300) o en CubeMX qué SPI llega a D10–D13.**
-- Los niveles lógicos son de 3,3 V en los dos lados; confirma que el conector Arduino del DK trabaja a 3,3 V.
+- Los niveles lógicos son de 3,3 V en los dos lados.
+- Verificado con la Raspberry Pi 5 (P5, 2026-10-13): 60 002 bloques en 10 min a 4 MHz, modo 0, con `crc=0` y `gaps=0`; con DRDY, `auravoxd` recibió 7192 bloques sin errores.
 
 ### Secuencia por bloque
 ```
@@ -132,8 +147,10 @@ DK: callback de TX completo (o NSS ↑) → DRDY ↓ → queda libre para el blo
 - **Si el DK no tiene bloque**, MISO queda en 0x00 o 0xFF. La Pi lo ve como "sin sync" y lo ignora en silencio, sin contarlo como error.
 
 ## 5. Arquitectura sugerida del firmware
+Es la arquitectura original con el INMP441 por SAI. La implementación real (`firmware/n6/`) usa LPTIM1 para el EMG y LPTIM2 + ADC2 para la ADMP401, los dos desde el mismo cristal.
+
 ```
-TIMx (2 kHz, TRGO) ──► ADC (scan A1, A2, A3) ──► DMA circular  adc_buf[2][20][3]
+TIMx (2 kHz, TRGO) ──► ADC (scan A1, A4, A5) ──► DMA circular  adc_buf[2][20][3]
                                                   └─ callbacks de mitad / completo cada 10 ms ─┐
 SAI (I2S maestro RX, 16 kHz, slots de 32 bits) ──► DMA circular ──► FIFO de voz (int16)        │
                                                                                               ▼
@@ -173,5 +190,5 @@ Pestaña **Sesión → Enlace** (también en `journalctl -u auravoxd -f` en la P
    - DRDY sube cada 10 ms;
    - CS baja ~1,1 ms;
    - los primeros bytes de MISO son `AA 55 04 01`, seguidos de `seq` en little-endian.
-4. **En reposo, con el AFE conectado:** `adc[]` ≈ 2046 (depende de GDK). Un aplauso se ve en `voz[]`.
+4. **En reposo, con el AFE conectado:** `adc[]` ≈ 2041. Un aplauso se ve en `voz[]`.
 5. **En la HMI, pestaña Señales:** los 3 canales y la voz se mueven. Al hablar, Causalidad muestra un τ\* positivo.

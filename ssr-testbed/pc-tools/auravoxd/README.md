@@ -23,7 +23,8 @@ make deploy                        # compila para arm64, copia a aura@192.168.0.
 | `-src` | `spi` | `spi`, `sim` (sEMG 60 ms antes que la voz) o `file -file sesion.avx` |
 | `-spi-dev`, `-spi-hz` | `/dev/spidev0.0`, 4 MHz | SPI0 de la Pi, que es el maestro |
 | `-gpiochip`, `-drdy` | `gpiochip0`, `25` | Línea DRDY del DK. `-drdy -1`: sin DRDY, lee cada 10 ms |
-| `-vref-adc`, `-gdk`, `-vmid`, `-gain` | 1.8, 0.545, 1.65, 2500 | Conversión del código del ADC a µV RTI. **GDK es un supuesto: medirlo en el banco** |
+| `-vref-adc`, `-gdk`, `-vmid`, `-gain` | 1.8, 0.5437, 1.65, 2500 | Conversión del código del ADC a µV RTI. GDK = divisor 560/1030 del DK (MB1939); en reposo el código es ≈ 2041 |
+| `-voz-delay` | 0.75 | Retardo fijo de la voz en ms (FIR del firmware con la ADMP401; 1.078 con el INMP441). Se resta de τ\*, del adelanto del onset y del lag por frecuencia. Con `-src sim` vale 0 salvo que se indique |
 | `-hop` | 10 | Hop de la CWT en ms (5/10/20). También se cambia desde la HMI |
 | `-data` | `./data` | Carpeta de las sesiones (`.avx` crudo + `.json`) |
 
@@ -33,9 +34,11 @@ make deploy                        # compila para arm64, copia a aura@192.168.0.
 | SCLK | GPIO11 (23) | D13 |
 | MISO (DK → Pi) | GPIO9 (21) | D12 |
 | MOSI | GPIO10 (19) | D11 |
-| CS | GPIO8 / CE0 (24) | D10 (NSS) |
-| DRDY (DK → Pi) | GPIO25 (22) | D libre, a definir en CubeMX |
+| CS | GPIO8 / CE0 (24) | D10 |
+| DRDY (DK → Pi) | GPIO25 (22) | D4 |
 | GND | 25 | GND |
+
+El AFE entra al DK por A1 (CH1), A4 (CH2) y A5 (CH3); el micrófono ADMP401 por A3. Detalle en `firmware/PROTOCOLO_SPI.md` y en el README del firmware (`firmware/n6/`).
 
 ## Trama
 - El formato está en `frame/frame.go` y en `firmware/Core/Inc/auravox_frame.h`; los dos son iguales.
@@ -47,8 +50,7 @@ make deploy                        # compila para arm64, copia a aura@192.168.0.
   - arma el bloque, lo sella con `avx_block_seal()` y sube DRDY;
   - la Pi lee los 538 B;
   - el DK baja DRDY.
-
-  Conviene usar doble buffer, para armar el siguiente mientras se envía el actual.
+- Probado con la Raspberry Pi 5: 100 bloques/s sin errores de CRC ni huecos.
 
 ## Pestañas de la HMI
 1. **Señales:** 3 gráficos horizontales (CH1 submentoniano, CH2 labio inferior, CH3 cuello) + voz.
