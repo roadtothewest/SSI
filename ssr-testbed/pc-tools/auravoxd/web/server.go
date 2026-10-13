@@ -5,13 +5,17 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"auravoxd/analysis"
 	"auravoxd/record"
+	"auravoxd/source"
 	"auravoxd/stream"
 )
 
@@ -28,9 +32,13 @@ type Server struct {
 	St      *stream.Store
 	An      *analysis.Analyzer
 	Rec     *record.Recorder
+	Src     *source.Mux // en vivo ↔ sesión grabada
 	Conv    stream.Conv
-	Source  string
+	Source  string // fuente en vivo del arranque (-src)
 	DataDir string
+
+	srcMu    sync.Mutex
+	liveCond string // condición en vivo, para restaurarla al volver de una sesión
 }
 
 func (s *Server) Handler() http.Handler {
@@ -65,6 +73,10 @@ func (s *Server) Handler() http.Handler {
 			http.Error(w, "json inválido", http.StatusBadRequest)
 			return
 		}
+		if req.On && s.Src.State().Mode == source.ModeFile {
+			http.Error(w, "no se graba mientras se reproduce una sesión", http.StatusConflict)
+			return
+		}
 		var err error
 		if req.On {
 			_, err = s.Rec.Start(s.Conv, s.An.Hop(), s.An.Condition())
@@ -81,7 +93,71 @@ func (s *Server) Handler() http.Handler {
 		s.An.ResetStats()
 		writeJSON(w, true)
 	})
+	mux.HandleFunc("GET /api/source", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.Src.State())
+	})
+	mux.HandleFunc("POST /api/source", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ File string } // "" = volver a en vivo
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "json inválido", http.StatusBadRequest)
+			return
+		}
+		switch err := s.setSource(req.File); {
+		case errors.Is(err, source.ErrBadSession):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, source.ErrNoSession):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case err != nil:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		default:
+			writeJSON(w, s.Src.State())
+		}
+	})
 	return mux
+}
+
+// setSource cambia a la sesión file ("" = en vivo). Al reproducir no se graba, las marcas
+// de la sesión fijan la condición en su bloque, y al volver se restaura la condición en vivo.
+// Cada cambio reinicia los contadores del enlace y las estadísticas: no se mezclan fuentes.
+func (s *Server) setSource(file string) error {
+	s.srcMu.Lock()
+	defer s.srcMu.Unlock()
+	fromLive := s.Src.State().Mode == source.ModeLive
+	if file == "" {
+		if fromLive {
+			return nil
+		}
+		s.Src.Live()
+		s.An.SetCondition(s.liveCond)
+	} else {
+		if err := s.Src.Check(file); err != nil {
+			return err
+		}
+		marks, err := record.LoadMarks(s.DataDir, file)
+		if err != nil {
+			log.Printf("source: %s sin marcas de condición: %v", file, err)
+		}
+		if fromLive {
+			s.liveCond = s.An.Condition()
+			if err := s.Rec.Stop(); err != nil {
+				log.Printf("source: cerrar la grabación: %v", err)
+			}
+		}
+		err = s.Src.Play(file, func(i uint64) {
+			if i == 0 {
+				s.St.ResetSeq() // cada vuelta del bucle
+			}
+			if c, ok := record.CondAt(marks, i); ok {
+				s.An.SetCondition(c)
+			}
+		})
+		if err != nil {
+			return err
+		}
+	}
+	s.St.ResetLink()
+	s.An.ResetStats()
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -109,6 +185,7 @@ type msg struct {
 	R    *analysis.Result `json:"r,omitempty"`
 	Link *stream.Link     `json:"link,omitempty"`
 	Rec  *record.Status   `json:"rec,omitempty"`
+	Src  *source.State    `json:"src,omitempty"`
 }
 
 func minmax(x []float32, n int) []float32 {
@@ -190,8 +267,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			m.C = append(m.C, c.Data)
 		}
 		if i%5 == 0 {
-			l, st := s.St.Link(), s.Rec.Status()
-			m.R, m.Link, m.Rec = s.An.Result(), &l, &st
+			l, st, src := s.St.Link(), s.Rec.Status(), s.Src.State()
+			m.R, m.Link, m.Rec, m.Src = s.An.Result(), &l, &st, &src
 		}
 		if !send(m) {
 			return
