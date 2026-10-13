@@ -35,8 +35,8 @@ uint32_t link_on_block(link_logic_t *l, int busy);
 /* The SPI finished sending the armed block. */
 uint32_t link_on_tx_done(link_logic_t *l);
 /* CS rose while a block is held (it arrived during a read of an idle link): arm it now. CS edges
-   in any other state mean nothing: the Pi 5 releases CS between bytes and when its FIFO runs dry,
-   so a transfer ends by its byte count (tx_done), never by CS (P5, 2026-10-12). */
+   in any other state mean nothing: the CS line glitches during reads, so a transfer ends by its
+   byte count (tx_done), never by CS (P5, 2026-10-12/13). */
 uint32_t link_on_nss_rise(link_logic_t *l);
 /* SPI/DMA error (e.g. underrun) on the armed block: restart it from byte 0, at once when CS is
    high, or held until CS rises when the Pi is in the middle of a read. */

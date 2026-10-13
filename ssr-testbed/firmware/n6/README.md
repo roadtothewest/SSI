@@ -28,7 +28,7 @@ Documentos: [spec v0.3](docs/2026-10-09-ssi-capture-spec.md), [plan 1](docs/2026
 - `voz[k]`: audio en la escala de 24 bits `>> 8`. Con la ADMP401, el fondo de escala del ADC (0–3,3 V en A3) equivale a ±32768 y la continua se elimina en el firmware. Con el INMP441, los primeros ~256 ms son ceros y el primer segundo trae un transitorio de arranque.
 - Alineamiento: EMG y audio salen del mismo cristal (*c* = 0 nominal; se confirma con la prueba de pulsos P4). Con la ADMP401, LPTIM1 (EMG) y LPTIM2 (micrófono a 64 kHz) arrancan juntos y la muestra EMG *i* se toma junto con la muestra de audio 8*i*. Con el INMP441, a mitad de la trama 8*i*.
 - Latencias fijas que la Pi debe compensar: filtro de decimación del firmware **750 µs** con la ADMP401 (12 muestras de audio; el INMP441 trae el suyo de 1078 µs), aire 2,9 ms/m y la cadena del AFE (recalcular en LTspice).
-- DRDY: un flanco de subida por bloque. Si la Pi no leyó y llega otro bloque, se re-arma con el nuevo (nuevo flanco). Si la Pi está leyendo (CS bajo), la transferencia termina y el bloque nuevo se descarta. Si CS sube antes de 538 B, se re-arma desde el byte 0.
+- DRDY: un flanco de subida por bloque. Si la Pi no leyó y llega otro bloque, se re-arma con el nuevo (nuevo flanco). Si la Pi está leyendo (CS bajo), la transferencia termina y el bloque nuevo se descarta. Una lectura termina al completar los 538 B, nunca por CS: el SPI del DK ignora el pin de CS (NSS por software), porque el ruido en esa línea corría bits (P5); el firmware lee CS como GPIO solo para decidir cuándo armar un bloque. Si la Pi abandona una lectura a medias, el bloque siguiente la reemplaza; ante un error del SPI (underrun) el bloque se re-arma desde el byte 0.
 
 ## Compilar, cargar y probar
 
@@ -52,7 +52,7 @@ Herramientas por SWD (no detienen la MCU):
 - `tools/mic_tone_check.sh`: el PC reproduce 5 tonos (250 Hz a 4 kHz) y verifica que el micrófono los capte, con el micrófono del PC como referencia (micrófono libre, a ~20 cm de los parlantes);
 - `tools/gen_audio_fir.py`: coeficientes del filtro de decimación de la ADMP401 y su respuesta.
 
-En la Raspberry, para probar el enlace sin `auravoxd` (P5): copiar `tools/rpi_spi_check.py` y `tools/avx_block.py` y correr `python3 rpi_spi_check.py --secs 600` (requiere `python3-spidev`; lee por polling, sin DRDY). Aceptación: ~100 bloques/s, `crc=0` y `gaps=0`.
+En la Raspberry, para probar el enlace sin `auravoxd` (P5): copiar `tools/rpi_spi_check.py` y `tools/avx_block.py` y correr `python3 rpi_spi_check.py --secs 600` (requiere `python3-spidev`; lee por polling, sin DRDY). Aceptación: ~100 bloques/s, `crc=0` y `gaps=0`. El enlace es SPI modo 0. Si aparecen bloques malos, `python3 rpi_spi_diag.py --secs 15` (lee igual) los clasifica según dónde y cómo se rompen: cola en ceros (underrun), corrimiento de bits, reinicio a mitad de lectura o errores de bit; `--raw archivo` guarda todas las lecturas para analizarlas.
 
 ### Mensajes del VCP
 
@@ -92,6 +92,8 @@ Micrófono (2026-10-10): el primer INMP441 resultó **defectuoso**. Entrega tram
 
 Micrófono ADMP401 (2026-10-12, plan 3), probado en el DK: `INIT … sync=1 mic=1`, 115 s de flujo sin pérdidas ni errores (EMG y audio iguales ventana a ventana) y **P3 PASS** con `tools/mic_tone_check.sh` (tonos de 250 Hz a 4 kHz entre +37 y +62 dB sobre el ruido; 1 kHz medido en 999,98 Hz). Reposo: código ≈ 2027 en A3. **P4 PASS** con `diag.py pulse --analog`: *c* = 12 (750 µs = sincronía 0 + filtro 12) en 10 de 10 reinicios, ~100 pulsos cada uno. La Pi resta 750 µs al audio.
 
+Enlace con la RPi5 (P5, 2026-10-13): **PASS** con `rpi_spi_check.py --secs 600` en modo 0 a 4 MHz: 60 002 bloques, 100 bloques/s, `crc=0`, `gaps=0`. Antes fallaba (de 2 a 89 bloques/s, con CRC malos): `rpi_spi_diag.py` mostró que los bloques llegaban con bits corridos (de −5 a +2) a partir de un punto al azar. La Pi 5 maneja CE0 como GPIO y lo mantiene bajo durante la lectura, pero la línea de CS del DK recibe flancos espurios (muchos más en modo 0), y con NSS por hardware cada uno deseleccionaba el SPI a mitad de byte. Con NSS por software no queda ninguno. Con DRDY, `auravoxd` (origin/master f52980c, modo 0, GPIO25) recibió 7192 bloques en ~72 s a 100 bloques/s, sin errores de CRC, huecos ni duplicados.
+
 Pendiente:
 - con el INMP441 (si se usa uno nuevo): P3, P4 con el puente y ruido del SCK (P7);
-- con la RPi5: transferencias reales (P5).
+- con el AFE: niveles reales en A1/A4/A5 y prueba completa con la Pi.

@@ -21,7 +21,7 @@ static link_logic_t s_lk;
 static uint8_t *s_cur;
 static volatile uint32_t s_loops;
 static volatile uint32_t s_errors;
-static volatile uint32_t s_nss_ignored;  /* CS rises that did not arm a held block (Pi 5 CS gaps) */
+static volatile uint32_t s_nss_ignored;  /* CS rises that did not arm a held block (CS glitches) */
 static volatile uint32_t s_stalls;       /* partial transfers abandoned by the Pi (no progress in 10 ms) */
 static uint32_t s_left_last = AVX_BLOCK_SIZE; /* CTSIZE at the previous block */
 static int s_nss_irq_on;
@@ -110,7 +110,9 @@ static int spi_init(void)
   s_spi.Init.DataSize = SPI_DATASIZE_8BIT;
   s_spi.Init.CLKPolarity = SPI_POLARITY_LOW; /* mode 0 */
   s_spi.Init.CLKPhase = SPI_PHASE_1EDGE;
-  s_spi.Init.NSS = SPI_NSS_HARD_INPUT;
+  /* The SPI ignores the CS pin: glitches on it deselected the slave mid-byte and slipped bits (P5,
+     2026-10-13). A read ends by its byte count; link.c reads CS as a GPIO to arm blocks safely. */
+  s_spi.Init.NSS = SPI_NSS_SOFT;
   s_spi.Init.FirstBit = SPI_FIRSTBIT_MSB;
   s_spi.Init.TIMode = SPI_TIMODE_DISABLE;
   s_spi.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -181,9 +183,9 @@ static int nss_low(void)
   return HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3) == GPIO_PIN_RESET;
 }
 
-/* The Pi 5 SPI (RP1, DesignWare) releases CS between bytes in mode 0 and whenever its TX FIFO runs
-   dry (P5, 2026-10-12): a CS rise is not the end of a read. Only a CS that stays high lets a held
-   block be armed. */
+/* The DK sees spurious CS rises during a read, although the Pi 5 drives CE0 as a GPIO that stays
+   low for the whole transfer (P5, 2026-10-13; many more in mode 0): a CS rise is not the end of a
+   read. Only a CS that stays high lets a held block be armed. */
 static int nss_high_stable(void)
 {
   for (uint32_t i = 0; i < NSS_HIGH_READS; i++) {
@@ -214,7 +216,7 @@ static int link_busy(void)
   return nss_low() || moving;
 }
 
-/* EXTI3 only matters while a block is held: elsewhere the Pi 5's CS gaps would flood the thread. */
+/* EXTI3 only matters while a block is held: elsewhere CS glitches would flood the thread. */
 static void nss_irq_update(void)
 {
   if (s_lk.state == LINK_HELD && !s_nss_irq_on) {

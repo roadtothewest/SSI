@@ -30,8 +30,8 @@ int main(void)
   CHECK_EQ(l.dropped, 1);
   CHECK_EQ(l.state, LINK_ARMED);
 
-  /* CS rises in the middle of a transfer (the Pi 5 releases CS between bytes and when its FIFO
-     runs dry): not an end, the 538-byte count ends the transfer (P5, 2026-10-12) */
+  /* CS rises in the middle of a transfer (glitches on the CS line): not an end, the 538-byte
+     count ends the transfer (P5, 2026-10-12/13) */
   CHECK_EQ(link_on_nss_rise(&l), 0);
   CHECK_EQ(l.aborted, 0);
   CHECK_EQ(l.state, LINK_ARMED);
