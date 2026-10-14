@@ -1,5 +1,5 @@
 // Package frame define el bloque SPI que manda el STM32N6570-DK a la Raspberry.
-// El mismo formato está en firmware/Core/Inc/auravox_frame.h.
+// El mismo formato está en ssr-testbed/firmware/auravox_frame.h.
 //
 // Bloque fijo de 538 B cada 10 ms, little-endian:
 //

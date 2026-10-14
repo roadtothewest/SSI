@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-// Condiciones del protocolo de captura (refactor-emg-software.md §3.3 y §3.4).
+// Condiciones del protocolo de captura (archivo/docs/refactor-emg-software.md §3.3 y §3.4).
 var Conditions = []string{"desconectado", "reposo", "habla", "silenciosa", "vocal"}
 
 // F es un float que en JSON sale como null si es NaN o infinito.

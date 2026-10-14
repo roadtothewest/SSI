@@ -1,4 +1,4 @@
-* AuraVox AFE sEMG - subcircuitos (valores: docs/afe-emg/AFE_valores_ltspice.md)
+* AuraVox AFE sEMG - subcircuitos (valores: archivo/docs/afe-emg/AFE_valores_ltspice.md, 4 canales; vigente: sim/ltspice/README.md)
 * Nombres de componentes siguen la pizarra del 26-sep.
 * (modelo de INA: lo incluye cada prueba)
 * modelo de op-amp: el archivo de prueba incluye models/opa_behav.lib o models/opa_mcp.lib

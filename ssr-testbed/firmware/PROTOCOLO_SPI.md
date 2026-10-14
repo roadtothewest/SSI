@@ -8,12 +8,12 @@ Especificación para escribir el firmware del DK. Cubre:
 - qué falla si algo no se cumple.
 
 La referencia de verdad es el código:
-- `ssr-testbed/firmware/Core/Inc/auravox_frame.h`: struct C + CRC + `avx_block_seal()`, listo para incluir;
+- `ssr-testbed/firmware/auravox_frame.h`: struct C + CRC + `avx_block_seal()`, listo para incluir;
 - `ssr-testbed/pc-tools/auravoxd/frame/frame.go`: el decodificador de la Pi;
 - `pc-tools/auravoxd/source/spi.go`: el maestro SPI y la espera de DRDY;
 - `pc-tools/auravoxd/stream/store.go`: la validación de `seq`, los flags y la conversión a µV.
 
-El firmware que lo implementa está en `ssr-testbed/firmware/n6/` (rama `feat/n6-capture-fw`); su README tiene las conexiones, cómo compilar y las pruebas.
+El firmware que lo implementa está en `ssr-testbed/firmware/n6/`; su README tiene las conexiones, cómo compilar y las pruebas.
 
 ## 1. Qué captura el DK
 | Señal | Fuente en el DK | Tasa | Formato en la tupla |

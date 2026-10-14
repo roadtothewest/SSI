@@ -57,7 +57,7 @@ sudo nmcli connection modify auravox-ap connection.autoconnect yes connection.au
 El AFE entra al DK por A1 (CH1), A4 (CH2) y A5 (CH3); el micrófono ADMP401 por A3. Detalle en `firmware/PROTOCOLO_SPI.md` y en el README del firmware (`firmware/n6/`).
 
 ## Trama
-- El formato está en `frame/frame.go` y en `firmware/Core/Inc/auravox_frame.h`; los dos son iguales.
+- El formato está en `frame/frame.go` y en `firmware/auravox_frame.h`; los dos son iguales.
 - Es un bloque de 538 B cada 10 ms:
   - una cabecera con sync `AA 55`, `seq` y `t0_us`;
   - 20 tuplas de 26 B: `ts_us`, 3 ADC de 12 bits y 8 muestras de voz int16 a 16 kHz (`ts_us` es uint32: da la vuelta cada 71,6 min);
