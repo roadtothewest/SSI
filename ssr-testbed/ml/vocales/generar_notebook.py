@@ -34,7 +34,7 @@ md(r'''
 
 **Runtime:** conviene GPU T4 (*Entorno de ejecución → Cambiar tipo de entorno*). En CPU también funciona, pero la validación cruzada tarda unos 10–15 min en vez de 1–2.
 
-**Sin grabaciones**, el notebook genera un dataset sintético con el mismo formato (`MODO_DEMO`). Sirve para probar el flujo y para avanzar con AI Studio y el firmware mientras se graba; no dice nada de la exactitud real.
+**Con `MODO_DEMO = True`**, el notebook genera un dataset sintético con el mismo formato. Sirve para probar el flujo y para avanzar con AI Studio y el firmware mientras se graba; no dice nada de la exactitud real.
 ''')
 
 md(r'''
@@ -103,7 +103,7 @@ code(r'''
 CARPETA_DRIVE = '/content/drive/MyDrive/AuraVox/vocales'  # .avx + .json (+ etiquetas.csv opcional)
 CARPETA_LOCAL = '/content/avx'                            # destino del .zip si se sube a mano
 SALIDA = '/content/auravox_vocales'                       # resultados
-MODO_DEMO = None          # None: demo solo si no hay grabaciones; True: forzar la demo
+MODO_DEMO = False         # True: datos sintéticos (solo para probar el flujo). Con False nunca se inventan datos
 DURACION_DEMO_S = 12.0
 
 # Señal: igual que auravoxd (stream.Conv). El .json de cada sesión trae su propia conversión.
@@ -367,20 +367,26 @@ def generar_demo(carpeta, dur_s=DURACION_DEMO_S, semilla=1):
 md(r'''
 ## Datos
 
-Por defecto se leen de `CARPETA_DRIVE`. Para subir un `.zip` a mano, poner `SUBIR_ZIP = True` en la celda siguiente.
+Se buscan los `.avx` en este orden:
+1. `CARPETA_DRIVE` (incluye subcarpetas);
+2. `CARPETA_LOCAL` (`/content/avx`);
+3. cualquier `.zip` en `/content` (por ejemplo, arrastrado al panel de archivos de Colab) o en `CARPETA_DRIVE`, que se descomprime en `CARPETA_LOCAL`.
+
+Si no encuentra nada, **pide subir el zip** (botón *Elegir archivos*). El zip puede llamarse como sea y traer los `.avx` + `.json` sueltos o en carpetas. Nunca se usan datos sintéticos salvo con `MODO_DEMO = True`.
 ''')
 
 code(r'''
-SUBIR_ZIP = False
-if SUBIR_ZIP and EN_COLAB:
-    from google.colab import files
-    for nombre, datos in files.upload().items():
-        with zipfile.ZipFile(io.BytesIO(datos)) as z:
-            z.extractall(CARPETA_LOCAL)
-        print('extraído', nombre, '→', CARPETA_LOCAL)
-''')
+def _extraer(zips):
+    for z in zips:
+        with zipfile.ZipFile(z) as f:
+            f.extractall(CARPETA_LOCAL)
+        print(f'descomprimido {Path(z).name} → {CARPETA_LOCAL}')
 
-code(r'''
+
+def _avx_en(c):
+    return sorted(p for p in Path(c).rglob('*.avx') if 'demo_avx' not in p.parts) if c and Path(c).is_dir() else []
+
+
 def buscar_grabaciones():
     if EN_COLAB and CARPETA_DRIVE.startswith('/content/drive') and not Path('/content/drive/MyDrive').exists():
         try:
@@ -389,22 +395,35 @@ def buscar_grabaciones():
         except Exception as e:
             print('Drive no quedó montado:', e)
     for c in (CARPETA_DRIVE, CARPETA_LOCAL):
-        if c and Path(c).is_dir():
-            avx = sorted(Path(c).rglob('*.avx'))
-            if avx:
-                return Path(c), avx
-    return None, []
+        if _avx_en(c):
+            return Path(c), _avx_en(c)
+    zips = [z for d in ('/content', CARPETA_DRIVE) if d and Path(d).is_dir() for z in sorted(Path(d).glob('*.zip'))]
+    if zips:
+        _extraer(zips)
+    elif EN_COLAB:
+        print('No encontré grabaciones en', CARPETA_DRIVE or '(sin Drive)', 'ni en', CARPETA_LOCAL,
+              '→ sube el .zip con los .avx y .json:')
+        from google.colab import files
+        subidos = files.upload()
+        Path(CARPETA_LOCAL).mkdir(parents=True, exist_ok=True)
+        for nombre, datos in subidos.items():
+            (Path(CARPETA_LOCAL) / nombre).write_bytes(datos)
+        _extraer([Path(CARPETA_LOCAL) / n for n in subidos if n.lower().endswith('.zip')])
+    return (Path(CARPETA_LOCAL), _avx_en(CARPETA_LOCAL)) if _avx_en(CARPETA_LOCAL) else (None, [])
 
 
-CARPETA, ARCHIVOS = buscar_grabaciones()
-DEMO = (not ARCHIVOS) if MODO_DEMO is None else bool(MODO_DEMO)
+DEMO = bool(MODO_DEMO)
 if DEMO:
     CARPETA = OUT / 'demo_avx'
     generar_demo(CARPETA)
     ARCHIVOS = sorted(CARPETA.glob('*.avx'))
-    print(f'MODO DEMO: {len(ARCHIVOS)} grabaciones sintéticas en {CARPETA}')
+    print(f'MODO DEMO: {len(ARCHIVOS)} grabaciones SINTÉTICAS en {CARPETA} (no sirven para medir exactitud)')
 else:
-    print(f'{len(ARCHIVOS)} grabaciones en {CARPETA}')
+    CARPETA, ARCHIVOS = buscar_grabaciones()
+    if not ARCHIVOS:
+        raise RuntimeError('No hay grabaciones .avx: revisa CARPETA_DRIVE o sube el zip. '
+                           'Para probar el flujo con datos sintéticos, MODO_DEMO = True.')
+    print(f'{len(ARCHIVOS)} grabaciones REALES en {CARPETA}')
 RUTA = {a.name: a for a in ARCHIVOS}
 assert len(RUTA) == len(ARCHIVOS), 'hay .avx con el mismo nombre en distintas subcarpetas'
 ''')
