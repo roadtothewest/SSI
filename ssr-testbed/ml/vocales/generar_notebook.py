@@ -50,7 +50,7 @@ md(r'''
 **Cómo sabe la clase de cada grabación** (en este orden de prioridad):
 1. `ETIQUETAS` en la configuración: `{'20261015-143012': 'a', ...}`.
 2. `etiquetas.csv` junto a los `.avx`, con columnas `archivo,clase,ronda` (ronda opcional).
-3. El nombre del archivo: `r3_a.avx`, `a_2.avx`, `silencio_1.avx`… (`silencio` = `reposo`).
+3. El nombre del archivo: `a-sostenida2.avx`, `a_2.avx`, `silencio3.avx`… (`silencio` = `reposo`; los números al final se ignoran).
 4. El orden cronológico, solo si son exactamente las 40 del protocolo.
 
 Si no puede decidir, el notebook se detiene y deja una plantilla de `etiquetas.csv`. La plantilla trae ya `desconectado` y `reposo` según la condición marcada en la HMI; solo hay que escribir las vocales.
@@ -130,8 +130,10 @@ PLAN_RONDA = ['desconectado', 'reposo', 'a', 'e', 'i', 'o', 'u', 'reposo']
 N_RONDAS = 5
 BORDE_S = 0.5               # se descartan el inicio y el final de cada grabación
 # Voz y silencio se detectan con el escalograma del audio (misma CWT, 20–500 Hz: la banda de F0)
-UMBRAL_VOZ_DB = 15.0        # voz: energía del escalograma del audio > piso de ruido + 15 dB
-UMBRAL_SILENCIO_DB = 6.0    # silencio: energía < piso + 6 dB
+# En las grabaciones del 15-oct el silencio es muy estable (piso −52 dBFS, máximo piso + 2 dB) y las vocales
+# quedan solo 8–23 dB sobre el piso (el micrófono capta bajo), por eso los umbrales son bajos.
+UMBRAL_VOZ_DB = 6.0         # voz: energía del escalograma del audio > piso de ruido + 6 dB
+UMBRAL_SILENCIO_DB = 3.0    # silencio: energía < piso + 3 dB
 MIN_VOZ_MS, MAX_HUECO_MS = 200, 150
 GUARDA_VOZ_MS = 150         # margen dentro de cada tramo de voz (transiciones)
 GUARDA_REPOSO_MS = 400      # silencio usable como reposo: a ≥ 400 ms de la voz
@@ -414,7 +416,8 @@ def _normalizar(clase):
 
 
 def _clase_de_nombre(stem):
-    toks = [_normalizar(t) for t in re.split(r'[_\-\s.]+', stem.lower())]
+    # 'a-espaciada2' → a; 'silencio3' → reposo (se ignoran los números al final de cada parte)
+    toks = [_normalizar(re.sub(r'\d+$', '', t)) for t in re.split(r'[_\-\s.]+', stem.lower())]
     hits = sorted({t for t in toks if t in CLASES})
     return hits[0] if len(hits) == 1 else None
 
