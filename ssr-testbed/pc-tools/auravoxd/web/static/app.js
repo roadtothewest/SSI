@@ -145,11 +145,18 @@ function drawWaves() {
     const cv = $(s < 3 ? 'w' + s : 'wv'), g = fit(cv), W = cv.width, H = cv.height, d = DPR();
     g.clearRect(0, 0, W, H);
     const buf = waves[s], start = wpos - NB;
-    let peak = 1e-9;
-    for (let i = 0; i < 2 * NB; i++) peak = Math.max(peak, Math.abs(buf[i]));
+    // el sEMG llega con su offset DC (electrodo + VREF, x2500): se centra el eje en él y la escala
+    // sigue a la AC alrededor de ese centro. La voz (s = 3) ya viene centrada en 0.
+    const k0 = Math.max(0, start);
+    let ctr = 0, peak = 1e-9;
+    if (s < 3 && wpos > k0) {
+      for (let k = k0; k < wpos; k++) { const p = (k % NB) * 2; ctr += buf[p] + buf[p + 1]; }
+      ctr /= 2 * (wpos - k0);
+    }
+    for (let k = k0; k < wpos; k++) { const p = (k % NB) * 2; peak = Math.max(peak, Math.abs(buf[p] - ctr), Math.abs(buf[p + 1] - ctr)); }
     autoScale[s] = Math.max(peak * 1.15, autoScale[s] * 0.985);
     const sc = (s < 3 && fixedScale) ? fixedScale : autoScale[s];
-    const pad = 10 * d, y = v => H / 2 - Math.max(-1, Math.min(1, v / sc)) * (H / 2 - pad);
+    const pad = 10 * d, y = v => H / 2 - Math.max(-1, Math.min(1, (v - ctr) / sc)) * (H / 2 - pad);
     // rejilla: un trazo por segundo y la línea de cero
     g.strokeStyle = INK.grid; g.lineWidth = d; g.beginPath();
     for (let k = 1; k < I.showSecs; k++) { const x = Math.round(k * W / I.showSecs) + .5; g.moveTo(x, 0); g.lineTo(x, H); }
@@ -170,7 +177,7 @@ function drawWaves() {
     }
     g.stroke();
     font(g, 11); g.fillStyle = INK.muted; g.textAlign = 'right';
-    g.fillText(s < 3 ? `±${fmt(sc, sc < 10 ? 1 : 0)} µV` : `±${fmt(sc, 2)}`, W - 10 * d, 16 * d);
+    g.fillText(s < 3 ? `±${fmt(sc, sc < 10 ? 1 : 0)} µV · DC ${sgn(ctr)}` : `±${fmt(sc, 2)}`, W - 10 * d, 16 * d);
     if (s === 3) { g.textAlign = 'left'; g.fillText(`−${I.showSecs} s`, 8 * d, H - 8 * d); g.textAlign = 'right'; g.fillText('ahora', W - 10 * d, H - 8 * d); }
   }
 }
