@@ -17,10 +17,15 @@ deploy: build-pi
 	ssh -t $(PI) 'cd /tmp && sudo sh install.sh'
 
 # Paquetes de Python del clasificador (onnxruntime + numpy) para la Pi, sin pip ni sudo en ella.
+# Se descargan con internet (make ml-lib); deploy-ml-lib reutiliza dist/ml-lib, porque en la
+# red AuraVox no hay internet.
 ml-lib:
 	sh deploy/ml-lib.sh
 
-deploy-ml-lib: ml-lib
+dist/ml-lib:
+	sh deploy/ml-lib.sh
+
+deploy-ml-lib: dist/ml-lib
 	ssh $(PI) mkdir -p /home/aura/auravox/ml
 	rsync -a --delete dist/ml-lib/ $(PI):/home/aura/auravox/ml/lib/
 
