@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"auravoxd/analysis"
+	"auravoxd/ml"
 	"auravoxd/record"
 	"auravoxd/source"
 	"auravoxd/stream"
@@ -36,6 +37,7 @@ type Server struct {
 	Conv    stream.Conv
 	Source  string // fuente en vivo del arranque (-src)
 	DataDir string
+	ML      *ml.Manager // nil = sin clasificador (-ml=false)
 
 	srcMu    sync.Mutex
 	liveCond string // condición en vivo, para restaurarla al volver de una sesión
@@ -76,6 +78,10 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, map[string]string{"name": to})
 		}
 	})
+	mux.HandleFunc("GET /api/ml", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.mlStatus())
+	})
+	mux.HandleFunc("POST /api/ml/model", s.postModel)
 	mux.HandleFunc("GET /api/channels", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.channels())
 	})
@@ -249,6 +255,7 @@ type msg struct {
 	Rec  *record.Status              `json:"rec,omitempty"`
 	Src  *source.State               `json:"src,omitempty"`
 	Chs  *[stream.NCh]stream.Channel `json:"chans,omitempty"`
+	ML   *ml.Status                  `json:"ml,omitempty"`
 }
 
 func minmax(x []float32, n int) []float32 {
@@ -333,6 +340,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		if i%5 == 0 {
 			l, st, src, cs := s.St.Link(), s.Rec.Status(), s.Src.State(), s.channels()
 			m.R, m.Link, m.Rec, m.Src, m.Chs = s.An.Result(), &l, &st, &src, &cs
+			ms := s.mlStatus()
+			m.ML = &ms
 		}
 		if !send(m) {
 			return

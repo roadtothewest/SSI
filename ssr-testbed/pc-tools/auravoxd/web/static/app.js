@@ -33,7 +33,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
   tab = b.dataset.tab;
   history.replaceState(null, '', '#' + tab);
-  if (tab === 'ses') loadFiles();
+  if (tab === 'ses') { loadFiles(); if (lastML) drawMLInfo(lastML); }
   if (R && tab === 'cau') drawCausality(R);
 });
 { const b = document.querySelector(`#tabs button[data-tab="${location.hash.slice(1)}"]`); if (b) b.click(); }
@@ -77,6 +77,7 @@ es.onmessage = e => {
   const maxCols = I.showSecs * 1000 / hop + 400;
   if (cols.length > maxCols) cols.splice(0, cols.length - maxCols);
   if (m.chans) setChans(m.chans);
+  if (m.ml) onML(m.ml);
   if (m.r) onResult(m.r, m.link, m.rec, m.src);
 };
 es.onerror = () => setLink('bad', 'Sin conexión');
@@ -91,6 +92,42 @@ function init(m) {
   setChans(I.chans, true);
   drawRamp();
 }
+
+// ------------------------------------------------------------ modelo
+const ML_STATE = { 'sin-modelo': 'Sin modelo', cargando: 'Cargando…', activo: 'Activo', error: 'Error', apagado: 'Desactivado (-ml=false)' };
+let lastML = null;
+function onML(s) {
+  lastML = s;
+  const p = s.pred, on = s.state === 'activo' && p;
+  $('mlbox').hidden = !on;
+  if (on) {
+    $('mlbox').classList.toggle('stale', p.stale);
+    $('mlclase').textContent = p.clase;
+    $('mlsub').textContent = p.stale ? 'sin señal nueva' : `${fmt(100 * Math.max(...p.probs), 0)} % · ${s.model}`;
+    $('mlbars').innerHTML = s.clases.map((c, i) => `<div class="mlbar${c === p.clase ? ' on' : ''}">${esc(c)} ${fmt(100 * p.probs[i], 0)} %` +
+      `<div><i style="width:${(100 * p.probs[i]).toFixed(1)}%"></i></div></div>`).join('');
+  }
+  if (tab === 'ses') drawMLInfo(s);
+}
+function drawMLInfo(s) {
+  const row = (k, v, cls) => `<span>${k}</span><span${cls ? ` class="${cls}"` : ''}>${v}</span>`;
+  $('mlinfo').innerHTML = row('Estado', ML_STATE[s.state] || s.state) +
+    (s.err ? row('Error', esc(s.err), 'bad') : '') +
+    (s.model ? row('Modelo', `${esc(s.model)}${s.fecha ? ' · ' + esc(s.fecha) : ''}`) +
+      row('Clases', s.clases.map(esc).join(', ')) +
+      row('Entrada', `${s.canal.map(c => CH[c]).join(', ')} · ventana ${s.winMs} ms`) +
+      (s.accBal ? row('Validación', `exactitud balanceada ${fmt(100 * s.accBal, 0)} % (azar ${fmt(100 / s.clases.length, 0)} %)`) : '') +
+      (s.ort ? row('onnxruntime', esc(s.ort)) : '') : '');
+}
+$('mlup').onclick = () => $('mlfile').click();
+$('mlfile').onchange = () => {
+  const f = $('mlfile').files[0];
+  if (!f) return;
+  $('mlmsg').textContent = `Probando ${f.name}…`; $('mlup').disabled = true;
+  fetch('/api/ml/model', { method: 'POST', body: f }).then(async r => {
+    $('mlmsg').textContent = r.ok ? `Instalado: ${(await r.json()).model}` : await r.text();
+  }).catch(e => $('mlmsg').textContent = String(e)).finally(() => { $('mlup').disabled = false; $('mlfile').value = ''; });
+};
 
 // ------------------------------------------------------------ canales
 function setChans(cs, force) {

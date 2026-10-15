@@ -99,6 +99,22 @@ Lo conectado a A1/A4/A5 cambia según el montaje (AFE propio, MyoWare), así que
 - La ganancia nueva vale desde el bloque siguiente. Cada grabación guarda en su `.json` los canales con que se grabó (`chans`).
 - API: `GET /api/channels`; `POST /api/channels` con `[{"name","gain","on"} ×3]`. Nombre vacío o de más de 32 caracteres, o ganancia fuera de (0, 10⁶] → `400`.
 
+## Clasificador (modelo de Colab)
+
+`auravoxd` corre el clasificador que exporta el cuaderno de Colab (`auravox_vocales_npu.ipynb`) y muestra la clase y sus probabilidades arriba de **Señales**. Funciona en vivo y también al reproducir una sesión.
+
+- **Cambiar de modelo:** en **Sesión → Modelo → Subir modelo (.zip)**, el mismo `.zip` que sale del cuaderno. `auravoxd` lo descomprime, comprueba que carga y que evalúa una ventana, y recién entonces lo activa. El anterior queda en `<data>/ml/anterior/`. Por API: `curl --data-binary @modelo.zip http://auravox.lan/api/ml/model`.
+- **Contrato con el cuaderno:** el `.zip` trae
+  - un `.onnx` con entradas float `cwt_mag [1,nch,T,NF]` y `cwt_fase [1,2·nch,T,NF]`, y logits por clase en la salida. Si hay dos, se usa el `int8`, que es el que iría a la NPU de la N6;
+  - la cabecera C (`auravox_vocales.h`) con las `AVX_VOC_*`, `avx_voc_canal`, `avx_voc_mu`, `avx_voc_inv_sd` y `avx_voc_clases`. Es la misma que usaría el firmware, así que la Pi y la N6 preprocesan igual;
+  - `informe.json` (opcional): fecha, entradas y validación cruzada, que se muestran en la HMI.
+- **Preproceso** (`ml/features.go`): CWT con `dsp.Bank` (la misma del entrenamiento), dB acotado a [`DB_MIN`, `DB_MAX`], z-score por frecuencia acotado a ±`Z_CLIP`, y cos/sin de la fase absoluta. Usa los códigos crudos del ADC con la conversión del modelo (`VREF_ADC`, `GDK`, `VMID`, `GAIN`), no la ganancia de **Canales**. Aún no calcula la fase relativa.
+- **Evaluación:** cada 100 ms sobre la última ventana (T·HOP = 320 ms, que llega con ~144 ms de atraso por el semiancho del núcleo de 20 Hz), con las probabilidades promediadas sobre las 3 últimas. El `.onnx` lo evalúa `ml/runner.py`, un proceso Python con onnxruntime que no sabe nada del preproceso: un modelo nuevo de la misma familia no requiere cambiar código.
+- **Python en la Pi, sin `pip` ni `sudo`:** `make deploy-ml-lib` descarga en el PC las ruedas de onnxruntime y numpy para Python 3.13/aarch64 (`deploy/ml-lib.sh`) y las copia a `<data>/ml/lib`, que el evaluador pone en `PYTHONPATH`. Hay que hacerlo una vez, desde la red AuraVox.
+- **Flags:** `-ml=false` lo apaga; `-ml-python` elige el intérprete (por defecto `python3`).
+- **API:** `GET /api/ml` → `{state, model, clases, canal, winMs, accBal, ort, pred:{clase, probs, ms, stale}}`, con `state` = `sin-modelo`, `cargando`, `activo` o `error` (y `err`).
+- **Prueba con las grabaciones del entrenamiento:** `AURAVOX_ML_PY=<python con onnxruntime> AURAVOX_ML_MODEL=<carpeta del .zip> AURAVOX_ML_AVX=<carpeta de .avx> go test ./ml -run Recordings -v`. Con el modelo del 2026-10-15 da 66 % de las ventanas con la clase del archivo (silencios 100 %), igual con int8 que con fp32.
+
 ## Reproducir una sesión grabada
 
 Para la demo, una sesión grabada antes en buenas condiciones se puede mostrar en lugar de la señal en vivo, sin reiniciar el servicio.
@@ -147,7 +163,8 @@ source/       spi.go (spidev + DRDY con go-gpiocdev), sim.go, file.go, mux.go (e
 stream/       buffers circulares alineados por número de muestra + envolventes
 dsp/          filtros, banco Morlet, correlación cruzada, F0, umbrales
 analysis/     CWT por hop, enunciados, correlación con nivel de azar, estadísticas
+ml/           clasificador: modelo del cuaderno, preproceso CWT, evaluador ONNX (runner.py)
 record/       sesiones .avx (bloques crudos) + .json (condiciones, enunciados)
 web/          servidor SSE + HMI embebida (static/), canales (canales.cfg)
-deploy/       auravoxd.service, install.sh
+deploy/       auravoxd.service, install.sh, ml-lib.sh (Python del clasificador para la Pi)
 ```

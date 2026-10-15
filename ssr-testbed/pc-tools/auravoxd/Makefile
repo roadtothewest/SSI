@@ -16,7 +16,15 @@ deploy: build-pi
 	scp dist/* $(PI):/tmp/
 	ssh -t $(PI) 'cd /tmp && sudo sh install.sh'
 
+# Paquetes de Python del clasificador (onnxruntime + numpy) para la Pi, sin pip ni sudo en ella.
+ml-lib:
+	sh deploy/ml-lib.sh
+
+deploy-ml-lib: ml-lib
+	ssh $(PI) mkdir -p /home/aura/auravox/ml
+	rsync -a --delete dist/ml-lib/ $(PI):/home/aura/auravox/ml/lib/
+
 test:
 	go vet ./... && go test ./...
 
-.PHONY: build build-pi deploy test
+.PHONY: build build-pi deploy ml-lib deploy-ml-lib test

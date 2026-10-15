@@ -7,6 +7,7 @@
 //	recorder → graba la sesión en disco cuando se pide
 //	cwt      → escalogramas CWT (magnitud y fase), una columna por hop
 //	stats    → correlación cruzada sEMG→voz, cross-wavelet, enunciados, estadísticas
+//	ml       → clasificador del cuaderno de Colab (<data>/ml), si hay un modelo subido
 //	web      → HMI en http://auravox.lan (servicio en el puerto 80; -addr), SSE, sin internet
 package main
 
@@ -18,10 +19,12 @@ import (
 	"net"
 	"net/http"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"auravoxd/analysis"
+	"auravoxd/ml"
 	"auravoxd/record"
 	"auravoxd/source"
 	"auravoxd/stream"
@@ -39,6 +42,8 @@ func main() {
 	drdy := flag.Int("drdy", 25, "GPIO de DRDY (-1 = sin DRDY, lee cada 10 ms)")
 	hop := flag.Int("hop", 10, "hop de la CWT [ms]: 5, 10 o 20")
 	lag := flag.Float64("sim-lag", 60, "adelanto del sEMG en la simulación [ms]")
+	mlOn := flag.Bool("ml", true, "clasificador del modelo subido desde la HMI (carpeta <data>/ml)")
+	mlPy := flag.String("ml-python", "python3", "Python con el que corre el evaluador ONNX")
 	vozDelay := flag.Float64("voz-delay", 0.75, "retardo fijo de la voz respecto del sEMG [ms] (filtro del firmware: ADMP401 0.75, INMP441 1.078)")
 	conv := stream.Conv{}
 	flag.Float64Var(&conv.VrefADC, "vref-adc", 1.8, "referencia del ADC del DK [V]")
@@ -89,10 +94,15 @@ func main() {
 	go rec.Run(ctx)
 	go an.RunCWT(ctx)
 	go an.RunStats(ctx)
+	var mlm *ml.Manager
+	if *mlOn {
+		mlm = ml.NewManager(filepath.Join(*data, "ml"), *mlPy, st)
+		go mlm.Run(ctx)
+	}
 
 	srv := &http.Server{
 		Addr:        *addr,
-		Handler:     (&web.Server{St: st, An: an, Rec: rec, Src: mux, Conv: conv, Source: *src, DataDir: *data}).Handler(),
+		Handler:     (&web.Server{St: st, An: an, Rec: rec, Src: mux, Conv: conv, Source: *src, DataDir: *data, ML: mlm}).Handler(),
 		BaseContext: func(net.Listener) context.Context { return ctx }, // cierra los SSE al apagar
 	}
 	go func() {

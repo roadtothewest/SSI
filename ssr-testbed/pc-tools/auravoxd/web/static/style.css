@@ -79,6 +79,21 @@ canvas { display: block; width: 100%; }
 .lane.voz { height: clamp(110px, calc((100vh - 200px) * .19), 160px); }
 canvas.wave { height: 100%; min-height: 0; }
 
+/* ---------- modelo */
+.mlbox { display: grid; grid-template-columns: 200px 1fr; gap: 12px 20px; align-items: center; background: var(--surface);
+  border-radius: var(--r); padding: 12px 20px; margin-bottom: 10px; }
+.mlhead { display: flex; flex-direction: column; }
+.mlhead b { font-size: 34px; font-weight: 650; line-height: 1.1; }
+.mlbox.stale b { color: var(--muted); }
+.mlbars { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }
+.mlbar { font-size: 12px; color: var(--text2); }
+.mlbar div { height: 6px; border-radius: 3px; background: var(--raised); margin-top: 4px; overflow: hidden; }
+.mlbar div i { display: block; height: 100%; background: var(--c3); }
+.mlbar.on { color: var(--text); font-weight: 600; } .mlbar.on div i { background: var(--good); }
+.mlinfo { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 13px; }
+.mlinfo span:nth-child(odd) { color: var(--muted); }
+.mlinfo .bad { color: var(--bad); overflow-wrap: anywhere; }
+
 /* ---------- espectro */
 .hmrow { position: relative; margin-bottom: 8px; border-radius: var(--r); overflow: hidden; background: #000; }
 canvas.hm { height: 130px; image-rendering: pixelated; }
@@ -183,5 +198,5 @@ td.lead { color: #5fd35f; } td.lag { color: var(--warn); }
   .lane, .lane.voz { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; } .info { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 4px 12px; padding: 12px 16px 4px; }
   .site { margin: 0; } canvas.wave { height: 110px; }
   .big { font-size: 44px; } .tiles { min-width: 0; grid-template-columns: 1fr; }
-  .sesgrid { grid-template-columns: 1fr; } .chans label { grid-template-columns: 40px auto 1fr 72px; gap: 8px; } .delay { margin-left: 0; } input[type=range] { width: 120px; }
+  .sesgrid { grid-template-columns: 1fr; } .mlbox { grid-template-columns: 1fr; } .chans label { grid-template-columns: 40px auto 1fr 72px; gap: 8px; } .delay { margin-left: 0; } input[type=range] { width: 120px; }
 }

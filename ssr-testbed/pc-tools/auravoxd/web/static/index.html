@@ -35,6 +35,10 @@
       <button data-v="0" class="on">Auto</button><button data-v="10">10 µV</button><button data-v="50">50 µV</button><button data-v="200">200 µV</button>
     </div>
   </div>
+  <div class="mlbox" id="mlbox" hidden>
+    <div class="mlhead"><span class="kicker">Modelo</span><b id="mlclase">—</b><span class="muted" id="mlsub"></span></div>
+    <div class="mlbars" id="mlbars"></div>
+  </div>
   <div class="lane" id="L0"><div class="info"><div class="name"><i></i>CH1</div><div class="site">Submentoniano</div>
     <div class="val" id="r0">—</div><div class="sub" id="h0"></div></div><canvas id="w0" class="wave"></canvas></div>
   <div class="lane" id="L1"><div class="info"><div class="name"><i></i>CH2</div><div class="site">Labio inferior</div>
@@ -111,6 +115,14 @@
     <div class="card-h"><h2>Canales</h2><span class="muted">Ganancia del electrodo al pin: AFE 2500, MyoWare 2.0 RAW 200, 1 = µV en el pin</span></div>
     <div class="chans" id="chans"></div>
     <div class="actions"><button id="chsave" class="btn">Guardar canales</button><span id="chmsg" class="muted"></span></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Modelo</h2><span class="muted">.zip que exporta el cuaderno de Colab</span></div>
+    <div class="mlinfo" id="mlinfo"></div>
+    <div class="actions">
+      <input type="file" id="mlfile" accept=".zip" hidden>
+      <button id="mlup" class="btn">Subir modelo (.zip)</button><span id="mlmsg" class="muted"></span>
+    </div>
   </div>
   <div class="card">
     <h2>Grabaciones</h2>

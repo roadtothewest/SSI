@@ -1,0 +1,110 @@
+{
+  "fecha": "2026-10-15 05:40",
+  "demo": false,
+  "versiones": {
+    "torch": "2.11.0+cu130",
+    "onnx": "1.20.1",
+    "onnxruntime": "1.24.3"
+  },
+  "entradas": [
+    "cwt_mag",
+    "cwt_fase"
+  ],
+  "canales": [
+    "CH3"
+  ],
+  "clases": [
+    "reposo",
+    "a",
+    "e",
+    "i",
+    "o",
+    "u"
+  ],
+  "fase": "absoluta",
+  "atencion_se": false,
+  "cwt": {
+    "fs": 2000,
+    "fmin": 20.0,
+    "fmax": 500.0,
+    "nf": 32,
+    "w0": 6.0,
+    "hop_ms": 10,
+    "t_cols": 32,
+    "hmax": 287
+  },
+  "entrenamiento": {
+    "epocas": 10,
+    "batch": 64,
+    "lr_max": 0.003,
+    "weight_decay": 0.0001,
+    "dropout": 0.3
+  },
+  "piso_voz_dbfs": -52.892591973427486,
+  "ventanas_por_clase": {
+    "reposo": 2072,
+    "a": 398,
+    "e": 347,
+    "i": 406,
+    "o": 443,
+    "u": 509
+  },
+  "pliegues": "grabación (4 pliegues; las etiquetas no traen ronda en todas)",
+  "validacion_cruzada": [
+    {
+      "pliegue": 1,
+      "ventanas_val": 296,
+      "acc": 0.6790540540540541,
+      "acc_bal": 0.2929749977019947,
+      "f1_macro": 0.2960966880778202,
+      "acc_int8": 0.7331081081081081,
+      "acc_bal_int8": 0.3861351125001276
+    },
+    {
+      "pliegue": 2,
+      "ventanas_val": 444,
+      "acc": 0.581081081081081,
+      "acc_bal": 0.37632461246183824,
+      "f1_macro": 0.3511527081891687,
+      "acc_int8": 0.6261261261261262,
+      "acc_bal_int8": 0.4440850532842946
+    },
+    {
+      "pliegue": 3,
+      "ventanas_val": 491,
+      "acc": 0.42769857433808556,
+      "acc_bal": 0.2702380952380952,
+      "f1_macro": 0.21585114893045354,
+      "acc_int8": 0.4480651731160896,
+      "acc_bal_int8": 0.2986111111111111
+    },
+    {
+      "pliegue": 4,
+      "ventanas_val": 852,
+      "acc": 0.10328638497652583,
+      "acc_bal": 0.2021112773851428,
+      "f1_macro": 0.12957212243368357,
+      "acc_int8": 0.11267605633802817,
+      "acc_bal_int8": 0.21467150136946692
+    }
+  ],
+  "cuantizacion": {
+    "cwt_fase": {
+      "escala": 0.007843137718737125,
+      "zp": 0
+    },
+    "cwt_mag": {
+      "escala": 0.03471019119024277,
+      "zp": 16
+    },
+    "logits": {
+      "escala": 0.05174250155687332,
+      "zp": -7
+    }
+  },
+  "final": {
+    "acc_fp32_train": 0.8401344215074412,
+    "acc_int8_train": 0.7681228996639462,
+    "acuerdo_fp32_int8": 0.8175708113298128
+  }
+}

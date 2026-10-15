@@ -90,9 +90,10 @@ type Link struct {
 type Store struct {
 	mu    sync.RWMutex
 	conv  Conv
-	gain  [NCh]float64 // por canal; parte de conv.Gain
-	emg   [NCh]*Ring   // µV RTI, 2 kHz
-	voice *Ring        // [-1, 1], 16 kHz
+	gain  [NCh]float64  // por canal; parte de conv.Gain
+	emg   [NCh]*Ring    // µV RTI, 2 kHz
+	codes [NCh][]uint16 // códigos crudos del ADC, alineados con emg (los usa el modelo de ML)
+	voice *Ring         // [-1, 1], 16 kHz
 	env   [NCh + 1]*Ring
 	envF  [NCh + 1]*dsp.Envelope
 
@@ -110,6 +111,7 @@ func NewStore(c Conv) *Store {
 	for i := 0; i < NCh; i++ {
 		s.gain[i] = c.Gain
 		s.emg[i] = newRing(30 * FsEMG)
+		s.codes[i] = make([]uint16, 30*FsEMG)
 		s.envF[i] = dsp.NewEnvelope(FsEMG, DecEMG)
 	}
 	s.envF[NCh] = dsp.NewEnvelope(FsVoice, DecVoice)
@@ -155,6 +157,7 @@ func (s *Store) Ingest(raw []byte) bool {
 		t := &b.Tuples[i]
 		for c := 0; c < NCh; c++ {
 			uv := s.conv.microVolts(t.ADC[c], s.gain[c])
+			s.codes[c][s.emg[c].n%int64(len(s.codes[c]))] = t.ADC[c]
 			s.emg[c].push(uv)
 			if e, ok := s.envF[c].Step(float64(uv)); ok {
 				s.env[c].push(float32(e))
@@ -232,6 +235,20 @@ func (s *Store) ReadEMG(ch int, from int64, dst []float32) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.emg[ch].read(from, dst)
+}
+
+// ReadCodes copia los códigos crudos del ADC [from, from+len(dst)) del canal ch.
+func (s *Store) ReadCodes(ch int, from int64, dst []uint16) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n, c := s.emg[ch].n, s.codes[ch]
+	if from < 0 || from < n-int64(len(c)) || from+int64(len(dst)) > n {
+		return false
+	}
+	for i := range dst {
+		dst[i] = c[(from+int64(i))%int64(len(c))]
+	}
+	return true
 }
 
 func (s *Store) ReadVoice(from int64, dst []float32) bool {
