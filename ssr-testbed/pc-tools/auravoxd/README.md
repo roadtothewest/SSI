@@ -87,7 +87,7 @@ El AFE entra al DK por A1 (CH1), A4 (CH2) y A5 (CH3); el micrófono ADMP401 por 
    - grabar y detener;
    - RMS y 50 Hz por condición, y SNR habla/reposo;
    - estado del enlace (CRC, bloques perdidos);
-   - sesiones grabadas: **Reproducir** o descargar.
+   - sesiones grabadas: **Reproducir**, **Renombrar**, descargar (`.avx` y `.json`) o **Borrar**.
 
 ## Reproducir una sesión grabada
 
@@ -101,6 +101,14 @@ Para la demo, una sesión grabada antes en buenas condiciones se puede mostrar e
 - El SPI y la línea DRDY siguen abiertos durante la reproducción (`source.Mux`): volver a en vivo es inmediato.
 - API: `GET /api/source` → `{"mode":"live"}` o `{"mode":"file","file":"X.avx"}`; `POST /api/source` con `{"file":"X.avx"}` o `{"file":""}` (en vivo). Nombre inválido → `400`; inexistente → `404`.
 - Las sesiones grabadas en otro equipo se copian (`.avx` y su `.json`) a la carpeta `-data` (en la Pi, `/home/aura/auravox`).
+
+## Renombrar y borrar grabaciones
+
+- En **Sesión → Grabaciones**, cada sesión (su `.avx` y su `.json`) aparece una vez, con su duración. **Renombrar** y **Borrar** actúan sobre los dos archivos juntos.
+- Nombres: letras, números, `-` y `_`, hasta 64 caracteres; los espacios pasan a `_`. Sin puntos ni barras, así que un nombre no puede salir de la carpeta.
+- Renombrar nunca pisa otra sesión (`409`). Borrar pide confirmación y no se puede deshacer.
+- La sesión que se está grabando o reproduciendo no se puede renombrar ni borrar (`409`): primero **Detener** o **Volver a en vivo**.
+- API: `GET /api/files` → `[{"name","size","secs","meta"}]`; `POST /api/files/{nombre}/rename` con `{"to":"nuevo"}` → `{"name":"nuevo"}`; `DELETE /api/files/{nombre}`. Nombre inválido → `400`; inexistente → `404`.
 
 ## Estadísticas y de dónde salen
 - **τ\***: lag del máximo de la correlación cruzada entre la envolvente del sEMG y la de la voz.

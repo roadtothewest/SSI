@@ -43,11 +43,26 @@ $('delayauto').onclick = () => setAuto(!delayAuto);
 function setAuto(on) { delayAuto = on; $('delayauto').classList.toggle('on', on); }
 $('recbtn').onclick = () => post('/api/record', { on: !(lastRec && lastRec.active) });
 $('resetbtn').onclick = () => post('/api/reset', {});
-$('livebtn').onclick = () => post('/api/source', { file: '' }).then(loadFiles);
+$('livebtn').onclick = () => setSource('');
 $('files').onclick = e => {
-  const b = e.target.closest('button[data-play]');
-  if (b && !b.classList.contains('on')) post('/api/source', { file: b.dataset.play }).then(loadFiles);
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  const n = b.dataset.name;
+  if (b.dataset.play !== undefined) setSource(n + '.avx');
+  if (b.dataset.ren !== undefined) {
+    const to = prompt(`Nuevo nombre para ${n}\n(letras, números, - y _; los espacios pasan a _)`, n);
+    if (to === null || !to.trim() || to.trim() === n) return;
+    sessionOp(post(`/api/files/${encodeURIComponent(n)}/rename`, { to }));
+  }
+  if (b.dataset.del !== undefined && confirm(`¿Borrar la grabación ${n}?\nSe eliminan su .avx y su .json. No se puede deshacer.`))
+    sessionOp(fetch(`/api/files/${encodeURIComponent(n)}`, { method: 'DELETE' }));
 };
+function setSource(file) { // con el estado de la respuesta, la lista no espera al próximo evento SSE
+  post('/api/source', { file }).then(r => r.ok ? r.json() : null).then(st => { if (st) lastSrc = st; loadFiles(); });
+}
+function sessionOp(req) {
+  req.then(async r => { if (!r.ok) alert(await r.text()); }).catch(e => alert(e)).finally(loadFiles);
+}
 
 // ------------------------------------------------------------ stream SSE
 const es = new EventSource('/api/stream');
@@ -369,15 +384,20 @@ function drawSession(r, link) {
 let filesT = 0;
 const esc = s => s.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 function loadFiles() {
-  fetch('/api/files').then(r => r.json()).then(fs => {
-    const playing = lastSrc && lastSrc.mode === 'file' ? lastSrc.file : '';
-    $('files').innerHTML = (fs || []).map(f => {
-      const n = esc(f.name);
-      const play = !f.name.endsWith('.avx') ? ''
-        : f.name === playing ? '<button class="on" disabled>Reproduciendo</button>'
-        : `<button data-play="${n}">Reproducir</button>`;
-      return `<li><span>${n}<span class="muted"> · ${(f.size / 1e6).toFixed(1)} MB</span></span>` +
-        `<span class="acts">${play}<a href="/files/${encodeURIComponent(f.name)}" download>Descargar</a></span></li>`;
+  fetch('/api/files').then(r => r.json()).then(ss => {
+    const playing = lastSrc && lastSrc.mode === 'file' ? lastSrc.file.replace(/\.avx$/, '') : '';
+    const recording = lastRec && lastRec.active ? lastRec.name : '';
+    $('files').innerHTML = (ss || []).map(s => {
+      const n = esc(s.name), u = encodeURIComponent(s.name), busy = s.name === playing || s.name === recording;
+      const why = s.name === recording ? ' title="Se está grabando"' : s.name === playing ? ' title="Se está reproduciendo"' : '';
+      const play = !s.size ? ''
+        : s.name === playing ? '<button class="on" disabled>Reproduciendo</button>'
+        : `<button data-play data-name="${n}"${s.name === recording ? ' disabled' : ''}>Reproducir</button>`;
+      const dl = (s.size ? `<a href="/files/${u}.avx" download>Descargar</a>` : '') +
+        (s.meta ? `<a class="json" href="/files/${u}.json" download>.json</a>` : '');
+      return `<li><span class="fn">${n}<span class="muted"> · ${clock(s.secs)} · ${(s.size / 1e6).toFixed(1)} MB</span></span>` +
+        `<span class="acts">${play}<button data-ren data-name="${n}"${busy ? ' disabled' + why : ''}>Renombrar</button>${dl}` +
+        `<button class="del" data-del data-name="${n}"${busy ? ' disabled' + why : ''}>Borrar</button></span></li>`;
     }).join('') || '<li class="muted">Aún no hay grabaciones</li>';
   });
 }

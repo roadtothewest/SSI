@@ -48,7 +48,29 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /files/", http.StripPrefix("/files/", http.FileServer(http.Dir(s.DataDir))))
 	mux.HandleFunc("GET /api/stream", s.stream)
 	mux.HandleFunc("GET /api/files", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, s.Rec.Files())
+		writeJSON(w, s.Rec.Sessions())
+	})
+	mux.HandleFunc("DELETE /api/files/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if !sessionError(w, s.editSession(name, func() error { return s.Rec.Delete(name) })) {
+			writeJSON(w, map[string]string{"deleted": name})
+		}
+	})
+	mux.HandleFunc("POST /api/files/{name}/rename", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ To string }
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "json inválido", http.StatusBadRequest)
+			return
+		}
+		name := r.PathValue("name")
+		to, ok := record.CleanName(req.To)
+		if !ok {
+			http.Error(w, record.ErrBadName.Error(), http.StatusBadRequest)
+			return
+		}
+		if !sessionError(w, s.editSession(name, func() error { return s.Rec.Rename(name, to) })) {
+			writeJSON(w, map[string]string{"name": to})
+		}
 	})
 	mux.HandleFunc("POST /api/condition", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Cond string }
@@ -158,6 +180,36 @@ func (s *Server) setSource(file string) error {
 	s.St.ResetLink()
 	s.An.ResetStats()
 	return nil
+}
+
+var errPlaying = errors.New("la sesión se está reproduciendo: vuelve a en vivo primero")
+
+// editSession corre op (borrar o renombrar) si la sesión no se está reproduciendo.
+// Toma srcMu para que no empiece a reproducirse a mitad de la operación.
+func (s *Server) editSession(name string, op func() error) error {
+	s.srcMu.Lock()
+	defer s.srcMu.Unlock()
+	if st := s.Src.State(); st.Mode == source.ModeFile && st.File == name+".avx" {
+		return errPlaying
+	}
+	return op()
+}
+
+// sessionError responde el error de editSession y dice si hubo uno.
+func sessionError(w http.ResponseWriter, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, record.ErrBadName):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, record.ErrNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, record.ErrExists), errors.Is(err, record.ErrBusy), errors.Is(err, errPlaying):
+		http.Error(w, err.Error(), http.StatusConflict)
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return true
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
