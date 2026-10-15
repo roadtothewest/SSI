@@ -96,10 +96,21 @@ function init(m) {
 // ------------------------------------------------------------ modelo
 const ML_STATE = { 'sin-modelo': 'Sin modelo', cargando: 'Cargando…', activo: 'Activo', error: 'Error', apagado: 'Desactivado (-ml=false)' };
 let lastML = null;
+// Mostrar u ocultar el panel del modelo en Señales; se recuerda en este navegador.
+let mlShow = true;
+try { mlShow = localStorage.getItem('auravox.mlShow') !== '0'; } catch (e) { }
+$('mltoggle').onclick = () => {
+  mlShow = !mlShow;
+  try { localStorage.setItem('auravox.mlShow', mlShow ? '1' : '0'); } catch (e) { }
+  if (lastML) onML(lastML);
+};
 function onML(s) {
   lastML = s;
   const p = s.pred, on = s.state === 'activo' && p;
-  $('mlbox').hidden = !on;
+  $('mltoggle').hidden = !on;
+  $('mltoggle').classList.toggle('on', mlShow);
+  $('mltoggle').textContent = mlShow ? 'Ocultar modelo' : 'Mostrar modelo';
+  $('mlbox').hidden = !on || !mlShow;
   if (on) {
     $('mlbox').classList.toggle('stale', p.stale);
     $('mlclase').textContent = p.clase;

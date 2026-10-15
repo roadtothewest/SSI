@@ -101,7 +101,7 @@ Lo conectado a A1/A4/A5 cambia según el montaje (AFE propio, MyoWare), así que
 
 ## Clasificador (modelo de Colab)
 
-`auravoxd` corre el clasificador que exporta el cuaderno de Colab (`auravox_vocales_npu.ipynb`) y muestra la clase y sus probabilidades arriba de **Señales**. Funciona en vivo y también al reproducir una sesión.
+`auravoxd` corre el clasificador que exporta el cuaderno de Colab (`auravox_vocales_npu.ipynb`) y muestra la clase y sus probabilidades arriba de **Señales**. Funciona en vivo y también al reproducir una sesión. El botón **Ocultar modelo / Mostrar modelo** de esa pestaña esconde el panel; cada navegador recuerda su elección.
 
 - **Cambiar de modelo:** en **Sesión → Modelo → Subir modelo (.zip)**, el mismo `.zip` que sale del cuaderno. `auravoxd` lo descomprime, comprueba que carga y que evalúa una ventana, y recién entonces lo activa. El anterior queda en `<data>/ml/anterior/`. Por API: `curl --data-binary @modelo.zip http://auravox.lan/api/ml/model`.
 - **Contrato con el cuaderno:** el `.zip` trae
