@@ -57,9 +57,9 @@
       <button id="delayauto" class="chip on">Auto</button>
     </div>
   </div>
-  <div class="hmrow"><span class="tag c0">CH1</span><canvas id="c0" class="hm"></canvas></div>
-  <div class="hmrow"><span class="tag c1">CH2</span><canvas id="c1" class="hm"></canvas></div>
-  <div class="hmrow"><span class="tag c2">CH3</span><canvas id="c2" class="hm"></canvas></div>
+  <div class="hmrow" id="H0"><span class="tag c0">CH1</span><canvas id="c0" class="hm"></canvas></div>
+  <div class="hmrow" id="H1"><span class="tag c1">CH2</span><canvas id="c1" class="hm"></canvas></div>
+  <div class="hmrow" id="H2"><span class="tag c2">CH3</span><canvas id="c2" class="hm"></canvas></div>
   <div class="hmrow"><span class="tag c3">Voz</span><canvas id="c3" class="hm"></canvas></div>
   <div class="legend"><span>20 – 500 Hz</span><span class="ramp" id="ramp"></span><span id="rampl">baja → alta energía</span></div>
 </section>
@@ -75,14 +75,10 @@
     <div class="tiles" id="tiles"></div>
   </div>
   <div class="card">
-    <div class="card-h"><h2>Correlación sEMG → voz</h2><div class="keys" id="keys"></div></div>
+    <div class="card-h"><h2>Correlación sEMG → voz · últimos 3 s</h2><div class="keys" id="keys"></div></div>
     <div class="plot"><canvas id="xc" class="xc"></canvas><div id="tip" class="tip" hidden></div></div>
     <div class="axisnote"><span>← la voz primero</span><span>el músculo primero →</span></div>
-  </div>
-  <div class="grid3" id="xwgrid">
-    <div class="card"><div class="card-h"><h3><i class="c0"></i>CH1 × voz</h3><span class="muted" id="xn0"></span></div><canvas id="m0" class="xw"></canvas></div>
-    <div class="card"><div class="card-h"><h3><i class="c1"></i>CH2 × voz</h3><span class="muted" id="xn1"></span></div><canvas id="m1" class="xw"></canvas></div>
-    <div class="card"><div class="card-h"><h3><i class="c2"></i>CH3 × voz</h3><span class="muted" id="xn2"></span></div><canvas id="m2" class="xw"></canvas></div>
+    <p class="muted note">La banda gris es lo que da el azar entre señales sin relación: un pico dentro de ella no es una medición.</p>
   </div>
   <div class="card">
     <div class="card-h"><h2>Últimas frases</h2><span id="conf"></span></div>
@@ -110,6 +106,11 @@
     <div class="card-h"><h2>Nivel por condición</h2><span class="muted">RMS en µV</span></div>
     <div class="tablewrap"><table id="condtab"></table></div>
     <div class="snr" id="snr"></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Canales</h2><span class="muted">Ganancia del electrodo al pin: AFE 2500, MyoWare 2.0 RAW 200, 1 = µV en el pin</span></div>
+    <div class="chans" id="chans"></div>
+    <div class="actions"><button id="chsave" class="btn">Guardar canales</button><span id="chmsg" class="muted"></span></div>
   </div>
   <div class="card">
     <h2>Grabaciones</h2>

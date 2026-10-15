@@ -34,6 +34,7 @@ type Meta struct {
 	Stop      time.Time            `json:"stop"`
 	BlockSize int                  `json:"blockSize"`
 	Conv      stream.Conv          `json:"conv"`
+	Chans     []stream.Channel     `json:"chans,omitempty"` // nombre y ganancia de cada canal al grabar
 	HopMS     int                  `json:"hopMs"`
 	Blocks    uint64               `json:"blocks"`
 	Dropped   uint64               `json:"dropped"`
@@ -96,7 +97,7 @@ func (r *Recorder) Run(ctx context.Context) {
 	}
 }
 
-func (r *Recorder) Start(conv stream.Conv, hopMS int, cond string) (string, error) {
+func (r *Recorder) Start(conv stream.Conv, chans []stream.Channel, hopMS int, cond string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.f != nil {
@@ -112,7 +113,7 @@ func (r *Recorder) Start(conv stream.Conv, hopMS int, cond string) (string, erro
 		return "", err
 	}
 	r.f, r.w, r.name = f, bufio.NewWriterSize(f, 64<<10), name
-	r.meta = Meta{Start: now, BlockSize: frame.BlockSize, Conv: conv, HopMS: hopMS,
+	r.meta = Meta{Start: now, BlockSize: frame.BlockSize, Conv: conv, Chans: chans, HopMS: hopMS,
 		Marks: []Mark{{0, cond}}}
 	r.dropped.Store(0)
 	r.active.Store(true)

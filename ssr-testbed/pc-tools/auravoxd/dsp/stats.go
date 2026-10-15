@@ -166,3 +166,14 @@ func MedianIQR(v []float64) (med, iqr float64) {
 	}
 	return q(0.5), q(0.75) - q(0.25)
 }
+
+// ChanceR es el r máximo que la correlación cruzada de dos envolventes sin relación
+// alcanza por azar (p95) en una ventana de n muestras a 200 Hz, buscando en ±300 ms.
+// Ajuste de una simulación con la cadena de stream.Store (ruido contra voz en ráfagas):
+// p95 = 0,39 con 3 s y 0,56–0,57 con 1,3–1,5 s, ≈ 9,6/√n (dsp_test.go lo vuelve a comprobar).
+func ChanceR(n int) float64 {
+	if n <= 0 {
+		return 1
+	}
+	return math.Min(0.95, 9.6/math.Sqrt(float64(n)))
+}

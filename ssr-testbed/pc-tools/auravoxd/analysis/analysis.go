@@ -1,6 +1,6 @@
 // Package analysis calcula, en goroutines propias, lo que muestra la HMI:
 //   - RunCWT: escalogramas CWT (magnitud y fase) de los 3 sEMG y la voz, una columna por hop;
-//   - RunStats: correlación cruzada sEMG→voz, cross-wavelet, enunciados y estadísticas.
+//   - RunStats: correlación cruzada sEMG→voz, enunciados y estadísticas.
 package analysis
 
 import (
@@ -22,10 +22,9 @@ const (
 	FMax      = 500 // Hz
 	maxCols   = 4096
 	maxLag    = 60 // 60 muestras de envolvente = ±300 ms (Le 2026)
+	edgeLag   = 5  // un pico a ≤ 25 ms del borde no es un máximo: el verdadero puede estar fuera
 	envMS     = 1000 / stream.FsEnv
 	xcWin     = 3 * stream.FsEnv // correlación en vivo: últimos 3 s
-	xwtWin    = 5 * stream.FsEnv // cross-wavelet: últimos 5 s
-	xwtStep   = 10               // una columna cada 50 ms → 100 columnas
 	maxUtter  = 500
 	showUtter = 20
 )
@@ -39,7 +38,7 @@ type Analyzer struct {
 	// todos los lags, para que τ > 0 siga significando que el sEMG se adelanta.
 	VozDelayMS float64
 
-	bankE, bankV, bankX *dsp.Bank
+	bankE, bankV *dsp.Bank
 
 	colMu sync.RWMutex
 	cols  []Column
@@ -60,7 +59,6 @@ func New(st *stream.Store, hopMS int) *Analyzer {
 		st:    st,
 		bankE: dsp.NewBank(stream.FsEMG, FMin, FMax, NF, 6),
 		bankV: dsp.NewBank(stream.FsVoice, FMin, FMax, NF, 6),
-		bankX: dsp.NewBank(stream.FsEnv, 1.5, 16, 12, 6),
 		cols:  make([]Column, maxCols),
 		cond:  "reposo",
 	}
@@ -216,8 +214,9 @@ func (a *Analyzer) RunStats(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		if a.reset.Swap(false) {
-			s.utter, s.conds = nil, map[string]*condAcc{}
+		if a.reset.Swap(false) { // también lo pendiente: al cambiar de fuente no debe colarse una frase de la anterior
+			s.utter, s.conds, s.pend = nil, map[string]*condAcc{}, nil
+			s.inU, s.runOn, s.runOff = false, 0, 0
 		}
 		nE, _, nEnv := a.st.Counts()
 		if nEnv < 2*stream.FsEnv {
@@ -284,6 +283,9 @@ func (a *Analyzer) slowStats(s *stats, nE, nEnv int64) {
 		return
 	}
 	s.f0 = F(f0)
+	if math.Abs(math.Mod(f0+25, 50)-25) < 5 {
+		return // F0 en un armónico de 50 Hz: el pico en F0 sería la red, no la voz
+	}
 	for ch := 0; ch < stream.NCh; ch++ {
 		if !a.st.ReadEMG(ch, nE-stream.FsEMG, x) {
 			continue
@@ -377,6 +379,8 @@ func (a *Analyzer) analyzeUtterance(s *stats, p pending) (Utterance, bool) {
 		Cond: a.Condition(),
 	}
 	x := make([]float32, len(y))
+	rMin := dsp.ChanceR(len(y))
+	u.RMin = F(rMin)
 	for ch := 0; ch < stream.NCh; ch++ {
 		u.Tau[ch], u.R[ch], u.R0[ch], u.Lead[ch] = nan, nan, nan, nan
 		if !a.st.ReadEnv(ch, from, x) {
@@ -385,6 +389,7 @@ func (a *Analyzer) analyzeUtterance(s *stats, p pending) (Utterance, bool) {
 		r := dsp.XCorr(x, y, maxLag)
 		i, rv := dsp.Peak(r)
 		u.Tau[ch], u.R[ch], u.R0[ch] = a.lagMS((i-maxLag)*envMS), F(rv), F(r[maxLag])
+		u.Sig[ch] = significant(i, rv, rMin)
 		// Onset del sEMG entre −500 ms y +200 ms del onset de la voz (índice 100 de x).
 		// Se exige que el sEMG parta bajo el umbral, si no el onset no es medible.
 		win := x[:min(len(x), 140)]
@@ -402,7 +407,13 @@ func (a *Analyzer) analyzeUtterance(s *stats, p pending) (Utterance, bool) {
 	return u, true
 }
 
-// fastStats corre cada 200 ms: correlación cruzada en vivo y cross-wavelet.
+// significant dice si el pico i (índice en r, de 0 a 2·maxLag) con valor rv es un τ* medible:
+// sobre el r que da el azar y lejos del borde de la búsqueda.
+func significant(i int, rv float32, rMin float64) bool {
+	return float64(rv) > rMin && i >= edgeLag && i <= 2*maxLag-edgeLag
+}
+
+// fastStats corre cada 200 ms: correlación cruzada en vivo y resúmenes.
 func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 	r := &Result{
 		T:        F(float64(nE) / stream.FsEMG),
@@ -412,8 +423,7 @@ func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 		VoiceRMS: s.vrms,
 		F0:       s.f0,
 		Confound: s.conf,
-		XWTFreqs: a.bankX.Freqs,
-		XWTCols:  xwtWin / xwtStep,
+		RMinLive: F(dsp.ChanceR(xcWin)),
 		Conds:    map[string]*CondStat{},
 	}
 	// Correlación cruzada en vivo, últimos 3 s.
@@ -427,17 +437,23 @@ func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 			r.XC[ch] = dsp.XCorr(x, y, maxLag)
 			if r.Voiced {
 				i, v := dsp.Peak(r.XC[ch])
-				r.TauLive[ch], r.RLive[ch] = a.lagMS((i-maxLag)*envMS), F(v)
+				r.RLive[ch] = F(v)
+				if significant(i, v, float64(r.RMinLive)) {
+					r.TauLive[ch] = a.lagMS((i - maxLag) * envMS)
+				}
 			}
 		}
 	}
-	// Resumen de los enunciados (últimos 30).
+	// Resumen de los enunciados (últimos 30), solo con los τ* significativos.
 	recent := s.utter[max(0, len(s.utter)-30):]
 	for ch := 0; ch < stream.NCh; ch++ {
 		var tau, lead, rr, r0 []float64
-		pos := 0
+		pos, all := 0, 0
 		for _, u := range recent {
 			if !math.IsNaN(float64(u.Tau[ch])) {
+				all++
+			}
+			if u.Sig[ch] {
 				tau = append(tau, float64(u.Tau[ch]))
 				rr = append(rr, float64(u.R[ch]))
 				r0 = append(r0, float64(u.R0[ch]))
@@ -449,7 +465,7 @@ func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 				lead = append(lead, float64(u.Lead[ch]))
 			}
 		}
-		sm := Summary{N: len(tau), Tau: nan, TauIQR: nan, PctLead: nan, Lead: nan, LeadIQR: nan, R: nan, R0: nan}
+		sm := Summary{N: len(tau), NAll: all, Tau: nan, TauIQR: nan, PctLead: nan, Lead: nan, LeadIQR: nan, R: nan, R0: nan}
 		if len(tau) > 0 {
 			m, q := dsp.MedianIQR(tau)
 			sm.Tau, sm.TauIQR, sm.PctLead = F(m), F(q), F(100*float64(pos)/float64(len(tau)))
@@ -482,89 +498,5 @@ func (a *Analyzer) fastStats(s *stats, nE, nEnv int64) *Result {
 			}
 		}
 	}
-	a.crossWavelet(r, s, nEnv)
 	return r
-}
-
-// crossWavelet calcula Wxy = Wx·conj(Wy) entre la envolvente de cada sEMG (x) y la
-// de la voz (y) en 1,5–16 Hz, la banda de modulación articulatoria (sílabas).
-// Si el sEMG se adelanta Δ, la fase es φ = 2πfΔ, entonces Δ(f) = φ/(2πf).
-func (a *Analyzer) crossWavelet(r *Result, s *stats, nEnv int64) {
-	b := a.bankX
-	nf, cols := len(b.Freqs), xwtWin/xwtStep
-	y := make([]float32, xwtWin)
-	if !a.st.ReadEnv(stream.NCh, nEnv-xwtWin, y) {
-		return
-	}
-	center(y)
-	wy := make([][]complex128, cols)
-	for c := range wy {
-		wy[c] = make([]complex128, nf)
-		b.Column(y, c*xwtStep+xwtStep/2, wy[c])
-	}
-	x := make([]float32, xwtWin)
-	wx := make([]complex128, nf)
-	for ch := 0; ch < stream.NCh; ch++ {
-		if !a.st.ReadEnv(ch, nEnv-xwtWin, x) {
-			continue
-		}
-		center(x)
-		ref := float64(r.Sum[ch].Tau)
-		if math.IsNaN(ref) {
-			ref = float64(r.TauLive[ch])
-		}
-		if math.IsNaN(ref) {
-			ref = 0
-		} else {
-			ref += a.VozDelayMS // la fase medida trae el retardo de la voz
-		}
-		xw := XWT{Mag: make([]byte, nf*cols), Phase: make([]byte, nf*cols), Coh: make([]F, nf), Lag: make([]F, nf)}
-		mag := make([]float64, nf*cols)
-		sxy := make([]complex128, nf)
-		sxx, syy := make([]float64, nf), make([]float64, nf)
-		peak := 0.0
-		for c := 0; c < cols; c++ {
-			cc := c*xwtStep + xwtStep/2
-			b.Column(x, cc, wx)
-			for f := 0; f < nf; f++ {
-				p := wx[f] * cmplx.Conj(wy[c][f])
-				m := cmplx.Abs(p)
-				mag[f*cols+c] = m
-				peak = math.Max(peak, m)
-				xw.Phase[f*cols+c] = byte((cmplx.Phase(p) + math.Pi) / (2 * math.Pi) * 255)
-				if h := b.Half(f); cc >= h && cc+h < xwtWin { // fuera del cono de influencia
-					sxy[f] += p
-					sxx[f] += real(wx[f] * cmplx.Conj(wx[f]))
-					syy[f] += real(wy[c][f] * cmplx.Conj(wy[c][f]))
-				}
-			}
-		}
-		for i, m := range mag {
-			if peak > 0 {
-				xw.Mag[i] = byte(255 * math.Sqrt(m/peak))
-			}
-		}
-		for f, fr := range b.Freqs {
-			xw.Coh[f], xw.Lag[f] = nan, nan
-			if sxx[f] > 0 && syy[f] > 0 {
-				am := cmplx.Abs(sxy[f])
-				xw.Coh[f] = F(am * am / (sxx[f] * syy[f]))
-				cyc := cmplx.Phase(sxy[f]) / (2 * math.Pi)
-				k := math.Round(ref/1000*fr - cyc) // desenrollar cerca de τ*
-				xw.Lag[f] = F((cyc+k)/fr*1000 - a.VozDelayMS)
-			}
-		}
-		r.XWT[ch] = xw
-	}
-}
-
-func center(x []float32) {
-	var m float64
-	for _, v := range x {
-		m += float64(v)
-	}
-	m /= float64(len(x))
-	for i := range x {
-		x[i] -= float32(m)
-	}
 }

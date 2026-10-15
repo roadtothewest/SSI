@@ -39,9 +39,13 @@ type Server struct {
 
 	srcMu    sync.Mutex
 	liveCond string // condición en vivo, para restaurarla al volver de una sesión
+
+	chMu  sync.Mutex
+	chans [stream.NCh]stream.Channel // nombre, ganancia y activo por canal (canales.cfg)
 }
 
 func (s *Server) Handler() http.Handler {
+	s.loadChannels()
 	mux := http.NewServeMux()
 	sub, _ := fs.Sub(static, "static")
 	mux.Handle("GET /", http.FileServerFS(sub))
@@ -72,6 +76,10 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, map[string]string{"name": to})
 		}
 	})
+	mux.HandleFunc("GET /api/channels", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.channels())
+	})
+	mux.HandleFunc("POST /api/channels", s.postChannels)
 	mux.HandleFunc("POST /api/condition", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Cond string }
 		if json.NewDecoder(r.Body).Decode(&req) != nil || !s.An.SetCondition(req.Cond) {
@@ -101,7 +109,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		var err error
 		if req.On {
-			_, err = s.Rec.Start(s.Conv, s.An.Hop(), s.An.Condition())
+			cs := s.channels()
+			_, err = s.Rec.Start(s.Conv, cs[:], s.An.Hop(), s.An.Condition())
 		} else {
 			err = s.Rec.Stop()
 		}
@@ -218,26 +227,28 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 type initMsg struct {
-	FsEMG    int         `json:"fsEmg"`
-	Bucket   int         `json:"bucket"`
-	ShowSecs int         `json:"showSecs"`
-	Freqs    []float64   `json:"freqs"`
-	NF       int         `json:"nf"`
-	MagRange [2][2]int   `json:"magRange"`
-	Conds    []string    `json:"conds"`
-	Source   string      `json:"source"`
-	Conv     stream.Conv `json:"conv"`
-	MaxLagMS int         `json:"maxLagMs"`
+	FsEMG    int                        `json:"fsEmg"`
+	Bucket   int                        `json:"bucket"`
+	ShowSecs int                        `json:"showSecs"`
+	Freqs    []float64                  `json:"freqs"`
+	NF       int                        `json:"nf"`
+	MagRange [2][2]int                  `json:"magRange"`
+	Conds    []string                   `json:"conds"`
+	Source   string                     `json:"source"`
+	Conv     stream.Conv                `json:"conv"`
+	MaxLagMS int                        `json:"maxLagMs"`
+	Chans    [stream.NCh]stream.Channel `json:"chans"`
 }
 
 type msg struct {
-	E    [3][]float32     `json:"e"` // pares min/max por balde, por canal [µV]
-	V    []float32        `json:"v"` // pares min/max de la voz
-	C    [][]byte         `json:"c"` // columnas CWT nuevas
-	R    *analysis.Result `json:"r,omitempty"`
-	Link *stream.Link     `json:"link,omitempty"`
-	Rec  *record.Status   `json:"rec,omitempty"`
-	Src  *source.State    `json:"src,omitempty"`
+	E    [3][]float32                `json:"e"` // pares min/max por balde, por canal [µV]
+	V    []float32                   `json:"v"` // pares min/max de la voz
+	C    [][]byte                    `json:"c"` // columnas CWT nuevas
+	R    *analysis.Result            `json:"r,omitempty"`
+	Link *stream.Link                `json:"link,omitempty"`
+	Rec  *record.Status              `json:"rec,omitempty"`
+	Src  *source.State               `json:"src,omitempty"`
+	Chs  *[stream.NCh]stream.Channel `json:"chans,omitempty"`
 }
 
 func minmax(x []float32, n int) []float32 {
@@ -276,6 +287,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		Freqs: s.An.Freqs(), NF: analysis.NF,
 		MagRange: [2][2]int{{-10, 40}, {-80, -10}},
 		Conds:    analysis.Conditions, Source: s.Source, Conv: s.Conv, MaxLagMS: 300,
+		Chans: s.channels(),
 	}) {
 		return
 	}
@@ -319,8 +331,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			m.C = append(m.C, c.Data)
 		}
 		if i%5 == 0 {
-			l, st, src := s.St.Link(), s.Rec.Status(), s.Src.State()
-			m.R, m.Link, m.Rec, m.Src = s.An.Result(), &l, &st, &src
+			l, st, src, cs := s.St.Link(), s.Rec.Status(), s.Src.State(), s.channels()
+			m.R, m.Link, m.Rec, m.Src, m.Chs = s.An.Result(), &l, &st, &src, &cs
 		}
 		if !send(m) {
 			return

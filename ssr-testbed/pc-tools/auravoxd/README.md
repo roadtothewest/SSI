@@ -69,25 +69,35 @@ El AFE entra al DK por A1 (CH1), A4 (CH2) y A5 (CH3); el micrófono ADMP401 por 
 - Probado con la Raspberry Pi 5: 100 bloques/s sin errores de CRC ni huecos.
 
 ## Pestañas de la HMI
-1. **Señales:** 3 gráficos horizontales (CH1 submentoniano, CH2 labio inferior, CH3 cuello) + voz.
-   - Ventana de 5 s, en µV RTI.
+1. **Señales:** un gráfico por canal activo (nombre según **Sesión → Canales**) + voz.
+   - Ventana de 5 s, en µV RTI (con ganancia 1, µV en el pin).
    - Cada carril muestra el RMS y el 50 Hz del último segundo, y un punto que se enciende cuando el canal está activo.
    - Sirve para comparar silencio y piso de ruido contra habla.
 2. **CWT:** escalogramas Morlet (ω0 = 6) de 20 a 500 Hz, en magnitud o fase, de los 3 sEMG y la voz, con una columna por hop.
    - El deslizador **retardo biológico** adelanta la voz en pantalla para alinearla con el sEMG.
    - Por defecto toma el τ\* medido.
-3. **Causalidad**, por canal:
-   - **r(τ)** de las envolventes en ±300 ms;
-   - la **cross-wavelet sEMG × voz** (1,5–16 Hz, magnitud y fase);
-   - el **lag por frecuencia** Δt = φ/(2πf).
-
-   Debajo van la tabla resumen, los últimos enunciados y el control del confusor laríngeo.
+3. **Causalidad**, solo con los canales activos:
+   - el número grande es el τ\* del **canal principal**: el activo con más frases sobre el azar (empate: mayor r); sin frases, el de mayor r en vivo;
+   - una ficha por canal con τ\*, r y cuántas frases superan el azar;
+   - **r(τ)** de las envolventes en ±300 ms (últimos 3 s), con la **banda de azar** en gris;
+   - las últimas frases: τ\* y r por canal, atenuados si no superan el azar, y el control del confusor laríngeo.
 4. **Sesión:**
    - condición actual (desconectado / reposo / habla / articulación silenciosa / vocal sostenida);
+   - **canales**: nombre, ganancia y si está conectado (ver abajo);
    - grabar y detener;
    - RMS y 50 Hz por condición, y SNR habla/reposo;
    - estado del enlace (CRC, bloques perdidos);
    - sesiones grabadas: **Reproducir**, **Renombrar**, descargar (`.avx` y `.json`) o **Borrar**.
+
+## Canales
+
+Lo conectado a A1/A4/A5 cambia según el montaje (AFE propio, MyoWare), así que cada canal tiene nombre, ganancia y un interruptor **conectado**, editables en **Sesión → Canales** sin reiniciar el servicio.
+
+- Ganancia = del electrodo al pin Arduino: AFE AuraVox 2500, MyoWare 2.0 RAW 200. Con **1**, los valores son µV en el pin (MyoWare 1.0 RAW: su ganancia no está documentada).
+- Un canal desconectado no aparece en Señales, Espectro, Causalidad ni en la tabla por condición, y no entra en el número grande.
+- Se guarda en `canales.cfg` dentro de `-data`; sin ese archivo: los nombres del AFE, `-gain` y los tres activos.
+- La ganancia nueva vale desde el bloque siguiente. Cada grabación guarda en su `.json` los canales con que se grabó (`chans`).
+- API: `GET /api/channels`; `POST /api/channels` con `[{"name","gain","on"} ×3]`. Nombre vacío o de más de 32 caracteres, o ganancia fuera de (0, 10⁶] → `400`.
 
 ## Reproducir una sesión grabada
 
@@ -116,15 +126,18 @@ Para la demo, una sesión grabada antes en buenas condiciones se puede mostrar e
   - Se busca en ±300 ms (Le et al. 2026 no encuentran estructura fuera de ese rango).
   - τ > 0 = el sEMG se adelanta. Se espera ~+50 ms (Jou et al. 2006: el mejor WER se obtiene retrasando el EMG 50 ms).
   - Por enunciado se reportan τ\*, r(τ\*) y r(0). El resumen da la mediana e IQR y el **% de enunciados con el sEMG adelantado**, que mide la estabilidad del signo (refactor §3.2).
+- **Nivel de azar:** dos envolventes sin relación también dan un máximo de r(τ). Su p95 (`dsp.ChanceR`) es ≈ 9,6/√n con n muestras de envolvente: 0,39 en la ventana en vivo de 3 s y ≈ 0,55 en una frase típica (duración + 0,8 s). Sale de simular ruido contra voz en ráfagas con la misma cadena, y `dsp_test.go` lo comprueba.
+  - Un τ\* es **significativo** si r(τ\*) supera ese nivel y el pico no está a ≤ 25 ms del borde de ±300 ms (ahí el máximo verdadero puede estar fuera). El τ\* en vivo solo se informa si es significativo, y el resumen por canal usa solo las frases significativas.
+  - Con el montaje del 2026-10-15 (MyoWare 1.0 en el omohioideo), en las sesiones de vocales espaciadas 12 de 18 frases del CH3 superan el azar (11 con τ\* > 0, mediana ≈ +170 ms); el masetero y la entrada al aire, ninguna.
 - **Adelanto del onset:** onset de la voz − onset del sEMG.
   - Umbral = media + 3·DE de la línea base, con histéresis (Stepp et al. 2009).
-- **Cross-wavelet:** Wxy = Wx·conj(Wy) sobre las envolventes.
-  - Si el sEMG se adelanta Δ, la fase es 2πfΔ. La fase se desenrolla cerca de τ\*.
-  - La coherencia se calcula solo con las columnas fuera del cono de influencia.
+  - Se guarda en el `.json` de cada sesión, pero la HMI no lo muestra: con el montaje del 2026-10-15 solo se pudo medir en 6 de 18 frases y con signos mezclados.
+- La **cross-wavelet** sEMG × voz se quitó el 2026-10-15: no se podía leer en la demo y su lag por frecuencia nunca llegó a la pantalla.
 - **Por condición:** RMS en µV RTI y amplitud de 50 Hz (sirve para ver la efectividad del RLD con y sin él). SNR = 20·log10(RMS habla / RMS reposo).
 - **Confusor laríngeo** (refactor §3.3):
   - se calcula la F0 de la voz y el pico de cada canal sEMG en F0 respecto de la mediana del espectro de 20–500 Hz;
-  - si CH3 supera 10 dB durante una vocal sostenida, hay acople mecánico de la voz y no es actividad muscular.
+  - si el canal principal supera 10 dB, hay acople mecánico de la voz y no es actividad muscular;
+  - no se calcula si F0 cae a menos de 5 Hz de un armónico de 50 Hz (con F0 = 100 Hz mediría la red).
 
 ## Estructura
 ```
@@ -133,8 +146,8 @@ frame/        formato del bloque, CRC16
 source/       spi.go (spidev + DRDY con go-gpiocdev), sim.go, file.go, mux.go (en vivo ↔ sesión)
 stream/       buffers circulares alineados por número de muestra + envolventes
 dsp/          filtros, banco Morlet, correlación cruzada, F0, umbrales
-analysis/     CWT por hop, enunciados, cross-wavelet, estadísticas
+analysis/     CWT por hop, enunciados, correlación con nivel de azar, estadísticas
 record/       sesiones .avx (bloques crudos) + .json (condiciones, enunciados)
-web/          servidor SSE + HMI embebida (static/)
+web/          servidor SSE + HMI embebida (static/), canales (canales.cfg)
 deploy/       auravoxd.service, install.sh
 ```

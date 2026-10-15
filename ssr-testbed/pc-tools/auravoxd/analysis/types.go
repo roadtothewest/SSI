@@ -30,13 +30,15 @@ type Column struct {
 
 // Utterance es un enunciado detectado en la envolvente de la voz.
 type Utterance struct {
-	T    F      `json:"t"`   // inicio de la voz [s]
-	Dur  F      `json:"dur"` // duración [s]
-	Cond string `json:"cond"`
-	Tau  [3]F   `json:"tau"`  // lag de la correlación cruzada [ms]; > 0 = sEMG adelantado
-	R    [3]F   `json:"r"`    // r(τ*)
-	R0   [3]F   `json:"r0"`   // r(0)
-	Lead [3]F   `json:"lead"` // onset de voz − onset de sEMG [ms]; > 0 = sEMG primero
+	T    F       `json:"t"`   // inicio de la voz [s]
+	Dur  F       `json:"dur"` // duración [s]
+	Cond string  `json:"cond"`
+	Tau  [3]F    `json:"tau"`  // lag de la correlación cruzada [ms]; > 0 = sEMG adelantado
+	R    [3]F    `json:"r"`    // r(τ*)
+	R0   [3]F    `json:"r0"`   // r(0)
+	Lead [3]F    `json:"lead"` // onset de voz − onset de sEMG [ms]; > 0 = sEMG primero
+	RMin F       `json:"rMin"` // r que se alcanza por azar en la ventana del enunciado (dsp.ChanceR)
+	Sig  [3]bool `json:"sig"`  // r(τ*) sobre el azar y τ* lejos del borde de ±300 ms
 }
 
 type Lane struct {
@@ -45,17 +47,11 @@ type Lane struct {
 	Active bool `json:"act"`
 }
 
-// XWT es la cross-wavelet sEMG × voz sobre las envolventes (últimos 5 s).
-type XWT struct {
-	Mag   []byte `json:"mag"`   // |Wxy| normalizado, [freq][col]
-	Phase []byte `json:"phase"` // arg(Wxy), 0..255 = -π..π
-	Coh   []F    `json:"coh"`   // coherencia por frecuencia (0..1)
-	Lag   []F    `json:"lag"`   // lag por frecuencia = φ/(2πf) [ms], desenrollado cerca de τ*
-}
-
+// Summary resume los enunciados recientes con τ* significativo (Utterance.Sig).
 type Summary struct {
-	N       int `json:"n"`
-	Tau     F   `json:"tau"` // mediana de τ* [ms]
+	N       int `json:"n"`    // enunciados significativos
+	NAll    int `json:"nAll"` // enunciados analizados
+	Tau     F   `json:"tau"`  // mediana de τ* [ms]
 	TauIQR  F   `json:"tauIqr"`
 	PctLead F   `json:"pctLead"` // % de enunciados con τ* > 0
 	Lead    F   `json:"lead"`    // mediana del adelanto del onset [ms]
@@ -77,16 +73,14 @@ type Result struct {
 	Lanes    [3]Lane              `json:"lanes"`
 	VoiceRMS F                    `json:"vrms"`
 	Voiced   bool                 `json:"voiced"`
-	XC       [3][]float32         `json:"xc"` // r(τ), τ = -300..300 ms cada 5 ms
-	TauLive  [3]F                 `json:"tauLive"`
+	XC       [3][]float32         `json:"xc"`      // r(τ), τ = -300..300 ms cada 5 ms
+	TauLive  [3]F                 `json:"tauLive"` // solo si es significativo
 	RLive    [3]F                 `json:"rLive"`
-	XWTFreqs []float64            `json:"xwtFreqs"`
-	XWTCols  int                  `json:"xwtCols"`
-	XWT      [3]XWT               `json:"xwt"`
+	RMinLive F                    `json:"rMinLive"` // r por azar en la ventana en vivo
 	Utter    []Utterance          `json:"utter"`
 	Sum      [3]Summary           `json:"sum"`
 	Conds    map[string]*CondStat `json:"conds"`
 	SNR      [3]F                 `json:"snr"` // habla vs reposo [dB]
 	F0       F                    `json:"f0"`
-	Confound [3]F                 `json:"confound"` // pico en F0 sobre la mediana [dB]
+	Confound [3]F                 `json:"confound"` // pico en F0 sobre la mediana [dB]; null si F0 cae en un armónico de 50 Hz
 }

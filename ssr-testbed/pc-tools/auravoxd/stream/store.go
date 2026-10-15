@@ -30,9 +30,18 @@ type Conv struct {
 	Gain    float64 // ganancia total del AFE (2500)
 }
 
-func (c Conv) MicroVolts(code uint16) float32 {
+func (c Conv) MicroVolts(code uint16) float32 { return c.microVolts(code, c.Gain) }
+
+func (c Conv) microVolts(code uint16, gain float64) float32 {
 	v := float64(code) * c.VrefADC / 4095 / c.GDK
-	return float32((v - c.VMid) / c.Gain * 1e6)
+	return float32((v - c.VMid) / gain * 1e6)
+}
+
+// Channel describe lo que está conectado a una entrada analógica del DK.
+type Channel struct {
+	Name string  `json:"name"`
+	Gain float64 `json:"gain"` // del electrodo al pin Arduino: AFE 2500, MyoWare 2.0 RAW 200; 1 = µV en el pin
+	On   bool    `json:"on"`   // false = entrada sin conectar: la HMI no la muestra
 }
 
 // Code es la inversa: la usa la fuente simulada.
@@ -81,8 +90,9 @@ type Link struct {
 type Store struct {
 	mu    sync.RWMutex
 	conv  Conv
-	emg   [NCh]*Ring // µV RTI, 2 kHz
-	voice *Ring      // [-1, 1], 16 kHz
+	gain  [NCh]float64 // por canal; parte de conv.Gain
+	emg   [NCh]*Ring   // µV RTI, 2 kHz
+	voice *Ring        // [-1, 1], 16 kHz
 	env   [NCh + 1]*Ring
 	envF  [NCh + 1]*dsp.Envelope
 
@@ -98,6 +108,7 @@ type Store struct {
 func NewStore(c Conv) *Store {
 	s := &Store{conv: c, voice: newRing(10 * FsVoice)}
 	for i := 0; i < NCh; i++ {
+		s.gain[i] = c.Gain
 		s.emg[i] = newRing(30 * FsEMG)
 		s.envF[i] = dsp.NewEnvelope(FsEMG, DecEMG)
 	}
@@ -143,7 +154,7 @@ func (s *Store) Ingest(raw []byte) bool {
 	for i := range b.Tuples {
 		t := &b.Tuples[i]
 		for c := 0; c < NCh; c++ {
-			uv := s.conv.MicroVolts(t.ADC[c])
+			uv := s.conv.microVolts(t.ADC[c], s.gain[c])
 			s.emg[c].push(uv)
 			if e, ok := s.envF[c].Step(float64(uv)); ok {
 				s.env[c].push(float32(e))
@@ -166,6 +177,18 @@ func (s *Store) Ingest(raw []byte) bool {
 		s.rateT0, s.rateN = now, 0
 	}
 	return true
+}
+
+// SetGains cambia la ganancia de cada canal desde el próximo bloque (lo ya
+// guardado en los buffers queda con la anterior).
+func (s *Store) SetGains(g [NCh]float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, v := range g {
+		if v > 0 {
+			s.gain[i] = v
+		}
+	}
 }
 
 // ResetLink pone en cero los contadores del enlace al cambiar de fuente (en vivo ↔ sesión

@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/cmplx"
 	"math/rand"
+	"sort"
 	"testing"
 )
 
@@ -86,5 +87,57 @@ func BenchmarkColumnVoice(b *testing.B) {
 	out := make([]complex128, 32)
 	for i := 0; i < b.N; i++ {
 		bank.Column(x, h, out)
+	}
+}
+
+// El umbral de azar de ChanceR cubre el p95 del r máximo entre una envolvente de
+// ruido y una de voz independiente, con la misma cadena que stream.Store.
+func TestChanceRCoversUnrelatedEnvelopes(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	env := func(x []float64, fs float64, dec int) []float32 {
+		e := NewEnvelope(fs, dec)
+		var out []float32
+		for _, v := range x {
+			if y, ok := e.Step(v); ok {
+				out = append(out, float32(y))
+			}
+		}
+		return out
+	}
+	for _, win := range []int{600, 300} {
+		var peaks []float64
+		for trial := 0; trial < 120; trial++ {
+			const secs = 6
+			e := make([]float64, secs*2000)
+			for i := range e {
+				e[i] = rng.NormFloat64()
+			}
+			v := make([]float64, secs*16000)
+			on, left := false, 0
+			for i := range v {
+				if left == 0 {
+					on = !on
+					left = int((0.1 + 0.4*rng.Float64()) * 16000)
+					if on {
+						left = int((0.15 + 0.15*rng.Float64()) * 16000)
+					}
+				}
+				left--
+				a := 0.01
+				if on {
+					a = 1
+				}
+				v[i] = a * math.Sin(2*math.Pi*120*float64(i)/16000) * (1 + 0.3*rng.NormFloat64())
+			}
+			x, y := env(e, 2000, 10), env(v, 16000, 80)
+			_, p := Peak(XCorr(x[len(x)-win:], y[len(y)-win:], 60))
+			peaks = append(peaks, float64(p))
+		}
+		sort.Float64s(peaks)
+		p95 := peaks[len(peaks)*95/100]
+		if p95 > ChanceR(win)+0.03 {
+			t.Errorf("ventana %d: p95 por azar %.2f > ChanceR %.2f", win, p95, ChanceR(win))
+		}
+		t.Logf("ventana %d: p95 por azar %.2f, ChanceR %.2f", win, p95, ChanceR(win))
 	}
 }

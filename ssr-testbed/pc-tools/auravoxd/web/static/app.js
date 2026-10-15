@@ -14,7 +14,9 @@ const fmt = (v, d = 1) => nil(v) ? '—' : Number(v).toFixed(d);
 const sgn = v => nil(v) ? '—' : (v > 0 ? '+' : '') + Math.round(v);
 const DPR = () => window.devicePixelRatio || 1;
 
-let I = null, R = null, tab = 'sig';
+let I = null, R = null, tab = 'sig', CHS = [];
+const ACT = () => [0, 1, 2].filter(ch => CHS[ch] && CHS[ch].on);
+const chName = ch => CHS[ch] ? CHS[ch].name : CH[ch];
 let NB = 0, waves = [], wpos = 0, cols = [], hop = 10;
 let autoScale = [20, 20, 20, 0.5], fixedScale = 0, cmode = 'mag', delayAuto = true, lastRec = null, lastSrc = null;
 
@@ -74,6 +76,7 @@ es.onmessage = e => {
   if (m.c) for (const c of m.c) cols.push(b64(c));
   const maxCols = I.showSecs * 1000 / hop + 400;
   if (cols.length > maxCols) cols.splice(0, cols.length - maxCols);
+  if (m.chans) setChans(m.chans);
   if (m.r) onResult(m.r, m.link, m.rec, m.src);
 };
 es.onerror = () => setLink('bad', 'Sin conexión');
@@ -85,9 +88,42 @@ function init(m) {
   wpos = 0; cols = [];
   $('condbtns').innerHTML = I.conds.map(c => { const [t, s] = COND[c] || [c, '']; return `<button data-c="${c}"><b>${t}</b><span>${s}</span></button>`; }).join('');
   document.querySelectorAll('#condbtns button').forEach(b => b.onclick = () => post('/api/condition', { cond: b.dataset.c }));
-  $('keys').innerHTML = CH.map((n, i) => `<span style="--k:${C[i]}"><i></i>${n}</span>`).join('');
+  setChans(I.chans, true);
   drawRamp();
 }
+
+// ------------------------------------------------------------ canales
+function setChans(cs, force) {
+  if (!cs || (!force && JSON.stringify(cs) === JSON.stringify(CHS))) return;
+  CHS = cs;
+  for (let ch = 0; ch < 3; ch++) {
+    const on = CHS[ch].on;
+    $('L' + ch).hidden = !on; $('H' + ch).hidden = !on;
+    $('L' + ch).querySelector('.site').textContent = CHS[ch].name;
+    $('H' + ch).querySelector('.tag').textContent = `${CH[ch]} · ${CHS[ch].name}`;
+  }
+  $('keys').innerHTML = ACT().map(ch => `<span style="--k:${C[ch]}"><i></i>${CH[ch]} ${esc(chName(ch))}</span>`).join('');
+  if (!$('chans').contains(document.activeElement)) drawChanEditor();
+}
+function drawChanEditor() {
+  $('chans').innerHTML = CHS.map((c, ch) =>
+    `<label style="--k:${C[ch]}"><b><i></i>${CH[ch]}</b><input type="checkbox" data-k="on"${c.on ? ' checked' : ''} title="Conectado">` +
+    `<input type="text" data-k="name" maxlength="32" value="${esc(c.name)}"${c.on ? '' : ' disabled'}>` +
+    `<input type="number" data-k="gain" min="0" step="any" value="${c.gain}"${c.on ? '' : ' disabled'} title="Ganancia"></label>`).join('');
+}
+$('chans').onchange = e => {
+  if (e.target.dataset.k === 'on') e.target.closest('label').querySelectorAll('input:not([type=checkbox])').forEach(i => i.disabled = !e.target.checked);
+};
+$('chsave').onclick = () => {
+  const cs = [...$('chans').querySelectorAll('label')].map(l => ({
+    name: l.querySelector('[data-k=name]').value, gain: +l.querySelector('[data-k=gain]').value, on: l.querySelector('[data-k=on]').checked,
+  }));
+  post('/api/channels', cs).then(async r => {
+    if (!r.ok) { $('chmsg').textContent = await r.text(); return; }
+    setChans(await r.json(), true); drawChanEditor(); $('chmsg').textContent = 'Guardado';
+    setTimeout(() => $('chmsg').textContent = '', 2500);
+  });
+};
 
 function b64(s) {
   const bin = atob(s), u = new Uint8Array(bin.length);
@@ -151,9 +187,17 @@ function onResult(r, link, rec, src) {
 
 const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function median(a) { a = a.filter(v => !nil(v)).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; }
-function leadTau(r) { // τ* representativo: mediana por frase; si aún no hay frases, el valor en vivo
-  const m = median(r.sum.map(s => s.n ? s.tau : null));
-  return nil(m) ? median(r.tauLive) : m;
+// Canal principal: el activo con más frases sobre el azar (empate: mayor r); sin frases, el de mayor r en vivo.
+function mainCh(r) {
+  const act = ACT();
+  if (!act.length) return -1;
+  const score = ch => r.sum[ch].n ? [1, r.sum[ch].n, r.sum[ch].r] : [0, nil(r.tauLive[ch]) ? 0 : 1, r.rLive[ch] || -1];
+  return act.reduce((b, ch) => { const x = score(ch), y = score(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i] ? ch : b; return b; });
+}
+function leadTau(r) { // τ* del canal principal: mediana de las frases significativas; si no hay, el valor en vivo
+  const ch = mainCh(r);
+  if (ch < 0) return null;
+  return r.sum[ch].n ? r.sum[ch].tau : r.tauLive[ch];
 }
 
 // ------------------------------------------------------------ dibujo base
@@ -282,10 +326,17 @@ function drawXC(r) {
     g.fillText((t > 0 ? '+' : '') + t + ' ms', x(t), H - 4 * d);
   }
   g.strokeStyle = INK.axis; g.beginPath(); g.moveTo(0, y(0)); g.lineTo(W, y(0)); g.stroke();
+  // zona de azar: r < rMinLive
+  if (!nil(r.rMinLive)) {
+    g.fillStyle = 'rgba(137,135,129,.13)'; g.fillRect(0, y(r.rMinLive), W, y(-0.2) - y(r.rMinLive));
+    font(g, 11); g.fillStyle = INK.muted; g.textAlign = 'right';
+    g.fillText(`azar (r < ${fmt(r.rMinLive, 2)})`, W - 6 * d, y(r.rMinLive) + 14 * d);
+  }
   // curvas r(τ)
+  const act = ACT();
   g.lineWidth = 2 * d; g.lineJoin = 'round';
   r.xc.forEach((xc, ch) => {
-    if (!xc) return;
+    if (!xc || !act.includes(ch)) return;
     g.strokeStyle = C[ch]; g.beginPath();
     xc.forEach((v, i) => { const t = -L + i * 5; i ? g.lineTo(x(t), y(v)) : g.moveTo(x(t), y(v)); });
     g.stroke();
@@ -293,14 +344,14 @@ function drawXC(r) {
   // τ* de cada canal: marcador en el pico
   r.xc.forEach((xc, ch) => {
     const t = r.tauLive[ch];
-    if (!xc || nil(t)) return;
+    if (!xc || nil(t) || !act.includes(ch)) return;
     const v = xc[Math.round((t + L) / 5)];
     g.fillStyle = C[ch]; g.strokeStyle = '#1a1a19'; g.lineWidth = 2 * d;
     g.beginPath(); g.arc(x(t), y(v), 5 * d, 0, 7); g.fill(); g.stroke();
   });
-  const tm = median(r.tauLive);
+  const mc = mainCh(r), tm = mc < 0 ? null : r.tauLive[mc];
   if (!nil(tm)) {
-    const v = Math.max(...r.xc.map(xc => xc ? xc[Math.round((tm + L) / 5)] : -1));
+    const v = r.xc[mc][Math.round((tm + L) / 5)];
     font(g, 12, 600); g.fillStyle = '#fff'; g.textAlign = x(tm) > W - 80 * d ? 'right' : 'left';
     g.fillText(`τ* ${sgn(tm)} ms`, x(tm) + (g.textAlign === 'left' ? 10 : -10) * d, y(v) - 10 * d);
   }
@@ -313,7 +364,7 @@ function drawXC(r) {
   g.strokeStyle = INK.text2; g.lineWidth = d; g.setLineDash([3 * d, 3 * d]);
   g.beginPath(); g.moveTo(x(t), padT); g.lineTo(x(t), H - padB); g.stroke(); g.setLineDash([]);
   tip.innerHTML = `<div><b>τ = ${t > 0 ? '+' : ''}${t} ms</b></div>` +
-    r.xc.map((xc, ch) => `<div style="--k:${C[ch]}"><i></i>${CH[ch]} r = ${xc ? fmt(xc[i], 2) : '—'}</div>`).join('');
+    act.map(ch => `<div style="--k:${C[ch]}"><i></i>${CH[ch]} ${esc(chName(ch))} r = ${r.xc[ch] ? fmt(r.xc[ch][i], 2) : '—'}</div>`).join('');
   tip.hidden = false;
   const px = x(t) / d;
   tip.style.left = (px > cv.clientWidth / 2 ? px - tip.offsetWidth - 12 : px + 12) + 'px';
@@ -321,40 +372,37 @@ function drawXC(r) {
 }
 
 function drawCausality(r) {
-  const t = leadTau(r), n = Math.max(...r.sum.map(s => s.n));
-  const pct = median(r.sum.map(s => s.n ? s.pctLead : null));
+  const act = ACT(), mc = mainCh(r), t = leadTau(r);
+  const sm = mc < 0 ? null : r.sum[mc], name = mc < 0 ? '' : `${chName(mc)} (${CH[mc]})`;
   $('lead').innerHTML = nil(t) ? '—' : `${sgn(t)}<small>ms</small>`;
-  $('leadsub').textContent = nil(t) ? 'Habla para comenzar la medición'
-    : n ? `El músculo se activa antes que la voz en ${fmt(pct, 0)} % de ${n} frases`
-      : 'Medición en vivo · habla unas frases para consolidarla';
-  $('tiles').innerHTML = r.sum.map((s, ch) => {
-    const tau = s.n ? s.tau : r.tauLive[ch], rr = s.n ? s.r : r.rLive[ch];
-    return `<div class="tile" style="--k:${C[ch]}"><div class="k"><i></i>${CH[ch]}</div>` +
-      `<div class="v">${sgn(tau)} ms</div><div class="s">r = ${fmt(rr, 2)}</div></div>`;
+  $('leadsub').textContent = mc < 0 ? 'No hay canales activos: actívalos en Sesión → Canales'
+    : sm.n ? `${name}: el músculo se activa antes que la voz en ${fmt(sm.pctLead, 0)} % de ${sm.n} frases sobre el azar (de ${sm.nAll})`
+      : !nil(t) ? `${name}, en vivo · r = ${fmt(r.rLive[mc], 2)}, azar < ${fmt(r.rMinLive, 2)} · habla unas frases para consolidarla`
+        : r.voiced ? `Ningún canal supera el azar (r < ${fmt(r.rMinLive, 2)})` : 'Habla para comenzar la medición';
+  $('tiles').innerHTML = act.map(ch => {
+    const s = r.sum[ch], tau = s.n ? s.tau : r.tauLive[ch], rr = s.n ? s.r : r.rLive[ch];
+    const sub = s.n ? `r = ${fmt(rr, 2)} · ${s.n} de ${s.nAll} frases`
+      : nil(rr) ? (s.nAll ? `0 de ${s.nAll} frases sobre el azar` : 'sin frases')
+        : `r = ${fmt(rr, 2)} · ${nil(tau) ? 'no significativo' : 'sobre el azar'}`;
+    return `<div class="tile${nil(tau) ? ' ns' : ''}" style="--k:${C[ch]}"><div class="k"><i></i>${CH[ch]} · ${esc(chName(ch))}</div>` +
+      `<div class="v">${nil(tau) ? '—' : sgn(tau) + ' ms'}</div><div class="s">${sub}</div></div>`;
   }).join('');
   drawXC(r);
 
-  const nf = r.xwtFreqs.length, NC = r.xwtCols;
-  for (let ch = 0; ch < 3; ch++) {
-    const xw = r.xwt[ch], cv = $('m' + ch);
-    if (!xw || !xw.mag) { fit(cv).clearRect(0, 0, cv.width, cv.height); $('xn' + ch).textContent = ''; continue; }
-    const mag = b64(xw.mag), ph = b64(xw.phase);
-    const g = heatmap(cv, NC, nf, (x, y) => { const f = nf - 1 - y; return hsv(ph[f * NC + x] / 256, mag[f * NC + x] / 255); });
-    freqAxis(g, cv.width, cv.height, r.xwtFreqs[0], r.xwtFreqs[nf - 1], nf, [2, 4, 8], ' Hz');
-    const coh = median(xw.coh || []);
-    $('xn' + ch).textContent = nil(coh) ? '' : `coherencia ${fmt(coh, 2)}`;
-  }
-
-  const c = r.confound;
-  $('conf').innerHTML = nil(r.f0) || nil(c[2]) ? ''
-    : c[2] > 10 ? '<span class="badge">CH3 capta la vibración de la voz</span>'
-      : '<span class="badge ok">CH3 sin acople de voz</span>';
+  const c = mc < 0 ? null : r.confound[mc];
+  $('conf').innerHTML = nil(r.f0) || nil(c) ? ''
+    : c > 10 ? `<span class="badge">${esc(chName(mc))} capta la vibración de la voz</span>`
+      : `<span class="badge ok">${esc(chName(mc))} sin acople de voz</span>`;
 
   const rows = r.utter.slice(-6).reverse();
-  $('uttab').innerHTML = rows.length
-    ? '<tr><th>Frase</th><th>Duración</th>' + CH.map(n => `<th>${n}</th>`).join('') + '</tr>' +
+  $('uttab').innerHTML = rows.length && act.length
+    ? '<tr><th>Frase</th><th>Duración</th>' + act.map(ch => `<th>${CH[ch]} ${esc(chName(ch))}</th>`).join('') + '</tr>' +
       rows.map(u => `<tr><td>${(COND[u.cond] || [u.cond])[0]} · ${clock(u.t)}</td><td>${fmt(u.dur, 1)} s</td>` +
-        u.tau.map(v => `<td class="${nil(v) ? '' : v > 0 ? 'lead' : 'lag'}">${sgn(v)} ms</td>`).join('') + '</tr>').join('')
+        act.map(ch => {
+          const v = u.tau[ch], sig = u.sig && u.sig[ch];
+          return `<td class="${nil(v) || !sig ? 'ns' : v > 0 ? 'lead' : 'lag'}" title="r = ${fmt(u.r[ch], 2)}, azar < ${fmt(u.rMin, 2)}">` +
+            `${sig ? sgn(v) + ' ms' : '—'}<small>r ${fmt(u.r[ch], 2)}</small></td>`;
+        }).join('') + '</tr>').join('')
     : '<tr><td class="empty">Aún no hay frases</td></tr>';
 }
 
@@ -368,17 +416,17 @@ function drawSession(r, link) {
     tile('Recibidos', link.blocks.toLocaleString('es'), clock(link.blocks / 100)) +
     tile('Desbordes', link.overrun, 'en el DK', link.overrun > 0);
 
-  const rows = I.conds.filter(c => r.conds[c]);
+  const rows = I.conds.filter(c => r.conds[c]), act = ACT();
   $('condtab').innerHTML = rows.length
-    ? '<tr><th>Condición</th><th>Tiempo</th>' + CH.map(n => `<th>${n}</th>`).join('') + '<th>50 Hz (prom.)</th></tr>' +
+    ? '<tr><th>Condición</th><th>Tiempo</th>' + act.map(ch => `<th>${CH[ch]} ${esc(chName(ch))}</th>`).join('') + '</tr>' +
       rows.map(c => {
-        const s = r.conds[c], hum = s.hum.filter(v => !nil(v));
-        return `<tr><td>${COND[c][0]}</td><td>${clock(s.secs)}</td>${s.rms.map(v => `<td>${fmt(v, 2)}</td>`).join('')}` +
-          `<td>${hum.length ? fmt(hum.reduce((a, b) => a + b, 0) / hum.length, 2) : '—'}</td></tr>`;
+        const s = r.conds[c];
+        return `<tr><td>${COND[c][0]}</td><td>${clock(s.secs)}</td>` +
+          act.map(ch => `<td>${fmt(s.rms[ch], 2)}<small>50 Hz ${fmt(s.hum[ch], 2)}</small></td>`).join('') + '</tr>';
       }).join('')
     : '<tr><td class="empty">Elige una condición para empezar a acumular</td></tr>';
-  $('snr').innerHTML = r.snr.some(v => !nil(v))
-    ? r.snr.map((v, i) => `<span>SNR ${CH[i]} <b>${fmt(v, 1)} dB</b></span>`).join('') : '';
+  $('snr').innerHTML = act.some(ch => !nil(r.snr[ch]))
+    ? act.map(ch => `<span>SNR ${CH[ch]} <b>${fmt(r.snr[ch], 1)} dB</b></span>`).join('') : '';
 }
 
 let filesT = 0;
